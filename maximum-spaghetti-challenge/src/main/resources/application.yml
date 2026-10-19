@@ -1,0 +1,25 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: maximum-spaghetti-challenge
+  datasource:
+    url: jdbc:postgresql://localhost:5434/payments_spaghetti
+    username: payments
+    password: payments
+  sql:
+    init:
+      mode: always
+  kafka:
+    bootstrap-servers: localhost:9093
+    consumer:
+      group-id: spaghetti-payments
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: true
+      auto-offset-reset: earliest
+
+logging:
+  level:
+    fr.kevin.llps.payments: INFO
