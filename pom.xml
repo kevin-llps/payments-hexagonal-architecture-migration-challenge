@@ -14,6 +14,7 @@
     <modules>
         <module>realistic-mess-challenge</module>
         <module>maximum-spaghetti-challenge</module>
+        <module>realistic-mess-based-on-jpa-entities-challenge</module>
     </modules>
 
 </project>
