@@ -13,6 +13,7 @@
 
     <modules>
         <module>realistic-mess-challenge</module>
+        <module>maximum-spaghetti-challenge</module>
     </modules>
 
 </project>
