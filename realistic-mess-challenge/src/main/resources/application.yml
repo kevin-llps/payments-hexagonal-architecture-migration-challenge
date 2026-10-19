@@ -1,0 +1,25 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: realistic-mess-challenge
+  datasource:
+    url: jdbc:postgresql://localhost:5433/payments_realistic
+    username: payments
+    password: payments
+  sql:
+    init:
+      mode: always
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: realistic-payments
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: true
+      auto-offset-reset: earliest
+
+logging:
+  level:
+    fr.kevin.llps.payments: INFO
