@@ -1,0 +1,29 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: realistic-mess-based-on-jpa-entities-challenge
+  datasource:
+    url: jdbc:postgresql://localhost:5435/payments_jpa
+    username: payments
+    password: payments
+  sql:
+    init:
+      mode: always
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+  kafka:
+    bootstrap-servers: localhost:9094
+    consumer:
+      group-id: jpa-payments
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: true
+      auto-offset-reset: earliest
+
+logging:
+  level:
+    fr.kevin.llps.payments: INFO
