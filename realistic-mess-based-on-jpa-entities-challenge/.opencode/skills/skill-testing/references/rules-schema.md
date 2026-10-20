@@ -10,8 +10,8 @@ written before `SKILL.md` and lives inside the skill directory:
 ├── scripts/
 └── tests/
     ├── rules.json
-    └── evals/
-        └── <ruleId>.md      # only for check: "eval"
+    └── agent-evaluations/
+        └── <ruleId>.md      # only for check: "agent-evaluation"
 ```
 
 ## Shape
@@ -30,8 +30,8 @@ written before `SKILL.md` and lives inside the skill directory:
     },
     {
       "id": "R2",
-      "rule": "Behavioral rule checked with an eval fixture",
-      "check": "eval"
+      "rule": "Behavioral rule checked by an agent",
+      "check": "agent-evaluation"
     }
   ]
 }
@@ -42,8 +42,11 @@ written before `SKILL.md` and lives inside the skill directory:
 | `skill` | Must equal the skill directory name (kebab-case). |
 | `id` | `R` followed by digits; unique within the spec. |
 | `rule` | One-line atomic behavior. |
-| `check` | `"static"` (deterministic) or `"eval"` (advisory). |
+| `check` | `"static"` (deterministic) or `"agent-evaluation"` (agent-run). |
 | `assertions` | Required for static rules, at least one entry. |
+
+Agent-evaluation rules need `tests/agent-evaluations/<id>.md`. A missing or
+malformed fixture is a failure, not a skip.
 
 `SKILL.md` must contain a `## Rules` table whose first column lists exactly the
 spec IDs. Coverage is checked in both directions, so a rule cannot exist only
@@ -61,14 +64,30 @@ in the table or only in the spec.
 | `pathExists` | `value` | The path resolves from the skill directory. |
 | `idMatchesDir` | — | The directory name matches `^[a-z0-9]+(-[a-z0-9]+)*$`. |
 | `ruleTableCoverage` | — | Spec IDs and `## Rules` table IDs match exactly. |
+| `scriptTestCoverage` | — | Every `scripts/*.py` has a matching `scripts/tests/test_<name>.py`. |
 
 A `section` value must match a heading text exactly (case-insensitive), without
 the `#` markers. Section scanning stops at the next heading of the same or
 higher level and ignores headings inside fenced code blocks.
 
-## Eval fixtures
+## Script tests
 
-Only used with `check: "eval"`. Create `tests/evals/<ruleId>.md`:
+Every `scripts/*.py` in a skill must have a matching stdlib `unittest` module at
+`scripts/tests/test_<name>.py` (hyphens become underscores). The
+`scriptTestCoverage` assertion enforces this, and it runs itself for
+`skill-testing`:
+
+```sh
+python3 -m unittest discover -s .opencode/skills/skill-testing/scripts/tests -v
+python3 .opencode/skills/skill-testing/scripts/run-skill-rule-tests.py skill-testing
+```
+
+Tests use only the standard library: no network, Docker, or extra packages.
+
+## Agent-evaluation fixtures
+
+Only used with `check: "agent-evaluation"`. Create
+`tests/agent-evaluations/<ruleId>.md`:
 
 ```markdown
 # R2 — Missing input
@@ -83,15 +102,28 @@ The agent asks for the missing responsibility before writing any file.
 ```
 
 The runner does not call a model. It validates that the fixture has `Prompt`
-and `Expected` sections and prints it as advisory output; the orchestrating
-agent executes the fixture and reports the observed behavior.
+and `Expected` sections, then lists every agent-evaluation rule **after** the
+static results, with the prompt an agent must execute. The orchestrating agent
+runs the prompt and reports the observed behavior. There is no flag: these
+checks are always listed, and an unusable fixture fails the run.
+
+## Output order
+
+1. Static results, one `PASS`/`FAIL` line per static rule.
+2. `Static:` summary.
+3. `Agent evaluations (not executed by this script — run with an agent):`
+   followed by one `AGENT-EVAL` block per rule with `Prompt` and `Expected`
+   (or `FAIL` with the fixture problem).
+4. `Agent evaluations to run: N`.
+5. `Result:` — `GREEN`, `GREEN (static) — N agent evaluation(s) pending`, or
+   `RED`.
 
 ## Exit codes
 
 | Code | Meaning |
 | ---- | ------- |
-| `0` | Every static rule passed (GREEN). |
-| `1` | At least one static rule failed, or no spec/`SKILL.md` yet (RED). |
+| `0` | Every static rule passed and every agent-evaluation fixture is usable. |
+| `1` | At least one static rule failed, no spec/`SKILL.md` yet, or an agent-evaluation fixture is missing/malformed. |
 | `2` | Usage error or malformed spec. |
 
 ## Guard

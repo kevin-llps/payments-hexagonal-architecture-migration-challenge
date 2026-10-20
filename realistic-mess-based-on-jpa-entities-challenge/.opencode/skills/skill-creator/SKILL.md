@@ -29,7 +29,8 @@ those tests pass.
 - Overwriting, updating, or deleting existing skills. Creation is create-only.
 - Writing skills outside `.opencode/skills/` unless the user explicitly asks.
 - Committing or pushing changes.
-- Executing behavioral eval fixtures; `skill-testing` surfaces them as advisory.
+- Executing agent-evaluation prompts; the orchestrating agent runs them after
+  the static gate.
 
 ## Required inputs
 
@@ -73,7 +74,7 @@ Do not invent inputs or fill gaps with placeholders.
    success. Fix the skill, not the tests; weakening a rule requires explicit
    user approval.
 7. **Report** — list the final path, the skill ID, RED and GREEN evidence, the
-   per-rule results, and any unrun eval fixtures.
+   per-rule results, and the agent-evaluation results.
 
 ## Rules
 
@@ -86,8 +87,9 @@ Do not invent inputs or fill gaps with placeholders.
 | R5  | Every generated skill carries a mandatory Rules table                | static |
 | R6  | Rules and a failing test run exist before SKILL.md is authored       | static |
 | R7  | Static tests must pass before success is reported                    | static |
-| R8  | The report includes RED and GREEN evidence and unrun eval fixtures   | static |
+| R8  | The report includes RED and GREEN evidence and agent-evaluation results  | static |
 | R9  | The description states when to use the skill                         | static |
+| R10 | An incomplete request is answered by asking, never by writing files | agent-evaluation |
 
 ## Template
 

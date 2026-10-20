@@ -2,16 +2,20 @@
 """Verify a skill against its authoritative rule spec.
 
 Usage:
-    python3 run-skill-rule-tests.py <skill-dir|skill-id> [--eval]
+    python3 run-skill-rule-tests.py <skill-dir|skill-id>
 
-Reads <skill-dir>/tests/rules.json, validates the spec, then runs its static
-assertions against <skill-dir>/SKILL.md and prints one PASS/FAIL line per rule.
+Reads <skill-dir>/tests/rules.json, validates the spec, runs the static
+assertions against <skill-dir>/SKILL.md, then lists every agent-evaluation rule
+with the prompt an agent must execute. Static rules come first; agent
+evaluations are always listed after them and are never hidden behind a flag.
+
 A bare skill ID is resolved from the current directory, then from the skills
 root. With no SKILL.md the run is RED: every static rule fails and the exit code
-is 1. Eval fixtures are surfaced by --eval and are advisory only.
+is 1. A missing or malformed agent-evaluation fixture is also a failure.
 
-Exit codes: 0 = all static rules pass, 1 = at least one static failure,
-2 = usage error or malformed spec.
+Exit codes: 0 = every static rule passes and every agent-evaluation fixture is
+usable, 1 = at least one static or structural failure, 2 = usage error or
+malformed spec.
 """
 
 from __future__ import annotations
@@ -30,7 +34,10 @@ KNOWN_ASSERTIONS = {
     "pathExists",
     "idMatchesDir",
     "ruleTableCoverage",
+    "scriptTestCoverage",
 }
+
+KNOWN_CHECKS = ("static", "agent-evaluation")
 
 ID_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 RULE_ID_PATTERN = re.compile(r"^R\d+$")
@@ -51,7 +58,7 @@ def fail(message: str) -> None:
 
 def usage() -> None:
     print(
-        "usage: python3 run-skill-rule-tests.py <skill-dir|skill-id> [--eval]",
+        "usage: python3 run-skill-rule-tests.py <skill-dir|skill-id>",
         file=sys.stderr,
     )
     raise SystemExit(2)
@@ -69,19 +76,10 @@ def resolve_skill_dir(raw: str) -> Path:
     return (Path.cwd() / candidate).resolve()
 
 
-def parse_args(argv: list[str]) -> tuple[Path, bool]:
-    positional: list[str] = []
-    eval_mode = False
-    for arg in argv:
-        if arg == "--eval":
-            eval_mode = True
-        elif arg.startswith("-"):
-            usage()
-        else:
-            positional.append(arg)
-    if len(positional) != 1:
+def parse_args(argv: list[str]) -> Path:
+    if len(argv) != 1 or argv[0].startswith("-"):
         usage()
-    return resolve_skill_dir(positional[0]), eval_mode
+    return resolve_skill_dir(argv[0])
 
 
 def parse_frontmatter(text: str) -> tuple[bool, dict[str, str]]:
@@ -175,6 +173,20 @@ def compare_ids(expected: list[str], actual: list[str]) -> tuple[list[str], list
     return missing, extra
 
 
+def script_test_coverage(directory: Path) -> list[str]:
+    """Every script directly under scripts/ needs scripts/tests/test_<name>.py."""
+    scripts_dir = directory / "scripts"
+    if not scripts_dir.is_dir():
+        return []
+    tests_dir = scripts_dir / "tests"
+    missing = []
+    for script in sorted(scripts_dir.glob("*.py")):
+        expected = tests_dir / f"test_{script.stem.replace('-', '_')}.py"
+        if not expected.is_file():
+            missing.append(f"{script.name} has no {expected.relative_to(directory)}")
+    return missing
+
+
 def python_flags(raw: str | None) -> int:
     flags = 0
     for char in raw or "":
@@ -253,6 +265,9 @@ def evaluate(assertion: dict, ctx: dict) -> str | bool:
         if extra:
             problems.append(f"not in spec: {', '.join(extra)}")
         return "; ".join(problems) if problems else True
+    if kind == "scriptTestCoverage":
+        problems = script_test_coverage(directory)
+        return "; ".join(problems) if problems else True
     return f"unknown assertion type: {kind}"
 
 
@@ -277,9 +292,10 @@ def validate_spec(spec: object, directory: Path) -> list[str]:
         ids.append(rule_id)
         if not isinstance(rule.get("rule"), str) or not rule["rule"].strip():
             fail(f"{rule_id} is missing its rule text")
-        if rule.get("check") not in ("static", "eval"):
-            fail(f"{rule_id} has invalid check: {rule.get('check')}")
-        if rule["check"] == "static":
+        check = rule.get("check")
+        if check not in KNOWN_CHECKS:
+            fail(f'{rule_id} has invalid check: {check} (use "static" or "agent-evaluation")')
+        if check == "static":
             assertions = rule.get("assertions")
             if not isinstance(assertions, list) or not assertions:
                 fail(f"{rule_id} is static but has no assertions")
@@ -287,7 +303,7 @@ def validate_spec(spec: object, directory: Path) -> list[str]:
                 kind = assertion.get("type")
                 if kind not in KNOWN_ASSERTIONS:
                     fail(f"{rule_id} has unknown assertion type: {kind}")
-                if kind not in ("idMatchesDir", "ruleTableCoverage"):
+                if kind not in ("idMatchesDir", "ruleTableCoverage", "scriptTestCoverage"):
                     if not isinstance(assertion.get("value"), str) or assertion["value"] == "":
                         fail(f"{rule_id} {kind} assertion has no value")
     return ids
@@ -309,8 +325,27 @@ def read_spec(directory: Path) -> dict:
         fail(f"cannot parse tests/rules.json: {error}")
 
 
+def read_agent_evaluation(directory: Path, rule_id: str) -> tuple[str, str] | str:
+    """Return (prompt, expected) or a failure reason."""
+    fixture = directory / "tests" / "agent-evaluations" / f"{rule_id}.md"
+    if not fixture.exists():
+        return f"fixture missing: tests/agent-evaluations/{rule_id}.md"
+    body = strip_frontmatter(fixture.read_text(encoding="utf-8"))
+    prompt = get_section(body, "Prompt")
+    expected = get_section(body, "Expected")
+    if prompt is None or not prompt.strip() or expected is None or not expected.strip():
+        return 'fixture needs non-empty "Prompt" and "Expected" sections'
+    return prompt.strip(), expected.strip()
+
+
+def print_indented(label: str, text: str) -> None:
+    print(f"      {label}:")
+    for line in text.splitlines():
+        print(f"        {line}" if line else "")
+
+
 def main() -> None:
-    directory, eval_mode = parse_args(sys.argv[1:])
+    directory = parse_args(sys.argv[1:])
     spec = read_spec(directory)
     spec_ids = validate_spec(spec, directory)
 
@@ -334,27 +369,16 @@ def main() -> None:
 
     passed = 0
     failed = 0
-    eval_rules = 0
-    eval_without_fixture = 0
+    agent_ready: list[tuple[dict, str, str]] = []
+    agent_unusable: list[tuple[dict, str]] = []
 
     for rule in spec["rules"]:
-        if rule["check"] == "eval":
-            eval_rules += 1
-            fixture = directory / "tests" / "evals" / f"{rule['id']}.md"
-            if not fixture.exists():
-                eval_without_fixture += 1
-                print(f"SKIP  {rule['id']}  {rule['rule']} (advisory, no fixture)")
-                continue
-            if not eval_mode:
-                print(f"SKIP  {rule['id']}  {rule['rule']} (advisory, run with --eval)")
-                continue
-            fixture_body = strip_frontmatter(fixture.read_text(encoding="utf-8"))
-            has_prompt = get_section(fixture_body, "Prompt") is not None
-            has_expected = get_section(fixture_body, "Expected") is not None
-            status = "ready" if has_prompt and has_expected else "malformed"
-            print(f"EVAL  {rule['id']}  {rule['rule']} (advisory, {status})")
-            if status == "malformed":
-                print('        - fixture needs "Prompt" and "Expected" sections')
+        if rule["check"] == "agent-evaluation":
+            fixture = read_agent_evaluation(directory, rule["id"])
+            if isinstance(fixture, str):
+                agent_unusable.append((rule, fixture))
+            else:
+                agent_ready.append((rule, fixture[0], fixture[1]))
             continue
 
         if not skill_exists:
@@ -380,20 +404,32 @@ def main() -> None:
 
     print("")
     print(f"Static: {passed} passed, {failed} failed, {passed + failed} total")
-    if eval_rules:
-        advisory = eval_rules - eval_without_fixture
-        print(
-            f"Eval (advisory, never fails): {advisory} fixture(s) available, "
-            f"{eval_without_fixture} missing"
-        )
-    if not skill_exists:
-        print("Result: RED (SKILL.md does not exist yet)")
-    elif failed:
+
+    if agent_ready or agent_unusable:
+        print("")
+        print("Agent evaluations (not executed by this script — run with an agent):")
+        for rule, prompt, expected in agent_ready:
+            print(f"  AGENT-EVAL  {rule['id']}  {rule['rule']}")
+            print_indented("Prompt", prompt)
+            print_indented("Expected", expected)
+        for rule, reason in agent_unusable:
+            print(f"  FAIL  {rule['id']}  {rule['rule']}")
+            print(f"        - {reason}")
+        print("")
+        summary = f"Agent evaluations to run: {len(agent_ready)}"
+        if agent_unusable:
+            summary += f", {len(agent_unusable)} unusable"
+        print(summary)
+
+    print("")
+    if failed or agent_unusable:
         print("Result: RED")
+    elif agent_ready:
+        print(f"Result: GREEN (static) — {len(agent_ready)} agent evaluation(s) pending")
     else:
         print("Result: GREEN")
 
-    raise SystemExit(1 if failed else 0)
+    raise SystemExit(1 if failed or agent_unusable else 0)
 
 
 if __name__ == "__main__":

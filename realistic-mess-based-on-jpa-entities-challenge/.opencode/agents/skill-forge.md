@@ -58,16 +58,22 @@ instructions, load them and follow them.
 
 6. **GREEN gate.** Rerun the same command. Every static rule must pass. Fix the
    skill, never the assertions; if a rule is genuinely wrong, ask the user
-   before changing `tests/rules.json`.
+   before changing `tests/rules.json`. The runner also prints an
+   `Agent evaluations` section after the static results.
 
-7. **Guard.** Run
+7. **Agent evaluations.** For every `AGENT-EVAL` block, launch a subagent, give
+   it the `Prompt` with the new skill loaded, and compare its answer to
+   `Expected`. Record PASS/FAIL per rule. A failing evaluation is reported,
+   never fixed by weakening the fixture. Never edit an evaluation result into
+   a passing one.
+
+8. **Guard.** Run
    `python3 .opencode/skills/skill-testing/scripts/enforce-new-skill-scope.py check --skill <id>`.
    It must report `CLEAN`. A violation means an existing skill was modified or
    a file was written outside `.opencode/skills/<id>/`.
 
-8. **Report.** Show the final path, the RED output, the GREEN output, the
-   per-rule table, the guard result, and any eval fixtures that were not
-   executed.
+9. **Report.** Show the final path, the RED output, the GREEN output, the
+   per-rule table, the agent-evaluation results, and the guard result.
 
 ## Hard limits
 

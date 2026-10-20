@@ -40,11 +40,11 @@
     },
     {
       "id": "R5",
-      "rule": "Eval rules are advisory and never fail the run",
+      "rule": "Agent evaluations are listed after the static run",
       "check": "static",
       "assertions": [
-        { "type": "contains", "value": "Eval rules are advisory" },
-        { "type": "contains", "value": "never fail the run" }
+        { "type": "contains", "value": "listed after the static run" },
+        { "type": "contains", "value": "agent-evaluation" }
       ]
     },
     {
@@ -81,6 +81,19 @@
         { "type": "idMatchesDir" },
         { "type": "frontmatterField", "value": "description", "matches": "use when" },
         { "type": "frontmatterField", "value": "name" }
+      ]
+    },
+    {
+      "id": "R10",
+      "rule": "Compound acceptance criteria are split into separate atomic rules",
+      "check": "agent-evaluation"
+    },
+    {
+      "id": "R11",
+      "rule": "Every script has a matching test module under scripts/tests",
+      "check": "static",
+      "assertions": [
+        { "type": "scriptTestCoverage" }
       ]
     }
   ]
