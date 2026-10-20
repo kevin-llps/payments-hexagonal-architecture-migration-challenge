@@ -1,0 +1,86 @@
+{
+  "skill": "skill-creator",
+  "rules": [
+    {
+      "id": "R1",
+      "rule": "All five inputs are required before any file is written",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Required inputs" },
+        { "type": "contains", "value": "until all five are present" },
+        { "type": "regex", "value": "Do not invent\\s+inputs" }
+      ]
+    },
+    {
+      "id": "R2",
+      "rule": "Missing inputs are asked in a single batched question",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "single batched question" }
+      ]
+    },
+    {
+      "id": "R3",
+      "rule": "Creation is create-only; an existing ID is refused",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "create-only" },
+        { "type": "regex", "value": "Never overwrite or edit\\s+an\\s+existing skill" }
+      ]
+    },
+    {
+      "id": "R4",
+      "rule": "The skill ID is lowercase kebab-case",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "`^[a-z0-9]+(-[a-z0-9]+)*$`" },
+        { "type": "idMatchesDir" }
+      ]
+    },
+    {
+      "id": "R5",
+      "rule": "Every generated skill carries a mandatory Rules table",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Rules" },
+        { "type": "contains", "value": "mandatory Rules table" }
+      ]
+    },
+    {
+      "id": "R6",
+      "rule": "Rules and a failing test run exist before SKILL.md is authored",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "must fail before" },
+        { "type": "contains", "value": "RED" }
+      ]
+    },
+    {
+      "id": "R7",
+      "rule": "Static tests must pass before success is reported",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "must pass before reporting" },
+        { "type": "contains", "value": "GREEN" }
+      ]
+    },
+    {
+      "id": "R8",
+      "rule": "The report includes RED and GREEN evidence and unrun eval fixtures",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "RED and GREEN evidence" },
+        { "type": "contains", "value": "unrun eval fixtures" }
+      ]
+    },
+    {
+      "id": "R9",
+      "rule": "The description states when to use the skill",
+      "check": "static",
+      "assertions": [
+        { "type": "frontmatterField", "value": "description", "matches": "use when" },
+        { "type": "frontmatterField", "value": "name" }
+      ]
+    }
+  ]
+}

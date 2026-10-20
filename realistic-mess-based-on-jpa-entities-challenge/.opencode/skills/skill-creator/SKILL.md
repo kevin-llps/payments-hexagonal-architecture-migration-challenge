@@ -1,12 +1,35 @@
 ---
 name: Skill Creator
-description: Create a new OpenCode skill from user-provided inputs (responsibility, in-scope, out-of-scope, instructions, acceptance criteria). Use when the user asks to create, define, or scaffold a skill.
+description: Create a new OpenCode skill from user-provided inputs (responsibility, in-scope, out-of-scope, instructions, acceptance criteria), test-first with rules and failing tests before SKILL.md. Use when the user asks to create, define, or scaffold a skill.
 ---
 
 # Skill Creator
 
 Create one OpenCode skill from the inputs the user provides. Do not invent
 inputs, and do not write files until every required input is known.
+
+## Purpose
+
+Turn the five user inputs into a discoverable, test-first OpenCode skill. The
+atomic rules and their failing tests come first; `SKILL.md` is written to make
+those tests pass.
+
+## Scope
+
+**In scope**
+
+- Collecting and validating the five required inputs.
+- Resolving a kebab-case ID and a project-local target path.
+- Delegating rule decomposition and test authoring to `skill-testing`.
+- Authoring `SKILL.md` only after the test run is RED.
+- Reporting RED and GREEN evidence.
+
+**Out of scope**
+
+- Overwriting, updating, or deleting existing skills. Creation is create-only.
+- Writing skills outside `.opencode/skills/` unless the user explicitly asks.
+- Committing or pushing changes.
+- Executing behavioral eval fixtures; `skill-testing` surfaces them as advisory.
 
 ## Required inputs
 
@@ -19,35 +42,54 @@ Collect these five items:
 4. **Instructions** — the ordered steps needed to complete the purpose,
    including commands, tools, and any supporting files.
 5. **Acceptance criteria** — observable, checkable conditions proving the
-   skill executed successfully.
+   skill executed successfully. Each criterion becomes at least one atomic rule.
 
 If any item is missing or ambiguous, ask the user for all missing items in a
 **single batched question** (one `question` call with one question per missing
 item). Do not write, scaffold, or update any file until all five are present.
-Do not fill gaps with assumptions or placeholders.
+Do not invent inputs or fill gaps with placeholders.
 
-## Resolve the target
+## Workflow
 
-1. Derive a stable ID from the skill name: lowercase kebab-case matching
-   `^[a-z0-9]+(-[a-z0-9]+)*$`.
-2. Determine the target source. If the user did not specify, ask whether the
-   skill is project-local or global:
-   - Project: `<project>/.opencode/skills/<id>/SKILL.md`
-   - Global: `~/.config/opencode/skills/<id>/SKILL.md`
-3. Check for an existing skill with the same ID in any discovered source
-   (`<source>/<id>/SKILL.md`, `<source>/<id>.md`). This skill is **create-only**:
-   if the ID is taken, stop, report the existing path, and ask for a different
-   ID. Never overwrite or edit an existing skill.
-4. Confirm the final path before writing when the location is not obvious.
+1. **Intake** — collect the five inputs as described above. Stop if any is
+   missing.
+2. **Resolve the target** — derive a lowercase kebab-case ID matching
+   `^[a-z0-9]+(-[a-z0-9]+)*$`. If the user did not specify scope, ask whether
+   the skill is project-local or global. Project: `.opencode/skills/<id>/`.
+3. **Refuse collisions** — check every discovered source for
+   `<id>/SKILL.md` and `<id>.md`. If the ID already exists, stop, report the
+   existing path, and ask for a different ID. Never overwrite or edit an
+   existing skill.
+4. **Test-first** — hand the five inputs to `skill-testing`. It derives atomic
+   rule IDs and writes `.opencode/skills/<id>/tests/rules.json`. Run
+   `python3 .opencode/skills/skill-testing/scripts/run-skill-rule-tests.py .opencode/skills/<id>`.
+   The run must fail before `SKILL.md` exists: that failure is the RED gate. Do
+   not author `SKILL.md` until RED is observed.
+5. **Author** — write exactly one `<id>/SKILL.md` using the template below. Its
+   `## Rules` table must list exactly the rule IDs from `tests/rules.json`.
+   Supporting `references/`, `scripts/`, or `templates/` files are optional and
+   must be referenced by paths relative to the skill directory.
+6. **GREEN gate** — rerun the same command. It must pass before reporting
+   success. Fix the skill, not the tests; weakening a rule requires explicit
+   user approval.
+7. **Report** — list the final path, the skill ID, RED and GREEN evidence, the
+   per-rule results, and any unrun eval fixtures.
 
-## Author the skill
+## Rules
 
-Create directories as needed and write exactly one `<id>/SKILL.md`.
-Supporting `references/`, `scripts/`, or `templates/` files are optional; add
-them only when the instructions actually require them, and reference them by
-paths relative to the skill directory.
+| ID  | Rule                                                                | Check  |
+| --- | ------------------------------------------------------------------- | ------ |
+| R1  | All five inputs are required before any file is written              | static |
+| R2  | Missing inputs are asked in a single batched question                | static |
+| R3  | Creation is create-only; an existing ID is refused                   | static |
+| R4  | The skill ID is lowercase kebab-case                                 | static |
+| R5  | Every generated skill carries a mandatory Rules table                | static |
+| R6  | Rules and a failing test run exist before SKILL.md is authored       | static |
+| R7  | Static tests must pass before success is reported                    | static |
+| R8  | The report includes RED and GREEN evidence and unrun eval fixtures   | static |
+| R9  | The description states when to use the skill                         | static |
 
-Use this structure:
+## Template
 
 ```markdown
 ---
@@ -73,46 +115,32 @@ description: <When to use this skill, in one sentence>
 
 1. <Input 4 steps, in execution order, with concrete commands or tools.>
 
+## Rules
+
+| ID  | Rule | Check  |
+| --- | ---- | ------ |
+| R1  | <Atomic behavior> | static |
+| R2  | <Atomic behavior> | eval   |
+
 ## Acceptance criteria
 
 - [ ] <Input 5 items, each observable and checkable.>
 ```
 
-Rules for the frontmatter:
+Template rules:
 
 - `name` is a human-readable display label, not the ID.
-- `description` must state **when** to use the skill, because that is the only
-  text shown to the model when deciding whether to load it. Omit it and the
-  skill is not advertised.
-- Keep the directory name equal to the ID; the ID comes from the path, not
-  from `name`.
+- `description` must state when to use the skill; it is the only text shown to
+  the model when deciding whether to load it. Omit it and the skill is not
+  advertised.
+- The directory name is the ID; it must stay equal to the ID.
+- Map each input to exactly one section. Put scope items only under their own
+  heading and never repeat an out-of-scope item as an optional workflow step.
 
-Map each input to exactly one section. Put scope items only under their own
-heading. Never move out-of-scope items into the workflow as optional steps.
+## Acceptance criteria
 
-## Validate before reporting
-
-Check every item and fix the file if any fails:
-
-- `SKILL.md` sits directly in `<id>/`, so the path-derived ID equals the
-  intended ID (case-sensitive).
-- Frontmatter is valid YAML with both `name` and `description`.
-- The description says when to use the skill, not only what it does.
-- All five inputs trace to a section, and no input is missing or paraphrased
-  into something broader.
-- Out-of-scope items appear nowhere in the workflow as permitted actions.
-- Every relative path referenced in the body resolves from the skill directory.
-- No other discovered source defines the same ID.
-
-## Report
-
-Return:
-
-- Final path and resulting skill ID.
-- How to invoke it: `@<id>` in a prompt, or the `skill` tool with that ID.
-- Validation checklist results, one line per item.
-- The original acceptance criteria and whether the created skill can satisfy
-  them as written.
-
-If the user supplied no acceptance criteria for a new skill, report that the
-skill is unverified rather than declaring it successful.
+- [ ] No file is written while an input is missing.
+- [ ] An existing skill ID stops the run with the existing path reported.
+- [ ] RED is observed before `SKILL.md` is created.
+- [ ] GREEN is observed before success is reported.
+- [ ] The generated `SKILL.md` passes `skill-testing` with exact rule coverage.
