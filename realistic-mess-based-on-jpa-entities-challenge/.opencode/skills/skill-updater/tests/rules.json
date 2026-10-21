@@ -21,11 +21,11 @@
     },
     {
       "id": "R3",
-      "rule": "Only the six listed categories are accepted as update scope",
+      "rule": "Only the seven listed categories are accepted as update scope",
       "check": "static",
       "assertions": [
         { "type": "contains", "value": "one or more of" },
-        { "type": "regex", "value": "responsibility, scope, out-of-scope,\\s+workflow, rules, acceptance criteria" }
+        { "type": "regex", "value": "responsibility, scope, out-of-scope,\\s+workflow, rules, acceptance criteria,\\s+readme" }
       ]
     },
     {

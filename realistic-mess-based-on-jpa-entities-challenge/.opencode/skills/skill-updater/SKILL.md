@@ -37,7 +37,7 @@ already exist, and both must stay consistent after the edit.
 Collect these three items:
 
 1. **Target skill** — the kebab-case ID of the existing skill to update.
-2. **Categories** — one or more of: responsibility, scope, out-of-scope, workflow, rules, acceptance criteria.
+2. **Categories** — one or more of: responsibility, scope, out-of-scope, workflow, rules, acceptance criteria, readme.
 3. **New content** — the exact replacement content for each requested category.
 
 If any item is missing or ambiguous, ask the user for all missing items in a
@@ -53,9 +53,11 @@ item). Do not write or update any file until all three are present.
    missing.
 3. **Read** — load the target `SKILL.md` and, when rules or acceptance
    criteria are requested, its `tests/rules.json`.
-4. **Edit** — change only the sections named by the requested categories;
-   every other section stays untouched. Keep the description's `when to use`
-   guidance accurate after the edit.
+4. **Edit** — change only the sections named by the requested categories or
+   files; for `readme`, update `README.md` in the skill root if it exists or
+   create it when explicitly requested. Every other section/file stays
+   untouched. Keep the description's `when to use` guidance accurate after
+   the edit.
 5. **Hand off tests** — when rules or acceptance criteria changed, give the
    new rule text to `skill-testing` so the spec and the `## Rules` table stay
    covered bidirectionally. The updater does not edit `tests/` itself.
@@ -72,7 +74,7 @@ item). Do not write or update any file until all three are present.
 | --- | -------------------------------------------------------------------------- | ---------------- |
 | R1  | A missing target skill is refused; the updater never creates it            | static           |
 | R2  | The target skill is resolved as a lowercase kebab-case ID                  | static           |
-| R3  | Only the six listed categories are accepted as update scope                | static           |
+| R3  | Only the seven listed categories are accepted as update scope               | static           |
 | R4  | Missing inputs are requested in one batched question before any edit       | static           |
 | R5  | Only the requested categories are edited; everything else stays untouched  | static           |
 | R6  | Rules changes are handed to skill-testing for bidirectional coverage       | static           |
