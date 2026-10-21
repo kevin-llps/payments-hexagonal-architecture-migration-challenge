@@ -49,29 +49,29 @@
     },
     {
       "id": "R6",
-      "rule": "Rules and a failing test run exist before SKILL.md is authored",
+      "rule": "Rule decomposition and test authoring are outside this skill",
       "check": "static",
       "assertions": [
-        { "type": "contains", "value": "must fail before" },
-        { "type": "contains", "value": "RED" }
+        { "type": "contains", "value": "outside this skill's responsibility" },
+        { "type": "contains", "value": "`tests/rules.json`" }
       ]
     },
     {
       "id": "R7",
-      "rule": "Static tests must pass before success is reported",
+      "rule": "This skill calls no skill, agent, or sub-agent",
       "check": "static",
       "assertions": [
-        { "type": "contains", "value": "must pass before reporting" },
-        { "type": "contains", "value": "GREEN" }
+        { "type": "contains", "value": "must not load, delegate to, invoke, or run any skill, agent, or" },
+        { "type": "notContains", "value": "`skill-" }
       ]
     },
     {
       "id": "R8",
-      "rule": "The report includes RED and GREEN evidence and agent-evaluation results",
+      "rule": "The report lists the final path, the skill ID, and the created files",
       "check": "static",
       "assertions": [
-        { "type": "contains", "value": "RED and GREEN evidence" },
-        { "type": "contains", "value": "agent-evaluation results" }
+        { "type": "contains", "value": "list the final path" },
+        { "type": "contains", "value": "the skill ID, and the files created" }
       ]
     },
     {

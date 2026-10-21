@@ -20,17 +20,19 @@ those tests pass.
 
 - Collecting and validating the five required inputs.
 - Resolving a kebab-case ID and a project-local target path.
-- Delegating rule decomposition and test authoring to `skill-testing`.
-- Authoring `SKILL.md` only after the test run is RED.
-- Reporting RED and GREEN evidence.
+- Authoring `SKILL.md` and `README.md` once the five inputs are complete and
+  the target path is free.
+- Reporting the final path, the skill ID, and the created files.
 
 **Out of scope**
 
 - Overwriting, updating, or deleting existing skills. Creation is create-only.
 - Writing skills outside `.opencode/skills/` unless the user explicitly asks.
 - Committing or pushing changes.
-- Executing agent-evaluation prompts; the orchestrating agent runs them after
-  the static gate.
+- Calling, loading, delegating to, or invoking any skill, agent, or sub-agent.
+- Rule decomposition, `tests/rules.json`, test runs, RED/GREEN gating, and
+  agent evaluations: none of them happen inside this skill.
+- Executing agent-evaluation prompts.
 
 ## Required inputs
 
@@ -61,11 +63,11 @@ Do not invent inputs or fill gaps with placeholders.
    `<id>/SKILL.md` and `<id>.md`. If the ID already exists, stop, report the
    existing path, and ask for a different ID. Never overwrite or edit an
    existing skill.
-4. **Test-first** — hand the five inputs to `skill-testing`. It derives atomic
-   rule IDs and writes `.opencode/skills/<id>/tests/rules.json`. Run
-   `python3 .opencode/skills/skill-testing/scripts/run-skill-rule-tests.py .opencode/skills/<id>`.
-   The run must fail before `SKILL.md` exists: that failure is the RED gate. Do
-   not author `SKILL.md` until RED is observed.
+4. **Testing stays outside** — rule decomposition and test authoring are
+   outside this skill's responsibility and are never performed here.
+   This skill must not load, delegate to, invoke, or run any skill, agent, or
+   sub-agent itself; it only relies on `.opencode/skills/<id>/tests/rules.json`
+   existing at authoring time for the rule IDs.
 5. **Author** — write exactly one `<id>/SKILL.md` using the template below. Its
    `## Rules` table must list exactly the rule IDs from `tests/rules.json`.
    Then write `<id>/README.md` next to it using the README template below; the
@@ -80,11 +82,9 @@ Do not invent inputs or fill gaps with placeholders.
    `<id>/README.md` with one indexed step sentence per step of this skill's
    own workflow (`1: <step>`, `2: <step>`, ...) in execution order, plus the
    files each step builds, following the graph rules below.
-8. **GREEN gate** — rerun the same command. It must pass before reporting
-   success. Fix the skill, not the tests; weakening a rule requires explicit
-   user approval.
-9. **Report** — list the final path, the skill ID, RED and GREEN evidence, the
-   per-rule results, and the agent-evaluation results.
+8. **Report** — list the final path, the skill ID, and the files created.
+   RED/GREEN runs, per-rule results, and agent-evaluation results are outside
+   this skill's report.
 
 ### README template
 
@@ -140,9 +140,9 @@ README template rules:
 | R3  | Creation is create-only; an existing ID is refused                   | static |
 | R4  | The skill ID is lowercase kebab-case                                 | static |
 | R5  | Every generated skill carries a mandatory Rules table                | static |
-| R6  | Rules and a failing test run exist before SKILL.md is authored       | static |
-| R7  | Static tests must pass before success is reported                    | static |
-| R8  | The report includes RED and GREEN evidence and agent-evaluation results  | static |
+| R6  | Rule decomposition and test authoring are outside this skill         | static |
+| R7  | This skill calls no skill, agent, or sub-agent                      | static |
+| R8  | The report lists the final path, the skill ID, and the created files | static |
 | R9  | The description states when to use the skill                         | static |
 | R10 | An incomplete request is answered by asking, never by writing files | agent-evaluation |
 | R11 | Every created skill ships a README.md documentation file            | static |
@@ -202,9 +202,7 @@ Template rules:
 
 - [ ] No file is written while an input is missing.
 - [ ] An existing skill ID stops the run with the existing path reported.
-- [ ] RED is observed before `SKILL.md` is created.
-- [ ] GREEN is observed before success is reported.
-- [ ] The generated `SKILL.md` passes `skill-testing` with exact rule coverage.
+- [ ] This skill calls no skill, agent, or sub-agent.
 - [ ] `<id>/README.md` exists beside `<id>/SKILL.md` for every created skill.
 - [ ] The README documents the skill's purpose, when to use it, and how to run
       it.
