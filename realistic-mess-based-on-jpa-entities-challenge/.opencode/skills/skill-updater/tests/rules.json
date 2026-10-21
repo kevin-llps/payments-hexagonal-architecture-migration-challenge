@@ -1,0 +1,91 @@
+{
+  "skill": "skill-updater",
+  "rules": [
+    {
+      "id": "R1",
+      "rule": "A missing target skill is refused; the updater never creates it",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "do not create it" },
+        { "type": "regex", "value": "does not exist, stop and report" }
+      ]
+    },
+    {
+      "id": "R2",
+      "rule": "The target skill is resolved as a lowercase kebab-case ID",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "kebab-case" },
+        { "type": "idMatchesDir" }
+      ]
+    },
+    {
+      "id": "R3",
+      "rule": "Only the six listed categories are accepted as update scope",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "one or more of" },
+        { "type": "regex", "value": "responsibility, scope, out-of-scope,\\s+workflow, rules, acceptance criteria" }
+      ]
+    },
+    {
+      "id": "R4",
+      "rule": "Missing inputs are requested in one batched question before any edit",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "single batched question" },
+        { "type": "contains", "value": "until all three are present" }
+      ]
+    },
+    {
+      "id": "R5",
+      "rule": "Only the requested categories are edited; everything else stays untouched",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "requested categories" },
+        { "type": "contains", "value": "stays untouched" }
+      ]
+    },
+    {
+      "id": "R6",
+      "rule": "Rules changes are handed to skill-testing so spec and Rules table stay covered bidirectionally",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "`skill-testing`" },
+        { "type": "contains", "value": "bidirectionally" }
+      ]
+    },
+    {
+      "id": "R7",
+      "rule": "The rule-test runner must be GREEN before success is reported",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "run-skill-rule-tests.py" },
+        { "type": "contains", "value": "GREEN before success is reported" }
+      ]
+    },
+    {
+      "id": "R8",
+      "rule": "The description still states when to use the skill",
+      "check": "static",
+      "assertions": [
+        { "type": "frontmatterField", "value": "description", "matches": "use when" },
+        { "type": "contains", "value": "when to use" }
+      ]
+    },
+    {
+      "id": "R9",
+      "rule": "The report includes before/after evidence and the test results",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "before/after" },
+        { "type": "contains", "value": "GREEN" }
+      ]
+    },
+    {
+      "id": "R10",
+      "rule": "An incomplete update request is answered by asking, never by writing files",
+      "check": "agent-evaluation"
+    }
+  ]
+}
