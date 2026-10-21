@@ -24,7 +24,6 @@ Exit codes: `0` GREEN, `1` RED, `2` bad spec.
 graph TD
     A1["1: skill-forge agent - loads this skill for the RED gate"] --> S["skill-testing"]
     A2["2: skill-updater agent - loads this skill for the tests handoff"] --> S
-    A3["3: skill-creator skill - delegates rule decomposition and the runner"] --> S
 ```
 
 ## Workflow graph
