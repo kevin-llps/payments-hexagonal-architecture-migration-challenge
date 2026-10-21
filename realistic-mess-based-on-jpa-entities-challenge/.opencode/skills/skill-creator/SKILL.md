@@ -68,13 +68,68 @@ Do not invent inputs or fill gaps with placeholders.
    not author `SKILL.md` until RED is observed.
 5. **Author** — write exactly one `<id>/SKILL.md` using the template below. Its
    `## Rules` table must list exactly the rule IDs from `tests/rules.json`.
-   Supporting `references/`, `scripts/`, or `templates/` files are optional and
-   must be referenced by paths relative to the skill directory.
-6. **GREEN gate** — rerun the same command. It must pass before reporting
+   Then write `<id>/README.md` next to it using the README template below; the
+   README is mandatory, not optional. Supporting `references/`, `scripts/`, or
+   `templates/` files are optional and must be referenced by paths relative to
+   the skill directory.
+6. **Dependency graph** — fill the `## Dependency graph` section of
+   `<id>/README.md` with one indexed caller sentence per agent or skill that
+   calls this skill (`1: <caller>`, `2: <caller>`, ...), one arrow per caller
+   pointing to this skill, following the graph rules below.
+7. **Workflow graph** — fill the `## Workflow graph` section of
+   `<id>/README.md` with one indexed step sentence per step of this skill's
+   own workflow (`1: <step>`, `2: <step>`, ...) in execution order, plus the
+   files each step builds, following the graph rules below.
+8. **GREEN gate** — rerun the same command. It must pass before reporting
    success. Fix the skill, not the tests; weakening a rule requires explicit
    user approval.
-7. **Report** — list the final path, the skill ID, RED and GREEN evidence, the
+9. **Report** — list the final path, the skill ID, RED and GREEN evidence, the
    per-rule results, and the agent-evaluation results.
+
+### README template
+
+```markdown
+# <Display Name>
+
+<One-paragraph purpose, from input 1.>
+
+## When to use
+
+<When to use this skill, mirroring the description input.>
+
+## How to run
+
+<How the user invokes the skill: the exact prompt phrase or command.>
+
+## Dependency graph
+
+<MERMAID graph TD: one node for this skill plus one node per agent or skill
+that calls it. Every caller node label starts with its 1-based index followed
+by ": " - e.g. "1: <first caller sentence>", "2: <second caller sentence>".
+One arrow per caller, pointing from the caller to this skill.>
+
+## Workflow graph
+
+<MERMAID graph TD: one node per step of this skill's own workflow, every node
+label starting with its 1-based index followed by ": " - e.g.
+"1: <first step sentence>", "2: <second step>", arrows in execution order.
+Each file a step builds hangs off its step with a "builds: <path>" label.>
+```
+
+README template rules:
+
+- The README documents the skill's purpose, when to use it, and how to run it.
+- The README stays shorter than `SKILL.md`; it documents, it does not duplicate.
+- Node labels in both graphs begin with the entry's 1-based index followed by
+  ": ", e.g. `1: <sentence>`; indexes follow the order in which the arrows
+  point.
+- The dependency graph shows only agents or skills that call this skill plus
+  the skill itself: one arrow per caller, pointing from the caller to the
+  skill. No outgoing dependencies, no unrelated nodes, and no invented
+  callers; if nothing calls the skill yet, one sentence says so instead.
+- The workflow graph shows only steps executed by this skill, in execution
+  order, with the files each step builds. Steps executed by an agent that
+  invokes this skill are excluded.
 
 ## Rules
 
@@ -90,6 +145,10 @@ Do not invent inputs or fill gaps with placeholders.
 | R8  | The report includes RED and GREEN evidence and agent-evaluation results  | static |
 | R9  | The description states when to use the skill                         | static |
 | R10 | An incomplete request is answered by asking, never by writing files | agent-evaluation |
+| R11 | Every created skill ships a README.md documentation file            | static |
+| R12 | The README documents the skill's purpose, when to use it, and how to run it | static |
+| R13 | The README dependency graph shows only this skill's callers, each label indexed | static |
+| R14 | The README workflow graph shows only this skill's own steps, each label indexed   | static |
 
 ## Template
 
@@ -146,3 +205,10 @@ Template rules:
 - [ ] RED is observed before `SKILL.md` is created.
 - [ ] GREEN is observed before success is reported.
 - [ ] The generated `SKILL.md` passes `skill-testing` with exact rule coverage.
+- [ ] `<id>/README.md` exists beside `<id>/SKILL.md` for every created skill.
+- [ ] The README documents the skill's purpose, when to use it, and how to run
+      it.
+- [ ] The README's dependency graph shows only this skill's callers, each
+      label indexed as `1: <caller>`.
+- [ ] The README's workflow graph shows only this skill's own steps, each
+      label indexed as `1: <step>`.
