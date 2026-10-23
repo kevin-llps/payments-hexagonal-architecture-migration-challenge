@@ -1,0 +1,68 @@
+{
+  "target": "skill-creator",
+  "phase": "opt-1",
+  "scenario": "duplicate-id",
+  "scenario_hash": "b223a02dfed1d4dba620b52c9a4988653abe115cc590bacc109c669a78d19557",
+  "run": 2,
+  "title": "tokens:skill-creator:duplicate-id:opt-1:2:24bd1e",
+  "reason": "Refuse to create a skill whose id already exists",
+  "date": "2026-10-23",
+  "session_id": "ses_e961ef2a8ffefpZbcNSzbbad5b",
+  "children": 0,
+  "model": "opencode/big-pickle",
+  "agent": "build",
+  "tokens": {
+    "input": 7859,
+    "output": 388,
+    "reasoning": 526,
+    "cache": {
+      "read": 36224,
+      "write": 0
+    },
+    "total": 44997
+  },
+  "cost": 0.0,
+  "duration_seconds": 12.71,
+  "exit_code": 0,
+  "result": "PASS",
+  "assertions": [
+    {
+      "check": "final_text:.opencode/skills/skill-creator",
+      "status": "PASS",
+      "detail": "found"
+    },
+    {
+      "check": "command:0",
+      "status": "PASS",
+      "detail": "exit 0"
+    },
+    {
+      "check": "rule_tests",
+      "status": "PASS",
+      "detail": " documentation file\nPASS  R12  The README documents the skill's purpose, when to use it, and how to run it\nPASS  R13  The README dependency graph shows only this skill's callers, each label indexed\nPASS  R14  The README workflow graph shows only this skill's own steps, each label indexed\n\nStatic: 13 passed, 0 failed, 13 total\n\nAgent evaluations (not executed by this script — run with an agent):\n  AGENT-EVAL  R10  An incomplete request is answered by asking, never by writing files\n      Prompt:\n        Create a skill called weather.\n      Expected:\n        The agent asks for responsibility, in-scope, out-of-scope, instructions and\n        acceptance criteria in a single batched question, and writes no file.\n\nAgent evaluations to run: 1\n\nResult: GREEN (static) — 1 agent evaluation(s) pending"
+    }
+  ],
+  "artifact_hashes": {},
+  "target_tests_hash": {
+    "agent-evaluations/R10.md": "28c5f76408006a81a8fdf95f7ea25909efbbd8c490fc2dea38ad291bb043f3b4",
+    "rules.json": "1822a3cde625c3f2019ef2f35e387c09ce29816a80b01f681f173ae49640b5d3"
+  },
+  "final_text": "I stopped before writing anything: the requested ID already exists.\n\n**Collision**\n- Skill ID: `skill-creator` (project-local)\n- Existing path: `project/.opencode/skills/skill-creator/SKILL.md`\n\nCreation is create-only, so I won't overwrite, update, or edit that skill. No files were written.\n\nPlease give me a different kebab-case ID (for example `token-usage-measurer`), and I'll create the new skill from the five inputs you already provided:\n\n- **Responsibility:** Measure token usage\n- **In-scope:** Running scenarios; recording totals\n- **Out-of-scope:** Editing other skills\n- **Instructions:** (1) Run scenario script, (2) Append history row\n- **Acceptance criteria:** Every run has a recorded total\n- **Rule IDs:** R1",
+  "error": "",
+  "event_errors": [],
+  "command": [
+    "opencode",
+    "run",
+    "--standalone",
+    "--format",
+    "json",
+    "--agent",
+    "build",
+    "--model",
+    "opencode/big-pickle",
+    "--title",
+    "tokens:skill-creator:duplicate-id:opt-1:2:24bd1e",
+    "--auto",
+    "Load the skill-creator skill and create a skill.\n\nResponsibility: Measure token usage.\n\nIn-scope:\n- Running scenarios\n- Recording totals\n\nOut-of-scope:\n- Editing other skills\n\nInstructions:\n1. Run scenario script\n2. Append history row\n\nAcceptance criteria:\n- [ ] Every run has a recorded total\n\nRule IDs: R1\nSkill ID: skill-creator (project-local)"
+  ]
+}

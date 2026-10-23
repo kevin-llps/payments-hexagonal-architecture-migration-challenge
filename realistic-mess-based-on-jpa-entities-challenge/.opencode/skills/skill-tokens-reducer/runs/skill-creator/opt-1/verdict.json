@@ -1,0 +1,43 @@
+{
+  "verdict": "REJECT",
+  "threshold_percent": 5.0,
+  "results_ok": true,
+  "artifacts_ok": true,
+  "tests_ok": true,
+  "settings_ok": true,
+  "scenarios": [
+    {
+      "scenario": "ambiguous",
+      "baseline_runs": 3,
+      "candidate_runs": 3,
+      "baseline_median": 39892,
+      "candidate_median": 47713,
+      "delta_tokens": -7821,
+      "delta_percent": -19.61,
+      "results": "PASS",
+      "artifacts": "no artifacts declared"
+    },
+    {
+      "scenario": "duplicate-id",
+      "baseline_runs": 3,
+      "candidate_runs": 3,
+      "baseline_median": 66847,
+      "candidate_median": 44997,
+      "delta_tokens": 21850,
+      "delta_percent": 32.69,
+      "results": "PASS",
+      "artifacts": "no artifacts declared"
+    },
+    {
+      "scenario": "nominal",
+      "baseline_runs": 3,
+      "candidate_runs": 3,
+      "baseline_median": 114279,
+      "candidate_median": 81510,
+      "delta_tokens": 32769,
+      "delta_percent": 28.67,
+      "results": "PASS",
+      "artifacts": "no artifacts declared"
+    }
+  ]
+}

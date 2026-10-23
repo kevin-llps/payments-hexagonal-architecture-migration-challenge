@@ -1,0 +1,11 @@
+{
+  "root": "/Users/kevinllps/projects/exalt-it/payments-hexagonal-architecture-migration-challenge/realistic-mess-based-on-jpa-entities-challenge/.opencode/skills/skill-creator",
+  "count": 5,
+  "files": {
+    "README.md": "6b772eb0db48f976f56da8d92fd6bb8b50d31ac1cebbbebe81d4f990adf27bff",
+    "SKILL.md": "3382ba24ada80274f61c086da75492b74936f16acd5f8474ddb41504419ebec4",
+    "TOKENS_HISTORY.md": "3a374383b17e8e9e785ca115456bce50370dceeb9eac1e7843e764058d5dce79",
+    "tests/agent-evaluations/R10.md": "28c5f76408006a81a8fdf95f7ea25909efbbd8c490fc2dea38ad291bb043f3b4",
+    "tests/rules.json": "1822a3cde625c3f2019ef2f35e387c09ce29816a80b01f681f173ae49640b5d3"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "id": "nominal",
+  "reason": "Create one skill from a complete five-input request",
+  "prompt": "Load the skill-creator skill and create a new skill.\n\nResponsibility: Turn git commit subjects into a Keep a Changelog entry.\n\nIn-scope:\n- Grouping commits by type\n- Writing Added, Changed, and Fixed sections\n\nOut-of-scope:\n- Running git commands\n- Committing\n- Publishing\n\nInstructions:\n1. Read commit subjects from a text file\n2. Group them by type\n3. Print Markdown\n4. Write docs/CHANGELOG.md\n\nAcceptance criteria:\n- [ ] Every commit appears exactly once\n- [ ] Empty input prints an empty entry\n- [ ] The output is valid Markdown\n\nRule IDs for the Rules table: R1, R2, R3\nSkill ID: sandbox-demo (project-local)",
+  "model": "opencode/big-pickle",
+  "agent": "build",
+  "assertions": {
+    "files": [
+      ".opencode/skills/sandbox-demo/SKILL.md",
+      ".opencode/skills/sandbox-demo/README.md"
+    ],
+    "contains": [
+      { "path": ".opencode/skills/sandbox-demo/SKILL.md", "text": "## Rules" },
+      { "path": ".opencode/skills/sandbox-demo/SKILL.md", "text": "## Acceptance criteria" },
+      { "path": ".opencode/skills/sandbox-demo/README.md", "text": "## Dependency graph" },
+      { "path": ".opencode/skills/sandbox-demo/SKILL.md", "text": "R1" }
+    ],
+    "not_contains": [
+      { "path": ".opencode/skills/sandbox-demo/SKILL.md", "text": "TODO" }
+    ],
+    "final_text_contains": ["sandbox-demo"],
+    "commands": [
+      ["sh", "-c", "test -f .opencode/skills/sandbox-demo/SKILL.md && test -f .opencode/skills/sandbox-demo/README.md"]
+    ]
+  }
+}

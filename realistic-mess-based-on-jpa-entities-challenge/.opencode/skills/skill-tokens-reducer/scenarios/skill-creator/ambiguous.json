@@ -1,0 +1,13 @@
+{
+  "id": "ambiguous",
+  "reason": "Ask for missing inputs instead of creating an under-specified skill",
+  "prompt": "Load the skill-creator skill and create a skill called weather.",
+  "model": "opencode/big-pickle",
+  "agent": "build",
+  "assertions": {
+    "final_text_contains": ["weather"],
+    "commands": [
+      ["sh", "-c", "test ! -e .opencode/skills/weather || (test -f .opencode/skills/weather/SKILL.md && test -f .opencode/skills/weather/README.md)"]
+    ]
+  }
+}

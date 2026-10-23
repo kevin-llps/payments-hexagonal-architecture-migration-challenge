@@ -1,0 +1,68 @@
+{
+  "target": "skill-creator",
+  "phase": "opt-1",
+  "scenario": "ambiguous",
+  "scenario_hash": "bf15544a8b99beb6c36e1b5ab036601807748410703bbfd059b1b960e44924de",
+  "run": 2,
+  "title": "tokens:skill-creator:ambiguous:opt-1:2:50f843",
+  "reason": "Ask for missing inputs instead of creating an under-specified skill",
+  "date": "2026-10-23",
+  "session_id": "ses_e961ff6f3ffeuIoRV4yN39J7qs",
+  "children": 0,
+  "model": "opencode/big-pickle",
+  "agent": "build",
+  "tokens": {
+    "input": 9136,
+    "output": 1218,
+    "reasoning": 877,
+    "cache": {
+      "read": 46720,
+      "write": 0
+    },
+    "total": 57951
+  },
+  "cost": 0.0,
+  "duration_seconds": 22.74,
+  "exit_code": 0,
+  "result": "PASS",
+  "assertions": [
+    {
+      "check": "final_text:weather",
+      "status": "PASS",
+      "detail": "found"
+    },
+    {
+      "check": "command:0",
+      "status": "PASS",
+      "detail": "exit 0"
+    },
+    {
+      "check": "rule_tests",
+      "status": "PASS",
+      "detail": " documentation file\nPASS  R12  The README documents the skill's purpose, when to use it, and how to run it\nPASS  R13  The README dependency graph shows only this skill's callers, each label indexed\nPASS  R14  The README workflow graph shows only this skill's own steps, each label indexed\n\nStatic: 13 passed, 0 failed, 13 total\n\nAgent evaluations (not executed by this script — run with an agent):\n  AGENT-EVAL  R10  An incomplete request is answered by asking, never by writing files\n      Prompt:\n        Create a skill called weather.\n      Expected:\n        The agent asks for responsibility, in-scope, out-of-scope, instructions and\n        acceptance criteria in a single batched question, and writes no file.\n\nAgent evaluations to run: 1\n\nResult: GREEN (static) — 1 agent evaluation(s) pending"
+    }
+  ],
+  "artifact_hashes": {},
+  "target_tests_hash": {
+    "agent-evaluations/R10.md": "28c5f76408006a81a8fdf95f7ea25909efbbd8c490fc2dea38ad291bb043f3b4",
+    "rules.json": "1822a3cde625c3f2019ef2f35e387c09ce29816a80b01f681f173ae49640b5d3"
+  },
+  "final_text": "I loaded the skill-creator skill. Before creating anything, it requires five inputs, and the `weather` request doesn't specify them. I also need to resolve where the skill should live.\nI can't create the `weather` skill yet: the request is missing the five inputs skill-creator requires, and this run is non-interactive, so I can't prompt you for them interactively.\n\nI checked for collisions first: `.opencode/skills/weather/` is absent, so the ID is available.\n\nPlease reply with the following, and I'll create `.opencode/skills/weather/SKILL.md` and `README.md` in one pass:\n\n1. **Responsibility** — what the skill is for, in one or two sentences.\n2. **In-scope** — what it must cover (capabilities, inputs, supported locations).\n3. **Out-of-scope** — what it must not do, including wrong assumptions to reject.\n4. **Instructions** — ordered steps with the commands, tools, files, or APIs to use.\n5. **Acceptance criteria** — observable, checkable conditions, each written as an atomic rule.\n6. **Location** — project-local (`.opencode/skills/weather/`) or global.\n\nI haven't written or scaffolded any file, because skill-creator forbids inventing inputs or using placeholders.",
+  "error": "",
+  "event_errors": [],
+  "command": [
+    "opencode",
+    "run",
+    "--standalone",
+    "--format",
+    "json",
+    "--agent",
+    "build",
+    "--model",
+    "opencode/big-pickle",
+    "--title",
+    "tokens:skill-creator:ambiguous:opt-1:2:50f843",
+    "--auto",
+    "Load the skill-creator skill and create a skill called weather."
+  ]
+}

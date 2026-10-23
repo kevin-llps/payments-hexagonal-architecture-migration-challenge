@@ -1,0 +1,13 @@
+{
+  "id": "duplicate-id",
+  "reason": "Refuse to create a skill whose id already exists",
+  "prompt": "Load the skill-creator skill and create a skill.\n\nResponsibility: Measure token usage.\n\nIn-scope:\n- Running scenarios\n- Recording totals\n\nOut-of-scope:\n- Editing other skills\n\nInstructions:\n1. Run scenario script\n2. Append history row\n\nAcceptance criteria:\n- [ ] Every run has a recorded total\n\nRule IDs: R1\nSkill ID: skill-creator (project-local)",
+  "model": "opencode/big-pickle",
+  "agent": "build",
+  "assertions": {
+    "final_text_contains": [".opencode/skills/skill-creator"],
+    "commands": [
+      ["sh", "-c", "test -f .opencode/skills/skill-creator/SKILL.md"]
+    ]
+  }
+}

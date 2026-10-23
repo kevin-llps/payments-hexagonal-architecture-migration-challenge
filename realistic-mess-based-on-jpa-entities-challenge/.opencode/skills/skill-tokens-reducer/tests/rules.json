@@ -1,0 +1,175 @@
+{
+  "skill": "skill-tokens-reducer",
+  "rules": [
+    {
+      "id": "R1",
+      "rule": "TOKENS_HISTORY.md is created when absent and never overwritten",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Create `TOKENS_HISTORY.md`", "section": "Workflow" },
+        { "type": "contains", "value": "Never overwrite an existing history", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R2",
+      "rule": "At least three scenarios are invented, persisted, and reused byte-identically",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "three scenarios (nominal, edge case,", "section": "Workflow" },
+        { "type": "contains", "value": "byte-identically", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R3",
+      "rule": "Every measured run uses a fresh isolated copy and a unique session title",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "fresh isolated copy", "section": "Workflow" },
+        { "type": "contains", "value": "unique session title", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R4",
+      "rule": "The model and agent are pinned and identical before and after",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "pinned model and agent", "section": "Workflow" },
+        { "type": "contains", "value": "same scenario files, model, agent and run count", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R5",
+      "rule": "Each history row records date, title, invocation reason, session ID, and tokens",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "date, session title, invocation reason,", "section": "Workflow" },
+        { "type": "contains", "value": "session ID, token components and total", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R6",
+      "rule": "Token totals come from recorded session usage and are never estimated",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Every token number comes from\nOpenCode's recorded session usage" },
+        { "type": "contains", "value": "nothing is estimated" },
+        { "type": "contains", "value": "Estimating tokens from characters" }
+      ]
+    },
+    {
+      "id": "R7",
+      "rule": "Child session tokens are included in every run total",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "including child sessions" }
+      ]
+    },
+    {
+      "id": "R8",
+      "rule": "The baseline runs each scenario at least three times",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "3 scenarios x 3 runs per phase" },
+        { "type": "contains", "value": "--runs 3", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R9",
+      "rule": "The target tests directory stays byte-identical",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "`tests/` must stay byte-identical", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R10",
+      "rule": "The candidate phase reuses identical scenarios, model, agent, and run count",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "same scenario files, model, agent and run count", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R11",
+      "rule": "Acceptance requires a median decrease of at least the threshold and all result checks passing",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "every scenario's median total drops by at least the threshold", "section": "Workflow" },
+        { "type": "contains", "value": "every result check passes", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R12",
+      "rule": "A rejected or inconclusive optimization is restored and recorded",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "restore the", "section": "Workflow" },
+        { "type": "contains", "value": "record the rejection", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R13",
+      "rule": "History rows are append-only and never edited",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Never edit history rows", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R14",
+      "rule": "The histogram lists every session with its date and is printed after each optimization",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "per-session histogram", "section": "Purpose" },
+        { "type": "contains", "value": "after every optimization, accepted or rejected", "section": "Workflow" },
+        { "type": "contains", "value": "render_tokens_histogram.py", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R15",
+      "rule": "The report shows before/after medians, verdict, histogram, and history path",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "before/after medians per", "section": "Workflow" },
+        { "type": "contains", "value": "the verdict, the histogram, and the history path", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R16",
+      "rule": "A missing target is reported and asked for before any measurement starts",
+      "check": "agent-evaluation"
+    },
+    {
+      "id": "R17",
+      "rule": "No token saving is claimed or written without a measured comparison",
+      "check": "agent-evaluation"
+    },
+    {
+      "id": "R18",
+      "rule": "Every supporting script exists and has a matching test module",
+      "check": "static",
+      "assertions": [
+        { "type": "pathExists", "value": "references/history-format.md" },
+        { "type": "pathExists", "value": "references/scenario-format.md" },
+        { "type": "pathExists", "value": "scripts/measure_session_tokens.py" },
+        { "type": "pathExists", "value": "scripts/render_tokens_histogram.py" },
+        { "type": "pathExists", "value": "scripts/append_tokens_history.py" },
+        { "type": "pathExists", "value": "scripts/summarize_session.py" },
+        { "type": "pathExists", "value": "scripts/fingerprint_workspace.py" },
+        { "type": "pathExists", "value": "scripts/compare_token_runs.py" },
+        { "type": "pathExists", "value": "scripts/run_skill_scenarios.py" },
+        { "type": "scriptTestCoverage" }
+      ]
+    },
+    {
+      "id": "R19",
+      "rule": "The skill is discoverable and its description states when to use it",
+      "check": "static",
+      "assertions": [
+        { "type": "idMatchesDir" },
+        { "type": "frontmatterField", "value": "name" },
+        { "type": "frontmatterField", "value": "description", "matches": "use when" }
+      ]
+    }
+  ]
+}
