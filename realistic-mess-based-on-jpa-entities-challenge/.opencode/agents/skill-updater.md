@@ -52,31 +52,45 @@ instructions, load them and follow them.
    covered bidirectionally. Never weaken or delete an existing assertion
    without explicit user approval.
 
-5. **GREEN gate.** Run
-   `python3 .opencode/skills/skill-testing/scripts/run-skill-rule-tests.py .opencode/skills/<id>`.
-   Every static rule must pass. Fix the skill, never the assertions.
+5. **Per-rule loop.** Iterate every added or changed rule in spec order with
+   `python3 .opencode/skills/skill-testing/scripts/run-skill-rule-tests.py .opencode/skills/<id> --rule <id>`.
+   - **New or intentionally changed static rule.** Prove RED first, then edit
+     only that rule's sections until the selected run prints `PASS` and exits
+     `0`.
+   - **Existing static rule.** Confirm it stays GREEN after the edit; if it
+     goes RED, fix the skill instead of the assertion.
+   - **Agent-evaluation rule.** Run the selected rule, execute the printed
+     `Prompt` against the updated skill, and compare to `Expected`. A mismatch
+     is the RED; add the missing guidance, rerun the prompt, and record the
+     PASS before continuing.
 
-6. **Agent evaluations.** For every `AGENT-EVAL` block, launch a subagent,
-   give it the `Prompt` with the updated skill loaded, and compare its
-   answer to `Expected`. Record PASS/FAIL per rule. A failing evaluation is
-   reported, never fixed by weakening the fixture. Never edit an evaluation
-   result into a passing one.
+6. **Full gate.** Run
+   `python3 .opencode/skills/skill-testing/scripts/run-skill-rule-tests.py .opencode/skills/<id>`
+   with no `--rule`. Every static rule must pass, and the `Agent evaluations`
+   section is listed after the static results. Fix the skill, never the
+   assertions.
 
-7. **Scope evidence.** Do not run `enforce-new-skill-scope.py check`: it is
+7. **Agent evaluations.** If `SKILL.md` changed after a rule's evaluation,
+   rerun that prompt and record the final PASS/FAIL per rule. A failing
+   evaluation is reported, never fixed by weakening the fixture. Never edit an
+   evaluation result into a passing one.
+
+8. **Scope evidence.** Do not run `enforce-new-skill-scope.py check`: it is
    a creation guard that flags exactly the modifications an update makes.
    Instead show that the change set is limited to the target skill directory
    (e.g. `git status --short` / `git diff --stat` filtered to
    `.opencode/skills/<id>`).
 
-8. **Report.** Show the before/after diff of the edited sections, the GREEN
-   output, the per-rule table, the agent-evaluation results, and the change
-   set limited to the target skill directory.
+9. **Report.** Show the before/after diff of the edited sections, the per-rule
+   RED then GREEN evidence, the full-run GREEN output, the agent-evaluation
+   results, and the change set limited to the target skill directory.
 
 ## Hard limits
 
 - One target skill per run. Do not update a second skill.
 - Never create, rename, or delete a skill, test, or reference file. If the
   target does not exist, stop and say so.
-- Never claim success without a GREEN run.
+- Never claim success without per-rule RED then GREEN evidence and a final
+  full-run GREEN.
 - If a gate cannot be reached, stop and report the blocker instead of writing
   around it.

@@ -52,6 +52,22 @@ malformed fixture is a failure, not a skip.
 spec IDs. Coverage is checked in both directions, so a rule cannot exist only
 in the table or only in the spec.
 
+## Selected-rule runs
+
+The spec is always written in full first. The implementation then advances one
+rule at a time, and each iteration is observed with `--rule`:
+
+```sh
+python3 .opencode/skills/skill-testing/scripts/run-skill-rule-tests.py <skill-dir> --rule R1
+```
+
+`--rule` is repeatable and also accepts `--rule=<id>`. The run keeps spec order,
+evaluates only the selected rules, and prints a `Selected: R1 (1 of N)` line.
+The whole spec is still validated, `ruleTableCoverage` still compares against
+every spec ID, and an unknown ID exits `2` before any assertion runs. A
+selected agent-evaluation rule is listed alone so its prompt can be executed at
+that point in the loop.
+
 ## Assertion types
 
 | Type | Extra fields | Passes when |
@@ -104,18 +120,21 @@ The agent asks for the missing responsibility before writing any file.
 The runner does not call a model. It validates that the fixture has `Prompt`
 and `Expected` sections, then lists every agent-evaluation rule **after** the
 static results, with the prompt an agent must execute. The orchestrating agent
-runs the prompt and reports the observed behavior. There is no flag: these
-checks are always listed, and an unusable fixture fails the run.
+runs the prompt and reports the observed behavior. In the per-rule loop, that
+evaluation happens at the rule's position: a mismatch with `Expected` is the
+RED, and a rerun after the fix is the GREEN. There is no flag: these checks are
+always listed, and an unusable fixture fails the run.
 
 ## Output order
 
-1. Static results, one `PASS`/`FAIL` line per static rule.
-2. `Static:` summary.
-3. `Agent evaluations (not executed by this script — run with an agent):`
+1. `Rules:` count, plus `Selected:` when `--rule` is used.
+2. Static results, one `PASS`/`FAIL` line per static rule.
+3. `Static:` summary.
+4. `Agent evaluations (not executed by this script — run with an agent):`
    followed by one `AGENT-EVAL` block per rule with `Prompt` and `Expected`
    (or `FAIL` with the fixture problem).
-4. `Agent evaluations to run: N`.
-5. `Result:` — `GREEN`, `GREEN (static) — N agent evaluation(s) pending`, or
+5. `Agent evaluations to run: N`.
+6. `Result:` — `GREEN`, `GREEN (static) — N agent evaluation(s) pending`, or
    `RED`.
 
 ## Exit codes
@@ -124,7 +143,7 @@ checks are always listed, and an unusable fixture fails the run.
 | ---- | ------- |
 | `0` | Every static rule passed and every agent-evaluation fixture is usable. |
 | `1` | At least one static rule failed, no spec/`SKILL.md` yet, or an agent-evaluation fixture is missing/malformed. |
-| `2` | Usage error or malformed spec. |
+| `2` | Usage error, malformed spec, or unknown rule ID. |
 
 ## Guard
 

@@ -123,6 +123,108 @@ class CliTests(unittest.TestCase):
         self.assertIn("PASS  R1", result.stdout)
         self.assertIn("Result: GREEN", result.stdout)
 
+    def test_selected_rule_runs_only_that_rule(self):
+        rules = [
+            STATIC_RULE,
+            {
+                "id": "R2",
+                "rule": "Has a workflow",
+                "check": "static",
+                "assertions": [{"type": "heading", "value": "Workflow"}],
+            },
+        ]
+        self.write_rules(rules)
+        result = run_cli(str(self.skill), "--rule", "R1")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("PASS  R1", result.stdout)
+        self.assertNotIn("R2", result.stdout)
+        self.assertIn("Selected: R1", result.stdout)
+        self.assertIn("Result: GREEN", result.stdout)
+
+    def test_selected_failing_rule_is_red(self):
+        rules = [
+            STATIC_RULE,
+            {
+                "id": "R2",
+                "rule": "Has a workflow",
+                "check": "static",
+                "assertions": [{"type": "heading", "value": "Workflow"}],
+            },
+        ]
+        self.write_rules(rules)
+        result = run_cli(str(self.skill), "--rule", "R2")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("FAIL  R2", result.stdout)
+        self.assertIn('heading "Workflow" not found', result.stdout)
+        self.assertNotIn("R1", result.stdout)
+        self.assertIn("Result: RED", result.stdout)
+
+    def test_selected_rule_without_skill_md_is_red(self):
+        (self.skill / "SKILL.md").unlink()
+        result = run_cli(str(self.skill), "--rule", "R1")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("FAIL  R1", result.stdout)
+        self.assertIn("SKILL.md not found", result.stdout)
+        self.assertIn("Result: RED", result.stdout)
+
+    def test_selected_unknown_rule_exits_two(self):
+        result = run_cli(str(self.skill), "--rule", "R9")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("unknown rule id", result.stderr)
+        self.assertNotIn("PASS", result.stdout)
+
+    def test_selected_rule_accepts_equals_and_repeated_forms(self):
+        rules = [
+            STATIC_RULE,
+            {
+                "id": "R2",
+                "rule": "Has a workflow",
+                "check": "static",
+                "assertions": [{"type": "heading", "value": "Workflow"}],
+            },
+        ]
+        self.write_rules(rules)
+        self.write_skill(SKILL_MD + "\n## Workflow\n\nstep\n")
+        result = run_cli(str(self.skill), "--rule=R1", "--rule", "R2", "--rule", "R1")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout.count("PASS  R1"), 1)
+        self.assertIn("PASS  R2", result.stdout)
+        self.assertIn("Selected: R1, R2 (2 of 2)", result.stdout)
+
+    def test_empty_rule_value_is_rejected(self):
+        result = run_cli(str(self.skill), "--rule=")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("usage:", result.stderr)
+        self.assertNotIn("PASS", result.stdout)
+
+    def test_selected_agent_evaluation_is_listed_alone(self):
+        rules = [STATIC_RULE, {"id": "R2", "rule": "Asks first", "check": "agent-evaluation"}]
+        self.write_rules(rules)
+        self.write_fixture("R2", "# R2\n\n## Prompt\n\nDo the thing.\n\n## Expected\n\nIt asks first.\n")
+        result = run_cli(str(self.skill), "--rule", "R2")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("AGENT-EVAL  R2", result.stdout)
+        self.assertNotIn("PASS  R1", result.stdout)
+        self.assertIn("1 agent evaluation(s) pending", result.stdout)
+
+    def test_selected_agent_evaluation_missing_fixture_fails(self):
+        rules = [STATIC_RULE, {"id": "R2", "rule": "Asks first", "check": "agent-evaluation"}]
+        self.write_rules(rules)
+        result = run_cli(str(self.skill), "--rule", "R2")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("fixture missing: tests/agent-evaluations/R2.md", result.stdout)
+        self.assertIn("Result: RED", result.stdout)
+
+    def test_selected_rule_still_validates_whole_spec(self):
+        rules = [
+            STATIC_RULE,
+            {"id": "R2", "rule": "broken", "check": "nope"},
+        ]
+        self.write_rules(rules)
+        result = run_cli(str(self.skill), "--rule", "R1")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("invalid check: nope", result.stderr)
+
     def test_missing_skill_md_is_red(self):
         (self.skill / "SKILL.md").unlink()
         result = run_cli(str(self.skill))

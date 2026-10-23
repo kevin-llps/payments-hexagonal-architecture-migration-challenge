@@ -1,13 +1,15 @@
 ---
 name: Skill Testing
-description: Decompose a skill's acceptance criteria into atomic rules, write executable tests for them, and run them to a RED/GREEN verdict. Use when a skill must be tested, when a skill is written test-first, or when verifying that an existing skill satisfies its rules.
+description: Decompose a skill's acceptance criteria into atomic rules, write executable tests for them, and iterate rule by rule from RED to GREEN. Use when a skill must be tested, when a skill is written test-first, or when verifying that an existing skill satisfies its rules.
 ---
 
 # Skill Testing
 
 Turn a skill's acceptance criteria into atomic, stable rule IDs and executable
 checks. Tests are the specification: they are written before the skill they
-describe, and the runner reports one PASS/FAIL line per static rule.
+describe, and the runner reports one PASS/FAIL line per static rule. The whole
+spec is written first, but the implementation advances one rule at a time:
+each rule is RED under `--rule <id>` before it is implemented and GREEN after.
 
 ## Purpose
 
@@ -23,6 +25,7 @@ regression-test any existing skill.
   `R2`, ...).
 - Writing `tests/rules.json` and agent-evaluation fixtures beside the skill.
 - Running static checks and returning a deterministic RED/GREEN verdict.
+- Running one selected rule at a time so each iteration has its own evidence.
 - Listing every agent-evaluation rule, with its prompt, after the static run.
 
 **Out of scope**
@@ -44,14 +47,25 @@ regression-test any existing skill.
 4. Choose assertions from `references/rules-schema.md`. Static rules need
    at least one assertion; agent-evaluation rules need
    `tests/agent-evaluations/<id>.md` with `Prompt` and `Expected` sections.
-5. Run `python3 .opencode/skills/skill-testing/scripts/run-skill-rule-tests.py <skill-dir>`.
-   With no `SKILL.md` the run is RED: every static rule fails and the exit code
-   is `1`.
-6. Hand the rule IDs to the authoring skill. After `SKILL.md` exists, rerun the
-   same command. The run is GREEN only when every static rule passes and
-   coverage between the spec and the `## Rules` table is bidirectional.
+5. Iterate **one rule at a time**, in spec order, until every rule is GREEN.
+   Hand each rule to the authoring skill; this skill never edits `SKILL.md`
+   itself.
+   1. Run that rule with
+      `python3 .opencode/skills/skill-testing/scripts/run-skill-rule-tests.py <skill-dir> --rule <id>`.
+   2. A static rule is RED while it prints `FAIL`; the authoring skill must
+      implement only that rule in `SKILL.md`, then rerun the same command until
+      the rule prints `PASS` and exits `0`.
+   3. Agent-evaluation rules run **at their position in the loop**: the runner
+      prints that rule's `Prompt` and `Expected`; execute the prompt against
+      the current `SKILL.md` and compare the answer to `Expected`. A mismatch
+      is RED; have the authoring skill add the missing guidance, rerun the
+      same prompt, and record the PASS before continuing.
+   4. Only then move to the next rule.
+6. Run the full suite with no `--rule`. Every static rule must be GREEN and
+   coverage between the spec and the `## Rules` table stays bidirectional.
    Agent evaluations are listed after the static run, never hidden behind a
-   flag, and a missing fixture fails the run.
+   flag, and a missing fixture fails the run. Rerun every prompt once more if
+   `SKILL.md` changed after its iteration.
 7. Report the rule table, PASS/FAIL per rule, and the result of every
    agent-evaluation prompt.
 
@@ -70,6 +84,9 @@ regression-test any existing skill.
 | R9  | A skill is discoverable and its description says when to use it | static           |
 | R10 | Compound acceptance criteria are split into separate atomic rules | agent-evaluation |
 | R11 | Every script has a matching test module under scripts/tests    | static           |
+| R12 | TDD goes one rule at a time: RED, implement, GREEN, next rule  | static           |
+| R13 | The runner executes one selected rule via --rule and reports it | static          |
+| R14 | Agent-evaluation rules run at their position in the loop       | static           |
 
 ## Commands
 
@@ -79,6 +96,12 @@ python3 .opencode/skills/skill-testing/scripts/run-skill-rule-tests.py .opencode
 
 # The skill argument may also be a bare ID, resolved from the cwd then the skills root
 python3 .opencode/skills/skill-testing/scripts/run-skill-rule-tests.py <id>
+
+# One rule at a time: prints "Selected: R1 (1 of N)" and reports only that rule
+python3 .opencode/skills/skill-testing/scripts/run-skill-rule-tests.py <skill-dir> --rule R1
+
+# `--rule` is repeatable (`--rule R1 --rule R2` or `--rule=R1`); unknown IDs exit `2`
+python3 .opencode/skills/skill-testing/scripts/run-skill-rule-tests.py <skill-dir> --rule R1 --rule R2
 
 # Edit guard for a skill-forge run
 python3 .opencode/skills/skill-testing/scripts/enforce-new-skill-scope.py snapshot
@@ -97,3 +120,6 @@ python3 -m unittest discover -s .opencode/skills/skill-testing/scripts/tests -v
 - [ ] Agent evaluations are printed after the static results with Prompt and Expected.
 - [ ] A missing agent-evaluation fixture exits `1` instead of being skipped.
 - [ ] Every script under `scripts/` has a matching `scripts/tests/test_<name>.py`.
+- [ ] Each static rule is RED under `--rule <id>` before its implementation and GREEN after it.
+- [ ] `--rule <id>` runs only the selected rule, prints `Selected:`, and exits `2` on an unknown ID.
+- [ ] Each agent-evaluation prompt is executed at its rule's position, before the next rule starts.

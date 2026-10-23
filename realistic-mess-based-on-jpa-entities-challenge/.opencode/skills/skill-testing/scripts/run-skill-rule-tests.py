@@ -2,12 +2,18 @@
 """Verify a skill against its authoritative rule spec.
 
 Usage:
-    python3 run-skill-rule-tests.py <skill-dir|skill-id>
+    python3 run-skill-rule-tests.py <skill-dir|skill-id> [--rule <id> ...]
 
-Reads <skill-dir>/tests/rules.json, validates the spec, runs the static
+Reads <skill-dir>/tests/rules.json, validates the whole spec, runs the static
 assertions against <skill-dir>/SKILL.md, then lists every agent-evaluation rule
 with the prompt an agent must execute. Static rules come first; agent
 evaluations are always listed after them and are never hidden behind a flag.
+
+`--rule <id>` (repeatable, also `--rule=<id>`) restricts the run to the named
+rules, in spec order, so a caller can iterate one rule at a time. Unknown IDs
+and malformed specs exit 2 before any assertion runs. A selected
+agent-evaluation rule is printed alone so its prompt can be executed at that
+point in the loop.
 
 A bare skill ID is resolved from the current directory, then from the skills
 root. With no SKILL.md the run is RED: every static rule fails and the exit code
@@ -58,7 +64,7 @@ def fail(message: str) -> None:
 
 def usage() -> None:
     print(
-        "usage: python3 run-skill-rule-tests.py <skill-dir|skill-id>",
+        "usage: python3 run-skill-rule-tests.py <skill-dir|skill-id> [--rule <id> ...]",
         file=sys.stderr,
     )
     raise SystemExit(2)
@@ -76,10 +82,46 @@ def resolve_skill_dir(raw: str) -> Path:
     return (Path.cwd() / candidate).resolve()
 
 
-def parse_args(argv: list[str]) -> Path:
-    if len(argv) != 1 or argv[0].startswith("-"):
+def parse_args(argv: list[str]) -> tuple[Path, list[str]]:
+    """Return the skill directory and the requested rule IDs, if any."""
+    positional: list[str] = []
+    selected: list[str] = []
+    index = 0
+    while index < len(argv):
+        argument = argv[index]
+        if argument == "--rule":
+            if index + 1 >= len(argv) or not argv[index + 1].strip():
+                usage()
+            selected.append(argv[index + 1])
+            index += 2
+            continue
+        if argument.startswith("--rule="):
+            value = argument[len("--rule=") :].strip()
+            if not value:
+                usage()
+            selected.append(value)
+            index += 1
+            continue
+        if argument.startswith("-"):
+            usage()
+        positional.append(argument)
+        index += 1
+    if len(positional) != 1:
         usage()
-    return resolve_skill_dir(argv[0])
+    cleaned = [value.strip() for value in selected if value.strip()]
+    return resolve_skill_dir(positional[0]), cleaned
+
+
+def select_rules(rules: list[dict], requested: list[str]) -> list[dict]:
+    """Filter rules to the requested IDs, keeping spec order."""
+    if not requested:
+        return rules
+    spec_ids = [rule["id"] for rule in rules]
+    unknown = [rule_id for rule_id in unique(requested) if rule_id not in spec_ids]
+    if unknown:
+        fail(f"unknown rule id: {', '.join(unknown)}")
+    wanted = set(requested)
+    return [rule for rule in rules if rule["id"] in wanted]
 
 
 def parse_frontmatter(text: str) -> tuple[bool, dict[str, str]]:
@@ -345,13 +387,17 @@ def print_indented(label: str, text: str) -> None:
 
 
 def main() -> None:
-    directory = parse_args(sys.argv[1:])
+    directory, requested = parse_args(sys.argv[1:])
     spec = read_spec(directory)
     spec_ids = validate_spec(spec, directory)
+    rules = select_rules(spec["rules"], requested)
 
     print(f"Skill: {directory.name}")
     print(f"Spec:  {directory / 'tests' / 'rules.json'}")
     print(f"Rules: {len(spec['rules'])}")
+    if requested:
+        selected_ids = [rule["id"] for rule in rules]
+        print(f"Selected: {', '.join(selected_ids)} ({len(selected_ids)} of {len(spec['rules'])})")
     print("")
 
     skill_path = directory / "SKILL.md"
@@ -372,7 +418,7 @@ def main() -> None:
     agent_ready: list[tuple[dict, str, str]] = []
     agent_unusable: list[tuple[dict, str]] = []
 
-    for rule in spec["rules"]:
+    for rule in rules:
         if rule["check"] == "agent-evaluation":
             fixture = read_agent_evaluation(directory, rule["id"])
             if isinstance(fixture, str):

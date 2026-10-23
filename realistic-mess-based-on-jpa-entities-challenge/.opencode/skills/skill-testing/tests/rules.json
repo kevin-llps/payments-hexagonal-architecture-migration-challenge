@@ -95,6 +95,34 @@
       "assertions": [
         { "type": "scriptTestCoverage" }
       ]
+    },
+    {
+      "id": "R12",
+      "rule": "TDD proceeds one rule at a time: RED before implementation, GREEN after, then the next rule",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "one rule at a time", "section": "Workflow" },
+        { "type": "contains", "value": "implement only that rule", "section": "Workflow" },
+        { "type": "contains", "value": "Only then move to the next rule", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R13",
+      "rule": "The runner executes a selected rule with --rule and reports that rule's own verdict",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "--rule R1", "section": "Commands" },
+        { "type": "contains", "value": "Selected:", "section": "Commands" }
+      ]
+    },
+    {
+      "id": "R14",
+      "rule": "Agent-evaluation rules run at their position in the per-rule loop",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "at their position in the loop", "section": "Workflow" },
+        { "type": "contains", "value": "execute the prompt", "section": "Workflow" }
+      ]
     }
   ]
 }
