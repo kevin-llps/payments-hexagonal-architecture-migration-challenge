@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -26,18 +27,20 @@ import fr.kevin.llps.payments.dto.InboundPaymentSearchRequest;
 import fr.kevin.llps.payments.dto.InstantPaymentResponse;
 import fr.kevin.llps.payments.dto.InstantPaymentSearchRequest;
 import fr.kevin.llps.payments.dto.OutboundPaymentSearchRequest;
-import fr.kevin.llps.payments.dto.RecallSearchRequest;
 import fr.kevin.llps.payments.dto.SuspendedPaymentSearchRequest;
 import fr.kevin.llps.payments.entity.InboundPayment;
 import fr.kevin.llps.payments.entity.InstantPayment;
 import fr.kevin.llps.payments.entity.OutboundPayment;
-import fr.kevin.llps.payments.entity.Recall;
 import fr.kevin.llps.payments.entity.SuspendedPayment;
+import fr.kevin.llps.payments.recall.adapter.out.persistence.JpaRecallAdapter;
+import fr.kevin.llps.payments.recall.adapter.out.persistence.entity.Recall;
+import fr.kevin.llps.payments.recall.RecallSearchCriteria;
+import fr.kevin.llps.payments.shared.domain.PaymentId;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({InstantPaymentRepository.class, SuspendedPaymentRepository.class, InboundPaymentRepository.class,
-        OutboundPaymentRepository.class, RecallRepository.class})
+        OutboundPaymentRepository.class, JpaRecallAdapter.class})
 @Testcontainers
 class PaymentRepositoryUnitTest {
 
@@ -60,7 +63,7 @@ class PaymentRepositoryUnitTest {
     @Autowired
     private OutboundPaymentRepository outboundRepository;
     @Autowired
-    private RecallRepository recallRepository;
+    private JpaRecallAdapter recallRepository;
     @Autowired
     private TestEntityManager em;
 
@@ -425,10 +428,7 @@ class PaymentRepositoryUnitTest {
                     "R-COR", Timestamp.valueOf("2026-10-16 12:00:00"), Date.valueOf("2026-10-18")));
         }
 
-        RecallSearchRequest request = new RecallSearchRequest();
-        request.limit = 5;
-
-        assertThat(recallRepository.search(request)).hasSize(50);
+        assertThat(recallRepository.search(recallCriteria(null, null, null, null, null, null, null, 5))).hasSize(50);
     }
 
     @Test
@@ -439,19 +439,11 @@ class PaymentRepositoryUnitTest {
                 recall("00000000-0000-0000-0000-000000000752", "R-REJ", Timestamp.valueOf("2026-10-14 19:00:00"),
                         Date.valueOf("2026-10-16")));
 
-        RecallSearchRequest request = new RecallSearchRequest();
-        request.recallType = "r-cor";
-        request.originalPaymentId = "00000000-0000-0000-0000-000000000401";
-        request.originalPaymentType = "outbound";
-        request.reasonCode = "ac04";
-        request.status = "initiated";
-        request.initiatedFrom = "2026-10-01T00:00:00";
-        request.initiatedTo = "2026-10-31T00:00:00";
-
-        List<Recall> results = recallRepository.search(request);
+        var results = recallRepository.search(recallCriteria("r-cor", "00000000-0000-0000-0000-000000000401",
+                "outbound", "ac04", "initiated", "2026-10-01T00:00:00", "2026-10-31T00:00:00", null));
 
         assertThat(results).hasSize(1);
-        assertThat(results.get(0).recallReference).isEqualTo("RCL-T1");
+        assertThat(results.get(0).recallReference()).isEqualTo("RCL-T1");
     }
 
     @Test
@@ -467,11 +459,9 @@ class PaymentRepositoryUnitTest {
     void recallSearch_unparseableInitiatedBounds_areIgnored() {
         persist(recall("00000000-0000-0000-0000-000000000755", "R-COR", Timestamp.valueOf("2026-10-16 12:00:00"),
                 Date.valueOf("2026-10-18")));
-        RecallSearchRequest request = new RecallSearchRequest();
-        request.initiatedFrom = "last week";
-        request.initiatedTo = "16/10/2026";
 
-        assertThat(recallRepository.search(request)).hasSize(1);
+        assertThat(recallRepository.search(recallCriteria(null, null, null, null, null, "last week", "16/10/2026",
+                null))).hasSize(1);
     }
 
     @Test
@@ -482,7 +472,8 @@ class PaymentRepositoryUnitTest {
                 recall("00000000-0000-0000-0000-000000000757", "R-COR", Timestamp.valueOf("2026-10-16 12:00:00"),
                         Date.valueOf("2026-10-18")));
 
-        assertThat(recallRepository.search(new RecallSearchRequest())).extracting(r -> r.recallType)
+        assertThat(recallRepository.search(recallCriteria(null, null, null, null, null, null, null, null)))
+                .extracting(r -> r.recallType())
                 .containsExactly("R-COR", "R-REJ");
     }
 
@@ -491,10 +482,10 @@ class PaymentRepositoryUnitTest {
         persist(recall("00000000-0000-0000-0000-000000000753", "R-COR", Timestamp.valueOf("2026-10-16 12:00:00"),
                 Date.valueOf("2026-10-18")));
 
-        Recall found = recallRepository.findById("00000000-0000-0000-0000-000000000753");
-        assertThat(found.recallType).isEqualTo("R-COR");
-        assertThat(found.deadline).isEqualTo(Date.valueOf("2026-10-18"));
-        assertThat(recallRepository.findById("11111111-1111-1111-1111-111111111111")).isNull();
+        var found = recallRepository.findById(PaymentId.parse("00000000-0000-0000-0000-000000000753")).orElseThrow();
+        assertThat(found.recallType()).isEqualTo("R-COR");
+        assertThat(found.deadline()).isEqualTo(LocalDate.of(2026, 10, 18));
+        assertThat(recallRepository.findById(PaymentId.parse("11111111-1111-1111-1111-111111111111"))).isEmpty();
     }
 
     // ---------------- helpers ----------------
@@ -513,10 +504,15 @@ class PaymentRepositoryUnitTest {
         return request;
     }
 
-    private RecallSearchRequest recallInitiatedTo(String initiatedTo) {
-        RecallSearchRequest request = new RecallSearchRequest();
-        request.initiatedTo = initiatedTo;
-        return request;
+    private RecallSearchCriteria recallInitiatedTo(String initiatedTo) {
+        return recallCriteria(null, null, null, null, null, null, initiatedTo, null);
+    }
+
+    private RecallSearchCriteria recallCriteria(String recallType, String originalPaymentId, String originalPaymentType,
+                                                String reasonCode, String status, String initiatedFrom,
+                                                String initiatedTo, Integer limit) {
+        return RecallSearchCriteria.from(recallType, originalPaymentId, originalPaymentType, reasonCode, status,
+                initiatedFrom, initiatedTo, limit);
     }
 
     private InstantPayment instant(String id, String endToEndId, String status, String debtorIban,

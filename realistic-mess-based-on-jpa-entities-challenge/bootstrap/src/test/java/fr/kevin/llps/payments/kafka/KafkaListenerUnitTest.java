@@ -3,6 +3,7 @@ package fr.kevin.llps.payments.kafka;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -10,6 +11,8 @@ import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -26,8 +29,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import fr.kevin.llps.payments.entity.InboundPayment;
 import fr.kevin.llps.payments.entity.InstantPayment;
 import fr.kevin.llps.payments.entity.OutboundPayment;
-import fr.kevin.llps.payments.entity.Recall;
 import fr.kevin.llps.payments.entity.SuspendedPayment;
+import fr.kevin.llps.payments.recall.adapter.in.kafka.RecallListener;
+import fr.kevin.llps.payments.recall.port.in.RecordRecallCommand;
+import fr.kevin.llps.payments.recall.port.in.RecordRecallUseCase;
+import fr.kevin.llps.payments.shared.domain.MalformedValueException;
 
 import jakarta.persistence.EntityManager;
 
@@ -36,6 +42,8 @@ class KafkaListenerUnitTest {
 
     @Mock
     private EntityManager em;
+    @Mock
+    private RecordRecallUseCase recordRecall;
 
     @InjectMocks
     private InstantPaymentListener instantListener;
@@ -216,9 +224,12 @@ class KafkaListenerUnitTest {
     @ParameterizedTest(name = "[{index}] originalPaymentId fragment \"{0}\" drops the recall")
     @ValueSource(strings = {"", ",\"originalPaymentId\":\"not-a-uuid\""})
     void recall_onMessage_missingOrInvalidOriginalPaymentId_isDropped(String originalIdFragment) {
+        // the use case rejects the reference (RecordRecallServiceTest); the listener must swallow the rejection
+        doThrow(new MalformedValueException("Invalid payment id", null)).when(recordRecall).record(any());
+
         assertThatCode(() -> recallListener.onMessage("{\"id\":\"00000000-0000-0000-0000-000000000905\""
                 + originalIdFragment + "}")).doesNotThrowAnyException();
-        verify(em, never()).merge(any(Recall.class));
+        assertThat(captureRecall().originalPaymentId()).isIn("", "not-a-uuid");
     }
 
     @Test
@@ -229,9 +240,9 @@ class KafkaListenerUnitTest {
                  "deadline":"2026-10-19T00:00:00Z"}
                 """);
 
-        Recall recall = captureMerge(Recall.class);
-        assertThat(recall.initiatedAt).isEqualTo(Timestamp.valueOf("2026-10-17 00:00:00"));
-        assertThat(recall.deadline).isEqualTo(Date.valueOf("2026-10-19"));
+        RecordRecallCommand recall = captureRecall();
+        assertThat(recall.initiatedAt()).isEqualTo(LocalDateTime.of(2026, 10, 17, 0, 0, 0));
+        assertThat(recall.deadline()).isEqualTo(LocalDate.of(2026, 10, 19));
     }
 
     @ParameterizedTest(name = "[{index}] {0} listens on {1} with group {2}")
@@ -240,7 +251,7 @@ class KafkaListenerUnitTest {
             "fr.kevin.llps.payments.kafka.SuspendedPaymentListener, pay.suspended, jpa-suspended-group",
             "fr.kevin.llps.payments.kafka.InboundPaymentListener, pay.inbound, jpa-inbound-group",
             "fr.kevin.llps.payments.kafka.OutboundPaymentMessageConsumer, pay.outbound, jpa-outbound-group",
-            "fr.kevin.llps.payments.kafka.RecallListener, pay.recall, jpa-recall-group"
+            "fr.kevin.llps.payments.recall.adapter.in.kafka.RecallListener, pay.recall, jpa-recall-group"
     })
     void listener_consumesItsTopicWithDedicatedConsumerGroup(String listenerClass, String topic, String groupId)
             throws Exception {
@@ -260,18 +271,24 @@ class KafkaListenerUnitTest {
                  "deadline":"2026-10-19","status":"INITIATED"}
                 """);
 
-        Recall recall = captureMerge(Recall.class);
-        assertThat(recall.recallReference).isEqualTo("RCL-1");
-        assertThat(recall.originalPaymentId).isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000904"));
-        assertThat(recall.initiatedAt).isEqualTo(Timestamp.valueOf("2026-10-17 12:00:00"));
-        assertThat(recall.deadline).isEqualTo(Date.valueOf("2026-10-19"));
-        assertThat(recall.reasonCode).isEqualTo("AC04");
+        RecordRecallCommand recall = captureRecall();
+        assertThat(recall.recallReference()).isEqualTo("RCL-1");
+        assertThat(recall.originalPaymentId()).isEqualTo("00000000-0000-0000-0000-000000000904");
+        assertThat(recall.initiatedAt()).isEqualTo(LocalDateTime.of(2026, 10, 17, 12, 0, 0));
+        assertThat(recall.deadline()).isEqualTo(LocalDate.of(2026, 10, 19));
+        assertThat(recall.reasonCode()).isEqualTo("AC04");
     }
 
     @Test
     void recall_onMessage_malformedJson_swallowed() {
         assertThatCode(() -> recallListener.onMessage("<>")).doesNotThrowAnyException();
-        verify(em, never()).merge(org.mockito.ArgumentMatchers.any(Recall.class));
+        verify(recordRecall, never()).record(any());
+    }
+
+    private RecordRecallCommand captureRecall() {
+        ArgumentCaptor<RecordRecallCommand> captor = ArgumentCaptor.forClass(RecordRecallCommand.class);
+        verify(recordRecall).record(captor.capture());
+        return captor.getValue();
     }
 
     @SuppressWarnings("unchecked")

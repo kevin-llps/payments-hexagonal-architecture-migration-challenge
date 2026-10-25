@@ -210,6 +210,7 @@ flowchart LR
 | TD-04 | Delete legacy classes as each increment replaces them | No parallel path to keep consistent; rollback is per-commit |
 | TD-05 | Re-target tests to new seams, keep assertions; integration suite untouched | Test diffs are larger, but behavior evidence is continuous |
 | TD-06 | **Amendment (Phase 5, approved):** the packages of §4 are distributed over four Maven modules — `domain/` (`jpa-domain`: `shared.domain`, `<context>.domain*`, `<context>.application*`), `infrastructure-adapters/` (`jpa-infrastructure-adapters`: `<context>.adapter.out.persistence`, `schema.sql`, `data.sql`), `client-adapters/` (`jpa-client-adapters`: `<context>.adapter.in.rest`, `<context>.adapter.in.kafka`, `shared.adapter.in.rest`), `bootstrap/` (`jpa-bootstrap`: `PaymentsApplication`, `<context>.config`, `shared.config`, `application.yml`). Package names are unchanged. | Dependency rules of §7 become compiler-enforced; module POMs to maintain |
+| TD-07 | **Amendment (I-1 change request):** inside `jpa-domain`, Recall uses `recall` / `recall.port.in` / `recall.port.out` instead of `recall.domain(.port)` / `recall.application(.port.in)`. The domain-isolation rule of §7.2 applies to the whole `jpa-domain` module. | Port direction stays visible; the domain / application split inside the module is by class role, not by package |
 
 **Assumptions**
 - A-1: entity scanning covers moved entities (base package unchanged).

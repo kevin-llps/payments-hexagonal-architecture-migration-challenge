@@ -10,6 +10,7 @@ import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -26,18 +27,20 @@ import fr.kevin.llps.payments.dto.InstantPaymentResponse;
 import fr.kevin.llps.payments.dto.InstantPaymentSearchRequest;
 import fr.kevin.llps.payments.dto.OutboundPaymentResponse;
 import fr.kevin.llps.payments.dto.OutboundPaymentSearchRequest;
-import fr.kevin.llps.payments.dto.RecallResponse;
-import fr.kevin.llps.payments.dto.RecallSearchRequest;
 import fr.kevin.llps.payments.dto.SuspendedPaymentResponse;
 import fr.kevin.llps.payments.dto.SuspendedPaymentSearchRequest;
 import fr.kevin.llps.payments.entity.OutboundPayment;
-import fr.kevin.llps.payments.entity.Recall;
 import fr.kevin.llps.payments.entity.SuspendedPayment;
 import fr.kevin.llps.payments.repository.InboundPaymentRepository;
 import fr.kevin.llps.payments.repository.InstantPaymentRepository;
 import fr.kevin.llps.payments.repository.OutboundPaymentRepository;
-import fr.kevin.llps.payments.repository.RecallRepository;
 import fr.kevin.llps.payments.repository.SuspendedPaymentRepository;
+import fr.kevin.llps.payments.recall.RecallQueryService;
+import fr.kevin.llps.payments.recall.port.in.RecallSearchQuery;
+import fr.kevin.llps.payments.recall.Recall;
+import fr.kevin.llps.payments.recall.port.out.RecallSearchRepository;
+import fr.kevin.llps.payments.shared.domain.InvalidSearchFilterException;
+import fr.kevin.llps.payments.shared.domain.PaymentId;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentServiceUnitTest {
@@ -51,7 +54,7 @@ class PaymentServiceUnitTest {
     @Mock
     private OutboundPaymentRepository outboundRepository;
     @Mock
-    private RecallRepository recallRepository;
+    private RecallSearchRepository recallRepository;
 
     @InjectMocks
     private InstantPaymentService instantService;
@@ -62,7 +65,7 @@ class PaymentServiceUnitTest {
     @InjectMocks
     private OutboundPaymentService outboundService;
     @InjectMocks
-    private RecallService recallService;
+    private RecallQueryService recallQueries;
 
     // ---------------- instant ----------------
 
@@ -288,11 +291,10 @@ class PaymentServiceUnitTest {
 
     @Test
     void recallSearch_invalidType_throws() {
-        RecallSearchRequest request = new RecallSearchRequest();
-        request.recallType = "NOPE";
+        RecallSearchQuery query = recallQuery("NOPE");
 
-        assertThatThrownBy(() -> recallService.search(request))
-                .isInstanceOf(IllegalArgumentException.class)
+        assertThatThrownBy(() -> recallQueries.search(query))
+                .isInstanceOf(InvalidSearchFilterException.class)
                 .hasMessageContaining("Unknown recall type");
     }
 
@@ -300,56 +302,32 @@ class PaymentServiceUnitTest {
     @ValueSource(strings = {"R-REJ", "r-cor", " R-UPD ", "   "})
     void recallSearch_knownTypeIgnoringCaseAndSpacesOrBlank_isAccepted(String recallType) {
         when(recallRepository.search(any())).thenReturn(List.of());
-        RecallSearchRequest request = new RecallSearchRequest();
-        request.recallType = recallType;
 
-        assertThat(recallService.search(request)).isEmpty();
+        assertThat(recallQueries.search(recallQuery(recallType))).isEmpty();
     }
 
     @Test
     void recallSearch_invalidType_messageEchoesRequestedValue() {
-        RecallSearchRequest request = new RecallSearchRequest();
-        request.recallType = "R-XXX";
-
-        assertThatThrownBy(() -> recallService.search(request))
-                .isInstanceOf(IllegalArgumentException.class)
+        assertThatThrownBy(() -> recallQueries.search(recallQuery("R-XXX")))
+                .isInstanceOf(InvalidSearchFilterException.class)
                 .hasMessage("Unknown recall type: R-XXX");
     }
 
-    @Test
-    void recallSearch_mapsFieldsAndFormatsDates() {
-        Recall recall = new Recall();
-        recall.id = UUID.fromString("00000000-0000-0000-0000-000000000501");
-        recall.recallReference = "RCL-1";
-        recall.recallType = "R-COR";
-        recall.originalPaymentId = UUID.fromString("00000000-0000-0000-0000-000000000401");
-        recall.originalPaymentType = "OUTBOUND";
-        recall.reasonCode = "AC04";
-        recall.amount = new BigDecimal("300.00");
-        recall.currency = "EUR";
-        recall.initiatedAt = Timestamp.valueOf("2026-10-16 12:00:00");
-        recall.deadline = Date.valueOf("2026-10-18");
-        recall.status = "INITIATED";
-        when(recallRepository.search(any())).thenReturn(List.of(recall));
-
-        RecallSearchRequest request = new RecallSearchRequest();
-        request.recallType = "r-cor";
-        RecallResponse response = recallService.search(request).get(0);
-
-        assertThat(response.initiatedAt).isEqualTo("2026-10-16T12:00:00");
-        assertThat(response.deadline).isEqualTo("2026-10-18");
-        assertThat(response.reasonCode).isEqualTo("AC04");
-        assertThat(response.originalPaymentId).isEqualTo("00000000-0000-0000-0000-000000000401");
-    }
+    // recallSearch_mapsFieldsAndFormatsDates moved to PaymentControllerWebTest (rendering is a REST adapter concern)
 
     @Test
     void recallGetById_foundAndMissing() {
-        Recall recall = new Recall();
-        recall.id = UUID.fromString("00000000-0000-0000-0000-000000000501");
-        when(recallRepository.findById("00000000-0000-0000-0000-000000000501")).thenReturn(recall);
-        when(recallRepository.findById("nope")).thenReturn(null);
+        PaymentId found = PaymentId.parse("00000000-0000-0000-0000-000000000501");
+        PaymentId missing = PaymentId.parse("00000000-0000-0000-0000-000000000599");
+        when(recallRepository.findById(found)).thenReturn(Optional.of(
+                new Recall(found, null, null, null, null, null, null, null, null, null, null)));
+        when(recallRepository.findById(missing)).thenReturn(Optional.empty());
 
-        assertThat(recallService.getById("00000000-0000-0000-0000-000000000501")).isNotNull();
-        assertThat(recallService.getById("nope")).isNull();
+        assertThat(recallQueries.get(found)).isPresent();
+        assertThat(recallQueries.get(missing)).isEmpty();
+    }
+
+    private static RecallSearchQuery recallQuery(String recallType) {
+        return new RecallSearchQuery(recallType, null, null, null, null, null, null, null);
     }
 }

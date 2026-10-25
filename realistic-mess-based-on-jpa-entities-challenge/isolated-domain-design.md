@@ -106,6 +106,8 @@ fr.kevin.llps.payments.compliancehold.{domain, domain.port, application, applica
 fr.kevin.llps.payments.recall.{domain, domain.port, application, application.port.in}
 ```
 
+**Recall (I-1 change request):** `recall` (aggregate, value objects, policies, criteria, application services), `recall.port.in` (input ports, queries, commands), `recall.port.out` (repository ports) — no `domain` / `application` sub-packages. Other contexts are decided when migrated.
+
 New packages are added alongside the legacy `controller/service/repository/entity/kafka/dto/util` packages, so contexts migrate one at a time.
 
 ### 6.3 Shared Kernel
@@ -118,6 +120,7 @@ New packages are added alongside the legacy `controller/service/repository/entit
 | `SearchLimit(int value)` | VO | `capped(Integer)`: null → 50, > 200 → 200, else as given; `uncapped(Integer)`: null → 50, else as given; `fixed()` → 50 | BR-02, BR-03, BR-04 |
 | `IbanFilter` | Policy | `isPlausible(String)`: 15 … 34 chars after removing spaces | BR-07 |
 | `InvalidSearchFilterException` | Domain exception | carries the user message; REST → **400** with that message | BR-07, BR-15 |
+| `LenientTimestamp` | Policy | `parse(String)` re-implements `java.sql.Timestamp.valueOf` with `java.time` (same accepted formats, range checks and roll-over); conformance-tested against it. Adapters bind bounds via `Timestamp.valueOf(LocalDateTime)`, keeping DST-gap normalization identical | BR-11, BR-12 |
 | `MalformedValueException` | Domain exception | REST → **500** generic body; deliberately **not** an `IllegalArgumentException` (R-08) | BR-14, BR-17 |
 | `DomainInvariantViolationException` | Domain exception | REST → **500** generic body | D-01 |
 
@@ -153,7 +156,7 @@ Ordering (BR-05) is part of each criteria object as a declared `SortOrder` const
 
 | Class | Kind | Behavior / invariant | Rules |
 |---|---|---|---|
-| `Recall` | Aggregate Root | **invariant:** `originalPayment` non-null with non-null id; `amount` is `Optional<Money>` (nullable column) | BR-28 |
+| `Recall` | Aggregate Root | `record(...)` (ingestion) requires the original `PaymentId` (BR-28); reconstitution is lossless (nullable columns stay null). `amount` (`BigDecimal`, nullable) and `currency` are separate fields: a stored recall without amount still exposes its currency | BR-28 |
 | `OriginalPaymentRef(PaymentId id, String type)` | VO | reference only; existence never checked | BR-28 |
 | `RecallType` | Policy | `validateFilter(String)`: trims, uppercases, accepts `R-REJ`, `R-COR`, `R-UPD`; else `InvalidSearchFilterException("Unknown recall type: <value>")`. **Not applied on ingestion** | BR-15, BR-33 |
 | `RecallSearchCriteria` | VO + factory | `originalPaymentId` exact via `PaymentId.parse` (→ `MalformedValueException`); `initiatedFrom/To` lenient — unparseable dropped, date-only `to` → **00:00:00**; `SearchLimit.fixed()`; order `initiatedAt DESC` | BR-04, BR-05, BR-10, BR-11, BR-12, BR-14 |
@@ -362,7 +365,8 @@ classDiagram
         +String recallType
         +OriginalPaymentRef originalPayment
         +String reasonCode
-        +Optional~Money~ amount
+        +BigDecimal amount
+        +String currency
         +LocalDateTime initiatedAt
         +LocalDate deadline
         +String status
@@ -649,6 +653,8 @@ flowchart LR
 | 2026-10-25 | Gate 1 — domain model | Approved with: BR-22 in REST adapter; minimal VO set; shared `FeeEstimate` interface; non-null `Money.amount`. |
 | 2026-10-25 | Gate 1 — follow-up | D-01 recorded: replace the 2 null-amount search-fee test cases in Phase 5; update BR-19 note. |
 | 2026-10-25 | Gate 2 — ports | Approved: read/write split output ports; `*Queries` + `Record*UseCase` input ports; injected `java.time.Clock`; id parsing in REST adapter. |
+| 2026-10-25 | Phase 5 I-1 change request | Recall package flattened in `jpa-domain`: domain objects and application services in `fr.kevin.llps.payments.recall`, input ports + queries / commands in `recall.port.in`, repository ports in `recall.port.out` (the Maven module already marks the domain / application boundary, so `recall.domain` / `recall.application` were redundant). Applies to Recall only; `shared.domain` and the remaining contexts are decided per iteration. |
+| 2026-10-25 | Phase 5 I-1 refinements | `LenientTimestamp` added to the Shared Kernel (approved: port `Timestamp.valueOf`). `Recall` keeps nullable `amount` + `currency` (instead of `Optional<Money>`) and enforces BR-28 in `record(...)` only (approved). `RecordRecallCommand.id` is raw text, parsed by the use case like `originalPaymentId`. |
 | 2026-10-25 | Phase 5 I-0 refinement | `PaymentId.parse` does not trim (preserves Kafka behavior for padded ids); trimming stays with the callers that trim today. |
 | 2026-10-25 | Phase 4 correction (documentation only) | Criteria field lists aligned with the real request parameters: instant and inbound `+currency`; outbound `+chargesType`; recall `+originalPaymentType`, `+reasonCode`; suspended filters are `debtorIban`, `holdReason`, `reviewStatus`, `heldFrom/To` (no creditor IBAN). All extra filters are trimmed, uppercased, exact matches (BR-01). No design change. |
 

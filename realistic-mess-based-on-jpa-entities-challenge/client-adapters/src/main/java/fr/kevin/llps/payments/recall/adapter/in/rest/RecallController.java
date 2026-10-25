@@ -1,8 +1,9 @@
-package fr.kevin.llps.payments.controller;
+package fr.kevin.llps.payments.recall.adapter.in.rest;
 
-import java.util.List;
-
-import org.springframework.beans.factory.annotation.Autowired;
+import fr.kevin.llps.payments.recall.adapter.in.rest.dto.RecallResponse;
+import fr.kevin.llps.payments.recall.port.in.RecallQueries;
+import fr.kevin.llps.payments.recall.port.in.RecallSearchQuery;
+import fr.kevin.llps.payments.shared.domain.PaymentId;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -10,16 +11,17 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import fr.kevin.llps.payments.dto.RecallResponse;
-import fr.kevin.llps.payments.dto.RecallSearchRequest;
-import fr.kevin.llps.payments.service.RecallService;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/recalls")
 public class RecallController {
 
-    @Autowired
-    private RecallService service;
+    private final RecallQueries recalls;
+
+    public RecallController(RecallQueries recalls) {
+        this.recalls = recalls;
+    }
 
     @GetMapping("/search")
     public List<RecallResponse> search(
@@ -31,24 +33,16 @@ public class RecallController {
             @RequestParam(required = false) String initiatedFrom,
             @RequestParam(required = false) String initiatedTo,
             @RequestParam(required = false) Integer limit) {
-        RecallSearchRequest request = new RecallSearchRequest();
-        request.recallType = recallType;
-        request.originalPaymentId = originalPaymentId;
-        request.originalPaymentType = originalPaymentType;
-        request.reasonCode = reasonCode;
-        request.status = status;
-        request.initiatedFrom = initiatedFrom;
-        request.initiatedTo = initiatedTo;
-        request.limit = limit;
-        return service.search(request);
+        RecallSearchQuery query = new RecallSearchQuery(recallType, originalPaymentId, originalPaymentType,
+                reasonCode, status, initiatedFrom, initiatedTo, limit);
+        return recalls.search(query).stream().map(RecallRestMapper::toResponse).toList();
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<RecallResponse> get(@PathVariable String id) {
-        RecallResponse response = service.getById(id);
-        if (response == null) {
-            return ResponseEntity.notFound().build();
-        }
-        return ResponseEntity.ok(response);
+        return recalls.get(PaymentId.parse(id.trim()))
+                .map(RecallRestMapper::toResponse)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 }

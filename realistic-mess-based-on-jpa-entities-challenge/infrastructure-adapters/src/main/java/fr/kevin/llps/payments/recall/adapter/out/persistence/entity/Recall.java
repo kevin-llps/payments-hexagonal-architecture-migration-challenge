@@ -1,4 +1,4 @@
-package fr.kevin.llps.payments.entity;
+package fr.kevin.llps.payments.recall.adapter.out.persistence.entity;
 
 import java.math.BigDecimal;
 import java.sql.Date;
