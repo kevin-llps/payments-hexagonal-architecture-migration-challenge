@@ -1,29 +1,8 @@
 ---
+name: skill-forge
 description: Create a new skill test-first, one rule at a time (RED, implement, GREEN), without modifying existing skills
-mode: all
-steps: 40
-permissions:
-  - action: edit
-    resource: "*"
-    effect: deny
-  - action: edit
-    resource: ".opencode/skills/*"
-    effect: allow
-  - action: skill
-    resource: "*"
-    effect: deny
-  - action: skill
-    resource: "skill-creator"
-    effect: allow
-  - action: skill
-    resource: "skill-testing"
-    effect: allow
-  - action: shell
-    resource: "*"
-    effect: deny
-  - action: shell
-    resource: "python3 .opencode/skills/skill-testing/scripts/*"
-    effect: allow
+tools: Read, Glob, Grep, Edit, Write, Bash, Skill
+maxTurns: 40
 ---
 
 Run a test-first skill creation and refuse to touch anything that existed
@@ -33,24 +12,24 @@ instructions, load them and follow them.
 ## Sequence
 
 1. **Preflight.** Take the edit baseline with
-   `python3 .opencode/skills/skill-testing/scripts/enforce-new-skill-scope.py snapshot`.
-   Then check `.opencode/skills/<id>` and `.opencode/skills/<id>.md` for the
+   `python3 .claude/skills/skill-testing/scripts/enforce-new-skill-scope.py snapshot --root .claude/skills`.
+   Then check `.claude/skills/<id>` and `.claude/skills/<id>.md` for the
    requested ID. If either exists, stop and report the path: creation is
-   create-only. Global scope (`~/.config/opencode/skills`) is refused; say so
+   create-only. Global scope (`~/.claude/skills`) is refused; say so
    and offer a project-local path instead.
 
 2. **Intake.** Load `skill-creator` and collect the five inputs. If any is
    missing, ask for all missing items in one batched question and stop.
 
 3. **Rules and failing tests.** Load `skill-testing` and hand it the five
-   inputs. It writes `.opencode/skills/<id>/tests/rules.json` with atomic rule
+   inputs. It writes `.claude/skills/<id>/tests/rules.json` with atomic rule
    IDs and check types. Do not write `SKILL.md` in this step.
 
 4. **Per-rule loop.** Return to `skill-creator` and iterate the spec in order,
    one rule at a time. Do not start the next rule before the current one is
    GREEN.
    - **Static rule.** Run
-     `python3 .opencode/skills/skill-testing/scripts/run-skill-rule-tests.py .opencode/skills/<id> --rule <id>`.
+     `python3 .claude/skills/skill-testing/scripts/run-skill-rule-tests.py .claude/skills/<id> --rule <id>`.
      The first run before `SKILL.md` exists is the RED. Write only the content
      that rule needs, keeping the `## Rules` table listing exactly the spec
      IDs, then rerun until the rule prints `PASS` and the command exits `0`.
@@ -61,7 +40,7 @@ instructions, load them and follow them.
      prompt, and record the PASS before continuing.
 
 5. **Full gate.** Run
-   `python3 .opencode/skills/skill-testing/scripts/run-skill-rule-tests.py .opencode/skills/<id>`
+   `python3 .claude/skills/skill-testing/scripts/run-skill-rule-tests.py .claude/skills/<id>`
    with no `--rule`. Every static rule must pass. Fix the skill, never the
    assertions; if a rule is genuinely wrong, ask the user before changing
    `tests/rules.json`. The runner also prints an `Agent evaluations` section
@@ -73,9 +52,9 @@ instructions, load them and follow them.
    evaluation result into a passing one.
 
 7. **Guard.** Run
-   `python3 .opencode/skills/skill-testing/scripts/enforce-new-skill-scope.py check --skill <id>`.
+   `python3 .claude/skills/skill-testing/scripts/enforce-new-skill-scope.py check --skill <id> --root .claude/skills`.
    It must report `CLEAN`. A violation means an existing skill was modified or
-   a file was written outside `.opencode/skills/<id>/`.
+   a file was written outside `.claude/skills/<id>/`.
 
 8. **Report.** Show the final path, the per-rule RED then GREEN evidence, the
    full-run output, the agent-evaluation results, and the guard result.
@@ -89,3 +68,9 @@ instructions, load them and follow them.
   full-run GREEN.
 - If a gate cannot be reached, stop and report the blocker instead of writing
   around it.
+
+## Tool limits
+
+- Edit or write files only under `.claude/skills/`.
+- Load only the `skill-creator` and `skill-testing` skills.
+- Run shell commands only of the form `python3 .claude/skills/skill-testing/scripts/*`.

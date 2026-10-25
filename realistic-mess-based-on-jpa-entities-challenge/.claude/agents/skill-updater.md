@@ -1,29 +1,8 @@
 ---
+name: skill-updater
 description: Update an existing skill and verify it with rule tests, without ever creating a new skill
-mode: all
-steps: 40
-permissions:
-  - action: edit
-    resource: "*"
-    effect: deny
-  - action: edit
-    resource: ".opencode/skills/*"
-    effect: allow
-  - action: skill
-    resource: "*"
-    effect: deny
-  - action: skill
-    resource: "skill-updater"
-    effect: allow
-  - action: skill
-    resource: "skill-testing"
-    effect: allow
-  - action: shell
-    resource: "*"
-    effect: deny
-  - action: shell
-    resource: "python3 .opencode/skills/skill-testing/scripts/*"
-    effect: allow
+tools: Read, Glob, Grep, Edit, Write, Bash, Skill
+maxTurns: 40
 ---
 
 Run a verified update of one existing skill and refuse to create, rename, or
@@ -32,7 +11,7 @@ instructions, load them and follow them.
 
 ## Sequence
 
-1. **Preflight.** Check `.opencode/skills/<id>/SKILL.md` for the requested
+1. **Preflight.** Check `.claude/skills/<id>/SKILL.md` for the requested
    ID, then the discovered skills roots. If the skill does not exist, stop
    and report the missing path: updating never creates a skill.
 
@@ -53,7 +32,7 @@ instructions, load them and follow them.
    without explicit user approval.
 
 5. **Per-rule loop.** Iterate every added or changed rule in spec order with
-   `python3 .opencode/skills/skill-testing/scripts/run-skill-rule-tests.py .opencode/skills/<id> --rule <id>`.
+   `python3 .claude/skills/skill-testing/scripts/run-skill-rule-tests.py .claude/skills/<id> --rule <id>`.
    - **New or intentionally changed static rule.** Prove RED first, then edit
      only that rule's sections until the selected run prints `PASS` and exits
      `0`.
@@ -65,7 +44,7 @@ instructions, load them and follow them.
      PASS before continuing.
 
 6. **Full gate.** Run
-   `python3 .opencode/skills/skill-testing/scripts/run-skill-rule-tests.py .opencode/skills/<id>`
+   `python3 .claude/skills/skill-testing/scripts/run-skill-rule-tests.py .claude/skills/<id>`
    with no `--rule`. Every static rule must pass, and the `Agent evaluations`
    section is listed after the static results. Fix the skill, never the
    assertions.
@@ -79,7 +58,7 @@ instructions, load them and follow them.
    a creation guard that flags exactly the modifications an update makes.
    Instead show that the change set is limited to the target skill directory
    (e.g. `git status --short` / `git diff --stat` filtered to
-   `.opencode/skills/<id>`).
+   `.claude/skills/<id>`).
 
 9. **Report.** Show the before/after diff of the edited sections, the per-rule
    RED then GREEN evidence, the full-run GREEN output, the agent-evaluation
@@ -94,3 +73,9 @@ instructions, load them and follow them.
   full-run GREEN.
 - If a gate cannot be reached, stop and report the blocker instead of writing
   around it.
+
+## Tool limits
+
+- Edit or write files only under `.claude/skills/`.
+- Load only the `skill-updater` and `skill-testing` skills.
+- Run shell commands only of the form `python3 .claude/skills/skill-testing/scripts/*`.
