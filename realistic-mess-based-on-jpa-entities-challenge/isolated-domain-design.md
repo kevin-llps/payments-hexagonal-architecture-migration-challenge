@@ -147,7 +147,7 @@ Ordering (BR-05) is part of each criteria object as a declared `SortOrder` const
 | Class | Kind | Behavior / invariant | Rules |
 |---|---|---|---|
 | `SuspendedPayment` | Aggregate Root | read model; `heldAt`, `releasedAt` (nullable) | — |
-| `SuspendedPaymentSearchCriteria` | VO + factory | IBANs trimmed exact; `heldFrom/heldTo` accept **only** `yyyy-MM-dd'T'HH:mm:ss`; any other non-blank format makes the criteria **unsatisfiable** (`isUnsatisfiable()` → adapter returns no rows); hold reason / review status trimmed + uppercased exact; `SearchLimit.capped`; order `heldAt DESC` | BR-01, BR-02, BR-05, BR-08, BR-13 |
+| `SuspendedPaymentSearchCriteria` | VO + factory | debtor IBAN trimmed exact; `heldFrom/heldTo` accept **only** `yyyy-MM-dd'T'HH:mm:ss`; any other non-blank format makes the criteria **unsatisfiable** (`isUnsatisfiable()` → adapter returns no rows); hold reason / review status trimmed + uppercased exact; `SearchLimit.capped`; order `heldAt DESC` | BR-01, BR-02, BR-05, BR-08, BR-13 |
 
 ### 6.6 Recall / Investigations
 
@@ -275,6 +275,7 @@ classDiagram
         +String creditorIbanContains
         +String endToEndId
         +String status
+        +String currency
         +LocalDateTime executionFrom
         +LocalDateTime executionTo
         +SearchLimit limit
@@ -285,6 +286,7 @@ classDiagram
         +String creditorIban
         +String originBicContains
         +String status
+        +String currency
         +LocalDate valueDateFrom
         +LocalDate valueDateTo
         +SearchLimit limit
@@ -294,6 +296,7 @@ classDiagram
         <<Value Object>>
         +String debtorIban
         +String destinationBicContains
+        +String chargesType
         +String status
         +LocalDate executionFrom
         +LocalDate executionTo
@@ -310,7 +313,7 @@ classDiagram
     OutboundPayment ..> Money
 ```
 
-(Field lists of criteria are indicative; Phase 4/5 fix the exact filter set from the existing `*SearchRequest` DTOs, one field per existing request parameter.)
+(Criteria field lists match the existing request parameters one-to-one — corrected during Phase 4, see §21.)
 
 ### 7.3 Compliance Hold
 
@@ -335,7 +338,6 @@ classDiagram
     class SuspendedPaymentSearchCriteria {
         <<Value Object>>
         +String debtorIban
-        +String creditorIban
         +String holdReason
         +String reviewStatus
         +LocalDateTime heldFrom
@@ -380,6 +382,8 @@ classDiagram
         <<Value Object>>
         +String recallType
         +PaymentId originalPaymentId
+        +String originalPaymentType
+        +String reasonCode
         +String status
         +LocalDateTime initiatedFrom
         +LocalDateTime initiatedTo
@@ -645,6 +649,7 @@ flowchart LR
 | 2026-10-25 | Gate 1 — domain model | Approved with: BR-22 in REST adapter; minimal VO set; shared `FeeEstimate` interface; non-null `Money.amount`. |
 | 2026-10-25 | Gate 1 — follow-up | D-01 recorded: replace the 2 null-amount search-fee test cases in Phase 5; update BR-19 note. |
 | 2026-10-25 | Gate 2 — ports | Approved: read/write split output ports; `*Queries` + `Record*UseCase` input ports; injected `java.time.Clock`; id parsing in REST adapter. |
+| 2026-10-25 | Phase 4 correction (documentation only) | Criteria field lists aligned with the real request parameters: instant and inbound `+currency`; outbound `+chargesType`; recall `+originalPaymentType`, `+reasonCode`; suspended filters are `debtorIban`, `holdReason`, `reviewStatus`, `heldFrom/To` (no creditor IBAN). All extra filters are trimmed, uppercased, exact matches (BR-01). No design change. |
 
 Documentation changed in this phase: `isolated-domain-design.md` (new), `ddd-domain-analysis.md` §15 (two change-history rows). No source or test file changed.
 
@@ -652,7 +657,7 @@ Documentation changed in this phase: `isolated-domain-design.md` (new), `ddd-dom
 
 - **Out of scope here:** adapter class design details, Spring wiring and package layout of adapters (Phase 4 — Technical Layers Design), code changes (Phase 5).
 - **Mermaid** diagrams were written by hand; `mmdc` is not installed, so they were not machine-rendered.
-- **Criteria field lists** in §7 are indicative; Phase 4 aligns them one-to-one with the existing `*SearchRequest` DTO fields.
+- **Criteria field lists** in §7 match the existing request parameters (corrected in Phase 4).
 - **Clock:** a `Clock` bean (`Clock.systemDefaultZone()`) keeps today's behavior; tests may switch to `Clock.fixed`, which also removes the date-dependence of the `ageInDays` tests (R-03). Existing tests using the real clock stay valid.
 - **R-04:** removing `SimpleDateFormat` from the domain path fixes thread-safety as a side effect without changing rendered values.
 - **Incremental migration order (suggestion for Phase 5):** Shared Kernel → Recall (smallest, self-contained) → Compliance Hold → Processing (instant, inbound, outbound last because of C-01 / BR-18 / D-01). Each increment keeps the full suite green.
