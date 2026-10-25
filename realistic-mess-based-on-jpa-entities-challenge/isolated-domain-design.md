@@ -112,7 +112,7 @@ New packages are added alongside the legacy `controller/service/repository/entit
 
 | Class | Kind | Behavior / invariant | Rules |
 |---|---|---|---|
-| `PaymentId(UUID value)` | VO | non-null; `parse(String)` trims and throws `MalformedValueException` if not a UUID | BR-14, BR-17, BR-23 |
+| `PaymentId(UUID value)` | VO | `parse(String)` delegates to `UUID.fromString` **without trimming** (Kafka ids are not trimmed today; REST adapters and criteria trim before parsing, as the legacy repositories do) and throws `MalformedValueException` if not a UUID | BR-14, BR-17, BR-23 |
 | `Money(BigDecimal amount, String currency)` | VO | **`amount` non-null** (D-01) — `Money.of(null, …)` throws `DomainInvariantViolationException`; `currency` lenient `String` | BR-19, BR-20, BR-30 |
 | `AuditTimestamps(LocalDateTime createdAt, LocalDateTime updatedAt)` | VO | `recordedAt(now)` sets both to `now`; nullable on reconstitution (columns nullable) | BR-18, BR-24 |
 | `SearchLimit(int value)` | VO | `capped(Integer)`: null → 50, > 200 → 200, else as given; `uncapped(Integer)`: null → 50, else as given; `fixed()` → 50 | BR-02, BR-03, BR-04 |
@@ -649,6 +649,7 @@ flowchart LR
 | 2026-10-25 | Gate 1 — domain model | Approved with: BR-22 in REST adapter; minimal VO set; shared `FeeEstimate` interface; non-null `Money.amount`. |
 | 2026-10-25 | Gate 1 — follow-up | D-01 recorded: replace the 2 null-amount search-fee test cases in Phase 5; update BR-19 note. |
 | 2026-10-25 | Gate 2 — ports | Approved: read/write split output ports; `*Queries` + `Record*UseCase` input ports; injected `java.time.Clock`; id parsing in REST adapter. |
+| 2026-10-25 | Phase 5 I-0 refinement | `PaymentId.parse` does not trim (preserves Kafka behavior for padded ids); trimming stays with the callers that trim today. |
 | 2026-10-25 | Phase 4 correction (documentation only) | Criteria field lists aligned with the real request parameters: instant and inbound `+currency`; outbound `+chargesType`; recall `+originalPaymentType`, `+reasonCode`; suspended filters are `debtorIban`, `holdReason`, `reviewStatus`, `heldFrom/To` (no creditor IBAN). All extra filters are trimmed, uppercased, exact matches (BR-01). No design change. |
 
 Documentation changed in this phase: `isolated-domain-design.md` (new), `ddd-domain-analysis.md` §15 (two change-history rows). No source or test file changed.

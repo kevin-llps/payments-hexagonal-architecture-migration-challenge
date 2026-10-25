@@ -1,7 +1,8 @@
-package fr.kevin.llps.payments.controller;
+package fr.kevin.llps.payments.shared.adapter.in.rest;
 
 import java.util.Map;
 
+import fr.kevin.llps.payments.shared.domain.InvalidSearchFilterException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -16,6 +17,11 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, Object>> handleBadRequest(IllegalArgumentException e) {
+        return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    }
+
+    @ExceptionHandler(InvalidSearchFilterException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidSearchFilter(InvalidSearchFilterException e) {
         return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
     }
 

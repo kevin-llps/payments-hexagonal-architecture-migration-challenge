@@ -1,6 +1,6 @@
 # Hexagonal Migration Plan — realistic-mess-based-on-jpa-entities-challenge
 
-- **Status:** plan approved · S-0 `APPROVED` · I-0 `IN_PROGRESS`
+- **Status:** plan approved · S-0 `APPROVED` · I-0 `APPROVED` · I-1 `IN_PROGRESS`
 - **Architecture inputs:** [`isolated-domain-design.md`](isolated-domain-design.md) (domains, ports), [`technical-layer-design.md`](technical-layer-design.md) (adapters, layers, TD-06 module structure)
 - **Business rules source:** [`ddd-domain-analysis.md`](ddd-domain-analysis.md) — used only for the BR inventory
 - **Test baseline:** 167 tests green (`ddd-test-coverage.md`, commit `2085e20`)
@@ -127,9 +127,9 @@ AC-01 … AC-19 of the migration agent apply; in short: approved module structur
 
 | ID | Status | Verification | Final compilation | User validation | Commit | Issues |
 |---|---|---|---|---|---|---|
-| S-0 | APPROVED | `mvn test` (module dir): reactor SUCCESS, 167 tests, 0 failures, 0 errors (bootstrap: 28 + 17 + 31 + 24 + 29 + 38). `mvn -q validate` OK. `mvn -pl domain dependency:tree`: test-scope only (junit-jupiter, assertj-core, mockito-junit-jupiter). `mvn test -Dtest=PaymentUtilsTest` OK from module dir. `mvn spring-boot:run` starts `PaymentsApplication` from `bootstrap` (stopped at DB connection, compose stack not running — expected). | `mvn test` → BUILD SUCCESS | approved 2026-10-25 | see git log (`build(jpa): split module…`) | — |
-| I-0 | IN_PROGRESS | | | | | |
-| I-1 | NOT_STARTED | | | | | |
+| S-0 | APPROVED | `mvn test` (module dir): reactor SUCCESS, 167 tests, 0 failures, 0 errors (bootstrap: 28 + 17 + 31 + 24 + 29 + 38). `mvn -q validate` OK. `mvn -pl domain dependency:tree`: test-scope only (junit-jupiter, assertj-core, mockito-junit-jupiter). `mvn test -Dtest=PaymentUtilsTest` OK from module dir. `mvn spring-boot:run` starts `PaymentsApplication` from `bootstrap` (stopped at DB connection, compose stack not running — expected). | `mvn test` → BUILD SUCCESS | approved 2026-10-25 | `b7e25c5` | — |
+| I-0 | APPROVED | TDD per method (16 rules RED → GREEN). `mvn test` (module dir): domain 30, client-adapters 3, bootstrap 168 (167 legacy + `ClockConfigurationTest`) = 201 tests, 0 failures, 0 errors. `jpa-domain` dependency tree: test scope only; no Spring / JPA / Jackson / `java.sql` import in `domain/src/main`. | `mvn test` → BUILD SUCCESS | approved 2026-10-25 | see I-1 row / git log (`feat(jpa): add shared kernel…`) | `PaymentId.parse` does not trim (design §6.3 corrected). Shared Kernel not yet consumed by legacy code (used from I-1). |
+| I-1 | IN_PROGRESS | | | | | |
 | I-2 | NOT_STARTED | | | | | |
 | I-3 | NOT_STARTED | | | | | |
 | I-4 | NOT_STARTED | | | | | |
@@ -143,3 +143,4 @@ AC-01 … AC-19 of the migration agent apply; in short: approved module structur
 | 2026-10-25 | Module structure | Approved: 4 Maven modules, application layer in `domain`, legacy into bootstrap first, SQL in `infrastructure-adapters`, update `AGENTS.md` in S-0. |
 | 2026-10-25 | S-0 | Approved and committed. |
 | 2026-10-25 | Plan | Approved. Re-targeted legacy tests stay in `bootstrap/src/test` until I-6. |
+| 2026-10-25 | I-0 | Approved and committed. |
