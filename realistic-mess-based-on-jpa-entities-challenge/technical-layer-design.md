@@ -209,6 +209,7 @@ flowchart LR
 | TD-03 | `@Transactional` on `Jpa*Adapter.upsert` | Equivalent to today since parsing has no side effects |
 | TD-04 | Delete legacy classes as each increment replaces them | No parallel path to keep consistent; rollback is per-commit |
 | TD-05 | Re-target tests to new seams, keep assertions; integration suite untouched | Test diffs are larger, but behavior evidence is continuous |
+| TD-06 | **Amendment (Phase 5, approved):** the packages of §4 are distributed over four Maven modules — `domain/` (`jpa-domain`: `shared.domain`, `<context>.domain*`, `<context>.application*`), `infrastructure-adapters/` (`jpa-infrastructure-adapters`: `<context>.adapter.out.persistence`, `schema.sql`, `data.sql`), `client-adapters/` (`jpa-client-adapters`: `<context>.adapter.in.rest`, `<context>.adapter.in.kafka`, `shared.adapter.in.rest`), `bootstrap/` (`jpa-bootstrap`: `PaymentsApplication`, `<context>.config`, `shared.config`, `application.yml`). Package names are unchanged. | Dependency rules of §7 become compiler-enforced; module POMs to maintain |
 
 **Assumptions**
 - A-1: entity scanning covers moved entities (base package unchanged).
@@ -223,3 +224,4 @@ flowchart LR
 |---|---|---|
 | 2026-10-25 | Structural decisions | Per-context adapter packages; framework-free application with transactions in the persistence adapter; delete legacy when replaced; re-target tests keeping assertions. |
 | 2026-10-25 | Design approval | Technical layer and adapter design approved; write and commit this document. |
+| 2026-10-25 | Phase 5 module structure | TD-06 approved: four Maven modules (application layer inside `domain`); legacy code moved unchanged into `bootstrap` first; SQL files in `infrastructure-adapters`. |

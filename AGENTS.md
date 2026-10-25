@@ -15,7 +15,7 @@ The code smells are **intentional**. Do not "clean up", fix, deduplicate, or ref
 No lint, formatter, typecheck, codegen, or CI config exists — don't go looking. There is no Maven wrapper; use the installed `mvn`.
 
 - All modules: `mvn test` from the repo root (root `pom.xml` is a pure aggregator). This includes the Docker-dependent integration suites.
-- One module: `cd <module> && mvn test` — modules parent `spring-boot-starter-parent` directly, so `-pl`/`-am` from the root adds nothing.
+- One module: `cd <module> && mvn test` — modules parent `spring-boot-starter-parent` directly, so `-pl`/`-am` from the root adds nothing. Exception: `realistic-mess-based-on-jpa-entities-challenge` is now a multi-module parent (see its `AGENTS.md`); run its commands from its own directory.
 - One test class: `mvn test -Dtest=PaymentServiceUnitTest` (run from inside the module); use `-Dtest=PaymentApplicationIntegrationTest` for the integration suite.
 - Test tiers:
   - Fast unit/web tests (`PaymentServiceUnitTest`, `KafkaListenerUnitTest`, `PaymentControllerWebTest`, `PaymentUtilsTest`): Mockito or `@WebMvcTest` slices with `@MockitoBean` services — run with **no Docker, no DB, no Kafka**. Use `@MockitoBean` (Spring Boot 3.4+), not the deprecated `@MockBean`.

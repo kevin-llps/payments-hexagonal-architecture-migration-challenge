@@ -6,9 +6,11 @@ Module-level instructions. Read the repo-root `../AGENTS.md` first: the intentio
 
 Independent Spring Boot 3.5.7 / Java 21 app (entrypoint `fr.kevin.llps.payments.PaymentsApplication`), the JPA-entities flavor of the migration exercise. Flow: HTTP controllers → services → hand-written `EntityManager` repositories → entities. Kafka listeners bypass that flow and `em.merge` entities directly.
 
+Maven layout (hexagonal migration in progress, see `hexagonal-migration-plan.md`): this directory is a `pom` parent with four children — `domain/` (`jpa-domain`, no framework dependencies), `infrastructure-adapters/` (`jpa-infrastructure-adapters`, JPA; holds `schema.sql` / `data.sql` in `src/main/resources`), `client-adapters/` (`jpa-client-adapters`, REST + Kafka) and `bootstrap/` (`jpa-bootstrap`, `PaymentsApplication`, `application.yml`, composition root). Code not yet migrated lives unchanged in `bootstrap/src`. Dependency direction: adapters → domain, bootstrap → everything; never domain → anything.
+
 ## Commands
 
-Run from this directory (no Maven wrapper, no lint/format/typecheck config):
+Run from this directory (no Maven wrapper, no lint/format/typecheck config). The parent POM sets `surefire.failIfNoSpecifiedTests=false` and skips `spring-boot:run` outside `bootstrap`, so the commands below work unchanged from here:
 
 - Full module suite (needs Docker): `mvn test`
 - Fast, no-Docker subset: `mvn test -Dtest='PaymentServiceUnitTest,KafkaListenerUnitTest,PaymentControllerWebTest,PaymentUtilsTest'`

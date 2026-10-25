@@ -14,59 +14,42 @@
     <groupId>fr.kevin.llps.payments</groupId>
     <artifactId>realistic-mess-based-on-jpa-entities-challenge</artifactId>
     <version>1.0.0</version>
+    <packaging>pom</packaging>
     <name>realistic-mess-based-on-jpa-entities-challenge</name>
     <description>Legacy payments application - realistically messy variant backed by JPA entities</description>
 
+    <modules>
+        <module>domain</module>
+        <module>infrastructure-adapters</module>
+        <module>client-adapters</module>
+        <module>bootstrap</module>
+    </modules>
+
     <properties>
         <java.version>21</java.version>
+        <!-- only bootstrap is runnable: keeps `mvn spring-boot:run` working from this directory -->
+        <spring-boot.run.skip>true</spring-boot.run.skip>
+        <!-- `mvn test -Dtest=X` must not fail in modules that do not contain X -->
+        <surefire.failIfNoSpecifiedTests>false</surefire.failIfNoSpecifiedTests>
     </properties>
 
-    <dependencies>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-jpa</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.kafka</groupId>
-            <artifactId>spring-kafka</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.postgresql</groupId>
-            <artifactId>postgresql</artifactId>
-            <scope>runtime</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.kafka</groupId>
-            <artifactId>spring-kafka-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>postgresql</artifactId>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>fr.kevin.llps.payments</groupId>
+                <artifactId>jpa-domain</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>fr.kevin.llps.payments</groupId>
+                <artifactId>jpa-infrastructure-adapters</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>fr.kevin.llps.payments</groupId>
+                <artifactId>jpa-client-adapters</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 </project>
