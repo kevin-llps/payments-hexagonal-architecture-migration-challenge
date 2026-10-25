@@ -6,6 +6,7 @@ import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.Timestamp;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,11 +28,12 @@ import fr.kevin.llps.payments.dto.InboundPaymentSearchRequest;
 import fr.kevin.llps.payments.dto.InstantPaymentResponse;
 import fr.kevin.llps.payments.dto.InstantPaymentSearchRequest;
 import fr.kevin.llps.payments.dto.OutboundPaymentSearchRequest;
-import fr.kevin.llps.payments.dto.SuspendedPaymentSearchRequest;
 import fr.kevin.llps.payments.entity.InboundPayment;
 import fr.kevin.llps.payments.entity.InstantPayment;
 import fr.kevin.llps.payments.entity.OutboundPayment;
-import fr.kevin.llps.payments.entity.SuspendedPayment;
+import fr.kevin.llps.payments.compliancehold.SuspendedPaymentSearchCriteria;
+import fr.kevin.llps.payments.compliancehold.adapter.out.persistence.JpaSuspendedPaymentAdapter;
+import fr.kevin.llps.payments.compliancehold.adapter.out.persistence.entity.SuspendedPayment;
 import fr.kevin.llps.payments.recall.adapter.out.persistence.JpaRecallAdapter;
 import fr.kevin.llps.payments.recall.adapter.out.persistence.entity.Recall;
 import fr.kevin.llps.payments.recall.RecallSearchCriteria;
@@ -39,7 +41,7 @@ import fr.kevin.llps.payments.shared.domain.PaymentId;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({InstantPaymentRepository.class, SuspendedPaymentRepository.class, InboundPaymentRepository.class,
+@Import({InstantPaymentRepository.class, JpaSuspendedPaymentAdapter.class, InboundPaymentRepository.class,
         OutboundPaymentRepository.class, JpaRecallAdapter.class})
 @Testcontainers
 class PaymentRepositoryUnitTest {
@@ -57,7 +59,7 @@ class PaymentRepositoryUnitTest {
     @Autowired
     private InstantPaymentRepository instantRepository;
     @Autowired
-    private SuspendedPaymentRepository suspendedRepository;
+    private JpaSuspendedPaymentAdapter suspendedRepository;
     @Autowired
     private InboundPaymentRepository inboundRepository;
     @Autowired
@@ -199,20 +201,13 @@ class PaymentRepositoryUnitTest {
                 suspended("00000000-0000-0000-0000-000000000613", "DE89370400440532013000", "AML_THRESHOLD",
                         "RELEASED", Timestamp.valueOf("2026-10-13 08:00:00"), Timestamp.valueOf("2026-10-13 15:00:00")));
 
-        SuspendedPaymentSearchRequest request = new SuspendedPaymentSearchRequest();
-        request.debtorIban = "DE89370400440532013000";
-        request.holdReason = "aml_threshold";
-        request.reviewStatus = "pending";
-        request.heldFrom = "2026-10-01T00:00:00";
-        request.heldTo = "2026-10-31T00:00:00";
-        request.limit = 5;
-
-        List<SuspendedPayment> results = suspendedRepository.search(request);
+        var results = suspendedRepository.search(SuspendedPaymentSearchCriteria.from("DE89370400440532013000",
+                "aml_threshold", "pending", "2026-10-01T00:00:00", "2026-10-31T00:00:00", 5));
 
         assertThat(results).hasSize(1);
-        assertThat(results.get(0).id).isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000611"));
-        assertThat(results.get(0).holdReason).isEqualTo("AML_THRESHOLD");
-        assertThat(results.get(0).heldAt).isEqualTo(Timestamp.valueOf("2026-10-14 08:00:00"));
+        assertThat(results.get(0).id()).isEqualTo(PaymentId.parse("00000000-0000-0000-0000-000000000611"));
+        assertThat(results.get(0).holdReason()).isEqualTo("AML_THRESHOLD");
+        assertThat(results.get(0).heldAt()).isEqualTo(LocalDateTime.of(2026, 10, 14, 8, 0, 0));
     }
 
     @Test
@@ -233,7 +228,8 @@ class PaymentRepositoryUnitTest {
                 suspended("00000000-0000-0000-0000-000000000617", "DE89370400440532013000", "AML_THRESHOLD",
                         "PENDING", Timestamp.valueOf("2026-10-14 08:00:00"), null));
 
-        assertThat(suspendedRepository.search(new SuspendedPaymentSearchRequest())).extracting(p -> p.id.toString())
+        assertThat(suspendedRepository.search(SuspendedPaymentSearchCriteria.from(null, null, null, null, null, null)))
+                .extracting(p -> p.id().value().toString())
                 .containsExactly("00000000-0000-0000-0000-000000000617", "00000000-0000-0000-0000-000000000616");
     }
 
@@ -241,10 +237,9 @@ class PaymentRepositoryUnitTest {
     void suspendedSearch_heldBoundNotInLegacyTimestampFormat_returnsNoRows() {
         persist(suspended("00000000-0000-0000-0000-000000000618", "DE89370400440532013000", "AML_THRESHOLD",
                 "PENDING", Timestamp.valueOf("2026-10-14 08:00:00"), null));
-        SuspendedPaymentSearchRequest request = new SuspendedPaymentSearchRequest();
-        request.heldFrom = "2026-10-01";
 
-        assertThat(suspendedRepository.search(request)).isEmpty();
+        assertThat(suspendedRepository.search(SuspendedPaymentSearchCriteria.from(null, null, null, "2026-10-01", null,
+                null))).isEmpty();
     }
 
     @Test
@@ -252,10 +247,10 @@ class PaymentRepositoryUnitTest {
         persist(suspended("00000000-0000-0000-0000-000000000614", "DE89370400440532013000", "AML_THRESHOLD",
                 "RELEASED", Timestamp.valueOf("2026-10-14 08:00:00"), Timestamp.valueOf("2026-10-13 15:45:00")));
 
-        SuspendedPayment found = suspendedRepository.findById("00000000-0000-0000-0000-000000000614");
-        assertThat(found.reviewStatus).isEqualTo("RELEASED");
-        assertThat(found.releasedAt).isEqualTo(Timestamp.valueOf("2026-10-13 15:45:00"));
-        assertThat(suspendedRepository.findById("11111111-1111-1111-1111-111111111111")).isNull();
+        var found = suspendedRepository.findById(PaymentId.parse("00000000-0000-0000-0000-000000000614")).orElseThrow();
+        assertThat(found.reviewStatus()).isEqualTo("RELEASED");
+        assertThat(found.releasedAt()).isEqualTo(LocalDateTime.of(2026, 10, 13, 15, 45, 0));
+        assertThat(suspendedRepository.findById(PaymentId.parse("11111111-1111-1111-1111-111111111111"))).isEmpty();
     }
 
     // ---------------- inbound ----------------
@@ -498,10 +493,8 @@ class PaymentRepositoryUnitTest {
         em.clear();
     }
 
-    private SuspendedPaymentSearchRequest suspendedByDebtorIban(String debtorIban) {
-        SuspendedPaymentSearchRequest request = new SuspendedPaymentSearchRequest();
-        request.debtorIban = debtorIban;
-        return request;
+    private SuspendedPaymentSearchCriteria suspendedByDebtorIban(String debtorIban) {
+        return SuspendedPaymentSearchCriteria.from(debtorIban, null, null, null, null, null);
     }
 
     private RecallSearchCriteria recallInitiatedTo(String initiatedTo) {

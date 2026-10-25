@@ -27,19 +27,20 @@ import fr.kevin.llps.payments.dto.InstantPaymentResponse;
 import fr.kevin.llps.payments.dto.InstantPaymentSearchRequest;
 import fr.kevin.llps.payments.dto.OutboundPaymentResponse;
 import fr.kevin.llps.payments.dto.OutboundPaymentSearchRequest;
-import fr.kevin.llps.payments.dto.SuspendedPaymentResponse;
-import fr.kevin.llps.payments.dto.SuspendedPaymentSearchRequest;
 import fr.kevin.llps.payments.entity.OutboundPayment;
-import fr.kevin.llps.payments.entity.SuspendedPayment;
 import fr.kevin.llps.payments.repository.InboundPaymentRepository;
 import fr.kevin.llps.payments.repository.InstantPaymentRepository;
 import fr.kevin.llps.payments.repository.OutboundPaymentRepository;
-import fr.kevin.llps.payments.repository.SuspendedPaymentRepository;
+import fr.kevin.llps.payments.compliancehold.SuspendedPayment;
+import fr.kevin.llps.payments.compliancehold.SuspendedPaymentQueryService;
+import fr.kevin.llps.payments.compliancehold.port.in.SuspendedPaymentSearchQuery;
+import fr.kevin.llps.payments.compliancehold.port.out.SuspendedPaymentSearchRepository;
 import fr.kevin.llps.payments.recall.RecallQueryService;
 import fr.kevin.llps.payments.recall.port.in.RecallSearchQuery;
 import fr.kevin.llps.payments.recall.Recall;
 import fr.kevin.llps.payments.recall.port.out.RecallSearchRepository;
 import fr.kevin.llps.payments.shared.domain.InvalidSearchFilterException;
+import fr.kevin.llps.payments.shared.domain.Money;
 import fr.kevin.llps.payments.shared.domain.PaymentId;
 
 @ExtendWith(MockitoExtension.class)
@@ -48,7 +49,7 @@ class PaymentServiceUnitTest {
     @Mock
     private InstantPaymentRepository instantRepository;
     @Mock
-    private SuspendedPaymentRepository suspendedRepository;
+    private SuspendedPaymentSearchRepository suspendedRepository;
     @Mock
     private InboundPaymentRepository inboundRepository;
     @Mock
@@ -59,7 +60,7 @@ class PaymentServiceUnitTest {
     @InjectMocks
     private InstantPaymentService instantService;
     @InjectMocks
-    private SuspendedPaymentService suspendedService;
+    private SuspendedPaymentQueryService suspendedQueries;
     @InjectMocks
     private InboundPaymentService inboundService;
     @InjectMocks
@@ -131,44 +132,31 @@ class PaymentServiceUnitTest {
 
     // ---------------- suspended ----------------
 
+    // suspendedSearch_mapsAllFields moved to PaymentControllerWebTest (rendering is a REST adapter concern)
     @Test
-    void suspendedSearch_mapsAllFields() {
-        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000201");
-        SuspendedPayment payment = new SuspendedPayment();
-        payment.id = id;
-        payment.amount = new BigDecimal("100.00");
-        payment.currency = "EUR";
-        payment.debtorIban = "DE89";
-        payment.debtorName = "ACME";
-        payment.creditorIban = "FR76";
-        payment.creditorName = "Dupont";
-        payment.holdReason = "AML_THRESHOLD";
-        payment.complianceCaseRef = "CASE-1";
-        payment.reviewStatus = "PENDING";
-        payment.heldAt = Timestamp.valueOf("2026-10-14 08:00:00");
-        payment.releasedAt = null;
+    void suspendedSearch_returnsRepositoryRows() {
+        SuspendedPayment payment = suspended("00000000-0000-0000-0000-000000000201");
         when(suspendedRepository.search(any())).thenReturn(List.of(payment));
 
-        SuspendedPaymentResponse response = suspendedService.search(new SuspendedPaymentSearchRequest()).get(0);
-
-        assertThat(response.id).isEqualTo(id.toString());
-        assertThat(response.holdReason).isEqualTo("AML_THRESHOLD");
-        assertThat(response.heldAt).isEqualTo("2026-10-14T08:00:00");
-        assertThat(response.releasedAt).isNull();
+        assertThat(suspendedQueries.search(new SuspendedPaymentSearchQuery(null, null, null, null, null, null)))
+                .containsExactly(payment);
     }
 
+    // releasedAt rendering moved to PaymentControllerWebTest.suspendedDetails_formatsReleasedAt
     @Test
     void suspendedGetById_foundAndMissing() {
-        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000202");
-        SuspendedPayment payment = new SuspendedPayment();
-        payment.id = id;
-        payment.reviewStatus = "RELEASED";
-        payment.releasedAt = Timestamp.valueOf("2026-10-13 15:45:00");
-        when(suspendedRepository.findById(id.toString())).thenReturn(payment);
-        when(suspendedRepository.findById("nope")).thenReturn(null);
+        PaymentId found = PaymentId.parse("00000000-0000-0000-0000-000000000202");
+        PaymentId missing = PaymentId.parse("00000000-0000-0000-0000-000000000299");
+        when(suspendedRepository.findById(found)).thenReturn(Optional.of(suspended(found.value().toString())));
+        when(suspendedRepository.findById(missing)).thenReturn(Optional.empty());
 
-        assertThat(suspendedService.getById(id.toString()).releasedAt).isEqualTo("2026-10-13T15:45:00");
-        assertThat(suspendedService.getById("nope")).isNull();
+        assertThat(suspendedQueries.get(found)).isPresent();
+        assertThat(suspendedQueries.get(missing)).isEmpty();
+    }
+
+    private static SuspendedPayment suspended(String id) {
+        return new SuspendedPayment(PaymentId.parse(id), Money.of(new BigDecimal("100.00"), "EUR"), null, null, null,
+                null, "AML_THRESHOLD", null, "RELEASED", null, null, null);
     }
 
     // ---------------- inbound ----------------

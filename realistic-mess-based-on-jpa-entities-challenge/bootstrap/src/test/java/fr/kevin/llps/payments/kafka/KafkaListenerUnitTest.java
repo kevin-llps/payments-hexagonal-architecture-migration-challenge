@@ -29,7 +29,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import fr.kevin.llps.payments.entity.InboundPayment;
 import fr.kevin.llps.payments.entity.InstantPayment;
 import fr.kevin.llps.payments.entity.OutboundPayment;
-import fr.kevin.llps.payments.entity.SuspendedPayment;
+import fr.kevin.llps.payments.compliancehold.adapter.in.kafka.SuspendedPaymentListener;
+import fr.kevin.llps.payments.compliancehold.port.in.RecordSuspendedPaymentCommand;
+import fr.kevin.llps.payments.compliancehold.port.in.RecordSuspendedPaymentUseCase;
 import fr.kevin.llps.payments.recall.adapter.in.kafka.RecallListener;
 import fr.kevin.llps.payments.recall.port.in.RecordRecallCommand;
 import fr.kevin.llps.payments.recall.port.in.RecordRecallUseCase;
@@ -44,6 +46,8 @@ class KafkaListenerUnitTest {
     private EntityManager em;
     @Mock
     private RecordRecallUseCase recordRecall;
+    @Mock
+    private RecordSuspendedPaymentUseCase recordSuspendedPayment;
 
     @InjectMocks
     private InstantPaymentListener instantListener;
@@ -147,16 +151,18 @@ class KafkaListenerUnitTest {
                  "heldAt":"2026-10-17 11:00:00","releasedAt":null}
                 """);
 
-        SuspendedPayment payment = captureMerge(SuspendedPayment.class);
-        assertThat(payment.complianceCaseRef).isEqualTo("CASE-1");
-        assertThat(payment.heldAt).isEqualTo(Timestamp.valueOf("2026-10-17 11:00:00"));
-        assertThat(payment.releasedAt).isNull();
+        ArgumentCaptor<RecordSuspendedPaymentCommand> captor = ArgumentCaptor.forClass(RecordSuspendedPaymentCommand.class);
+        verify(recordSuspendedPayment).record(captor.capture());
+        RecordSuspendedPaymentCommand payment = captor.getValue();
+        assertThat(payment.complianceCaseRef()).isEqualTo("CASE-1");
+        assertThat(payment.heldAt()).isEqualTo(LocalDateTime.of(2026, 10, 17, 11, 0, 0));
+        assertThat(payment.releasedAt()).isNull();
     }
 
     @Test
     void suspended_onMessage_malformedJson_swallowed() {
         assertThatCode(() -> suspendedListener.onMessage("{bad")).doesNotThrowAnyException();
-        verify(em, never()).merge(org.mockito.ArgumentMatchers.any(SuspendedPayment.class));
+        verify(recordSuspendedPayment, never()).record(any());
     }
 
     @Test
@@ -248,7 +254,7 @@ class KafkaListenerUnitTest {
     @ParameterizedTest(name = "[{index}] {0} listens on {1} with group {2}")
     @CsvSource({
             "fr.kevin.llps.payments.kafka.InstantPaymentListener, pay.instant, jpa-instant-group",
-            "fr.kevin.llps.payments.kafka.SuspendedPaymentListener, pay.suspended, jpa-suspended-group",
+            "fr.kevin.llps.payments.compliancehold.adapter.in.kafka.SuspendedPaymentListener, pay.suspended, jpa-suspended-group",
             "fr.kevin.llps.payments.kafka.InboundPaymentListener, pay.inbound, jpa-inbound-group",
             "fr.kevin.llps.payments.kafka.OutboundPaymentMessageConsumer, pay.outbound, jpa-outbound-group",
             "fr.kevin.llps.payments.recall.adapter.in.kafka.RecallListener, pay.recall, jpa-recall-group"

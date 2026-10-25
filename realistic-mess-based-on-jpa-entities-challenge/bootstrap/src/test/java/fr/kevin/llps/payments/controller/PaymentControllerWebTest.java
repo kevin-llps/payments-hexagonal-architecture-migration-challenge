@@ -30,7 +30,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import fr.kevin.llps.payments.dto.InboundPaymentResponse;
 import fr.kevin.llps.payments.dto.InstantPaymentResponse;
 import fr.kevin.llps.payments.dto.OutboundPaymentResponse;
-import fr.kevin.llps.payments.dto.SuspendedPaymentResponse;
+import fr.kevin.llps.payments.compliancehold.SuspendedPayment;
+import fr.kevin.llps.payments.compliancehold.adapter.in.rest.SuspendedPaymentController;
+import fr.kevin.llps.payments.compliancehold.port.in.SuspendedPaymentQueries;
 import fr.kevin.llps.payments.entity.OutboundPayment;
 import fr.kevin.llps.payments.recall.adapter.in.rest.RecallController;
 import fr.kevin.llps.payments.recall.port.in.RecallQueries;
@@ -39,8 +41,8 @@ import fr.kevin.llps.payments.recall.Recall;
 import fr.kevin.llps.payments.service.InboundPaymentService;
 import fr.kevin.llps.payments.service.InstantPaymentService;
 import fr.kevin.llps.payments.service.OutboundPaymentService;
-import fr.kevin.llps.payments.service.SuspendedPaymentService;
 import fr.kevin.llps.payments.shared.domain.InvalidSearchFilterException;
+import fr.kevin.llps.payments.shared.domain.Money;
 import fr.kevin.llps.payments.shared.domain.PaymentId;
 
 import jakarta.persistence.EntityManager;
@@ -61,7 +63,7 @@ class PaymentControllerWebTest {
     @MockitoBean
     private InstantPaymentService instantService;
     @MockitoBean
-    private SuspendedPaymentService suspendedService;
+    private SuspendedPaymentQueries suspendedQueries;
     @MockitoBean
     private InboundPaymentService inboundService;
     @MockitoBean
@@ -116,26 +118,55 @@ class PaymentControllerWebTest {
 
     // ---------------- suspended ----------------
 
+    private static final String SUSPENDED_ID = "00000000-0000-0000-0000-000000000201";
+    private static final String MISSING_SUSPENDED_ID = "00000000-0000-0000-0000-000000000299";
+
     @Test
     void suspendedSearch_returnsRows() throws Exception {
-        SuspendedPaymentResponse response = new SuspendedPaymentResponse();
-        response.id = "s1";
-        when(suspendedService.search(any())).thenReturn(List.of(response));
+        when(suspendedQueries.search(any())).thenReturn(List.of(suspended(SUSPENDED_ID, null, null)));
 
         mvc.perform(get("/api/v1/suspended-payments/search").param("reviewStatus", "PENDING"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value("s1"));
+                .andExpect(jsonPath("$[0].id").value(SUSPENDED_ID));
     }
 
     @Test
     void suspendedDetails_foundAndMissing() throws Exception {
-        SuspendedPaymentResponse response = new SuspendedPaymentResponse();
-        response.id = "s1";
-        when(suspendedService.getById("s1")).thenReturn(response);
-        when(suspendedService.getById("missing")).thenReturn(null);
+        when(suspendedQueries.get(PaymentId.parse(SUSPENDED_ID))).thenReturn(Optional.of(suspended(SUSPENDED_ID, null, null)));
+        when(suspendedQueries.get(PaymentId.parse(MISSING_SUSPENDED_ID))).thenReturn(Optional.empty());
 
-        mvc.perform(get("/api/v1/suspended-payments/s1")).andExpect(status().isOk());
-        mvc.perform(get("/api/v1/suspended-payments/missing")).andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/suspended-payments/" + SUSPENDED_ID)).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/suspended-payments/" + MISSING_SUSPENDED_ID)).andExpect(status().isNotFound());
+    }
+
+    // moved from PaymentServiceUnitTest: rendering is a REST adapter concern (D-02)
+    @Test
+    void suspendedSearch_mapsAllFields() throws Exception {
+        when(suspendedQueries.search(any())).thenReturn(List.of(
+                suspended(SUSPENDED_ID, LocalDateTime.of(2026, 10, 14, 8, 0, 0), null)));
+
+        mvc.perform(get("/api/v1/suspended-payments/search"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(SUSPENDED_ID))
+                .andExpect(jsonPath("$[0].holdReason").value("AML_THRESHOLD"))
+                .andExpect(jsonPath("$[0].heldAt").value("2026-10-14T08:00:00"))
+                .andExpect(jsonPath("$[0].releasedAt").value(nullValue()));
+    }
+
+    // moved from PaymentServiceUnitTest (suspendedGetById_foundAndMissing): releasedAt rendering on details
+    @Test
+    void suspendedDetails_formatsReleasedAt() throws Exception {
+        when(suspendedQueries.get(PaymentId.parse(SUSPENDED_ID))).thenReturn(Optional.of(
+                suspended(SUSPENDED_ID, null, LocalDateTime.of(2026, 10, 13, 15, 45, 0))));
+
+        mvc.perform(get("/api/v1/suspended-payments/" + SUSPENDED_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.releasedAt").value("2026-10-13T15:45:00"));
+    }
+
+    private static SuspendedPayment suspended(String id, LocalDateTime heldAt, LocalDateTime releasedAt) {
+        return new SuspendedPayment(PaymentId.parse(id), Money.of(new BigDecimal("100.00"), "EUR"), "DE89", "ACME",
+                "FR76", "Dupont", "AML_THRESHOLD", "CASE-1", "PENDING", heldAt, releasedAt, null);
     }
 
     // ---------------- inbound ----------------
