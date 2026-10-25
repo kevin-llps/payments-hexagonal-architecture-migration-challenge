@@ -2,8 +2,10 @@ package fr.kevin.llps.payments.kafka;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.sql.Date;
@@ -12,6 +14,10 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.kafka.annotation.KafkaListener;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -66,6 +72,64 @@ class KafkaListenerUnitTest {
         verify(em, never()).merge(org.mockito.ArgumentMatchers.any(InstantPayment.class));
     }
 
+    @ParameterizedTest(name = "[{index}] scheme fragment \"{0}\" defaults to SCT INST")
+    @ValueSource(strings = {"", ",\"scheme\":null"})
+    void instant_onMessage_missingOrNullScheme_defaultsToSctInst(String schemeFragment) {
+        instantListener.onMessage("{\"id\":\"00000000-0000-0000-0000-000000000901\",\"amount\":1.00"
+                + schemeFragment + "}");
+
+        assertThat(captureMerge(InstantPayment.class).scheme).isEqualTo("SCT INST");
+    }
+
+    @ParameterizedTest(name = "[{index}] executionDateTime \"{0}\" -> {1}")
+    @CsvSource({
+            "2026-10-17T10:00:00Z, 2026-10-17 10:00:00",
+            "2026-10-17T10:00:00, 2026-10-17 10:00:00",
+            "2026-10-17, 2026-10-17 00:00:00"
+    })
+    void instant_onMessage_executionDateTime_stripsTAndZWithoutTimezoneConversion(String raw, String expected) {
+        instantListener.onMessage("{\"id\":\"00000000-0000-0000-0000-000000000901\",\"amount\":1.00,"
+                + "\"executionDateTime\":\"" + raw + "\"}");
+
+        assertThat(captureMerge(InstantPayment.class).executionDatetime).isEqualTo(Timestamp.valueOf(expected));
+    }
+
+    @Test
+    void instant_onMessage_missingStringFieldsAreEmpty_nullStringFieldsAreLiteralNull_missingAmountIsZero() {
+        instantListener.onMessage("""
+                {"id":"00000000-0000-0000-0000-000000000901","debtorName":null}
+                """);
+
+        InstantPayment payment = captureMerge(InstantPayment.class);
+        assertThat(payment.endToEndId).isEmpty();
+        assertThat(payment.status).isEmpty();
+        assertThat(payment.debtorName).isEqualTo("null");
+        assertThat(payment.amount).isEqualByComparingTo("0");
+        assertThat(payment.executionDatetime).isNull();
+    }
+
+    @Test
+    void instant_onMessage_setsCreatedAtAndUpdatedAtToIngestionTime() {
+        long before = System.currentTimeMillis();
+
+        instantListener.onMessage("""
+                {"id":"00000000-0000-0000-0000-000000000901","amount":1.00}
+                """);
+
+        InstantPayment payment = captureMerge(InstantPayment.class);
+        long after = System.currentTimeMillis();
+        assertThat(payment.createdAt.getTime()).isBetween(before, after);
+        assertThat(payment.updatedAt.getTime()).isBetween(before, after);
+    }
+
+    @ParameterizedTest(name = "[{index}] id fragment \"{0}\" drops the message")
+    @ValueSource(strings = {"\"id\":\"not-a-uuid\",", ""})
+    void instant_onMessage_invalidOrMissingId_isDropped(String idFragment) {
+        assertThatCode(() -> instantListener.onMessage("{" + idFragment + "\"amount\":1.00}"))
+                .doesNotThrowAnyException();
+        verify(em, never()).merge(any(InstantPayment.class));
+    }
+
     @Test
     void suspended_onMessage_nullReleasedAt_staysNull() {
         suspendedListener.onMessage("""
@@ -102,6 +166,18 @@ class KafkaListenerUnitTest {
     }
 
     @Test
+    void inbound_onMessage_dateTimeValues_areTruncatedToDate() {
+        inboundListener.onMessage("""
+                {"id":"00000000-0000-0000-0000-000000000903","amount":10.00,
+                 "valueDate":"2026-10-17T23:59:59Z","settlementDate":"2026-10-18 01:00:00"}
+                """);
+
+        InboundPayment payment = captureMerge(InboundPayment.class);
+        assertThat(payment.valueDate).isEqualTo(Date.valueOf("2026-10-17"));
+        assertThat(payment.settlementDate).isEqualTo(Date.valueOf("2026-10-18"));
+    }
+
+    @Test
     void inbound_onMessage_malformedJson_swallowed() {
         assertThatCode(() -> inboundListener.onMessage("{not valid")).doesNotThrowAnyException();
         verify(em, never()).merge(org.mockito.ArgumentMatchers.any(InboundPayment.class));
@@ -126,6 +202,53 @@ class KafkaListenerUnitTest {
     void outbound_onMessage_malformedJson_swallowed() {
         assertThatCode(() -> outboundConsumer.onMessage("nope")).doesNotThrowAnyException();
         verify(em, never()).merge(org.mockito.ArgumentMatchers.any(OutboundPayment.class));
+    }
+
+    @Test
+    void outbound_onMessage_persistenceFailure_swallowed() {
+        when(em.merge(any(OutboundPayment.class))).thenThrow(new RuntimeException("db down"));
+
+        assertThatCode(() -> outboundConsumer.onMessage("""
+                {"id":"00000000-0000-0000-0000-000000000904","amount":300.00,"chargesType":"SHA"}
+                """)).doesNotThrowAnyException();
+    }
+
+    @ParameterizedTest(name = "[{index}] originalPaymentId fragment \"{0}\" drops the recall")
+    @ValueSource(strings = {"", ",\"originalPaymentId\":\"not-a-uuid\""})
+    void recall_onMessage_missingOrInvalidOriginalPaymentId_isDropped(String originalIdFragment) {
+        assertThatCode(() -> recallListener.onMessage("{\"id\":\"00000000-0000-0000-0000-000000000905\""
+                + originalIdFragment + "}")).doesNotThrowAnyException();
+        verify(em, never()).merge(any(Recall.class));
+    }
+
+    @Test
+    void recall_onMessage_dateOnlyInitiatedAt_defaultsToMidnight() {
+        recallListener.onMessage("""
+                {"id":"00000000-0000-0000-0000-000000000905",
+                 "originalPaymentId":"11111111-1111-1111-1111-111111111111","initiatedAt":"2026-10-17",
+                 "deadline":"2026-10-19T00:00:00Z"}
+                """);
+
+        Recall recall = captureMerge(Recall.class);
+        assertThat(recall.initiatedAt).isEqualTo(Timestamp.valueOf("2026-10-17 00:00:00"));
+        assertThat(recall.deadline).isEqualTo(Date.valueOf("2026-10-19"));
+    }
+
+    @ParameterizedTest(name = "[{index}] {0} listens on {1} with group {2}")
+    @CsvSource({
+            "fr.kevin.llps.payments.kafka.InstantPaymentListener, pay.instant, jpa-instant-group",
+            "fr.kevin.llps.payments.kafka.SuspendedPaymentListener, pay.suspended, jpa-suspended-group",
+            "fr.kevin.llps.payments.kafka.InboundPaymentListener, pay.inbound, jpa-inbound-group",
+            "fr.kevin.llps.payments.kafka.OutboundPaymentMessageConsumer, pay.outbound, jpa-outbound-group",
+            "fr.kevin.llps.payments.kafka.RecallListener, pay.recall, jpa-recall-group"
+    })
+    void listener_consumesItsTopicWithDedicatedConsumerGroup(String listenerClass, String topic, String groupId)
+            throws Exception {
+        KafkaListener annotation = Class.forName(listenerClass).getMethod("onMessage", String.class)
+                .getAnnotation(KafkaListener.class);
+
+        assertThat(annotation.topics()).containsExactly(topic);
+        assertThat(annotation.groupId()).isEqualTo(groupId);
     }
 
     @Test

@@ -122,6 +122,58 @@ class PaymentRepositoryUnitTest {
     }
 
     @Test
+    void instantSearch_ibanFilters_matchAnySubstringIgnoringCase() {
+        persist(instant("00000000-0000-0000-0000-000000000606", "E2E-S1", "COMPLETED",
+                "DE89370400440532013000", "FR7630006000011234567890189", Timestamp.valueOf("2026-10-15 09:15:00"), "EUR"));
+
+        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
+        request.debtorIban = " 0532013 ";
+        request.creditorIban = "6000011234";
+
+        assertThat(instantRepository.search(request)).extracting(r -> r.endToEndId).containsExactly("E2E-S1");
+    }
+
+    @Test
+    void instantSearch_dateOnlyBounds_coverTheWholeDay() {
+        persist(
+                instant("00000000-0000-0000-0000-000000000607", "E2E-MIDNIGHT", "COMPLETED",
+                        "DE89370400440532013000", "FR7630006000011234567890189", Timestamp.valueOf("2026-10-15 00:00:00"), "EUR"),
+                instant("00000000-0000-0000-0000-000000000608", "E2E-LATE", "COMPLETED",
+                        "DE89370400440532013000", "FR7630006000011234567890189", Timestamp.valueOf("2026-10-15 23:30:00"), "EUR"),
+                instant("00000000-0000-0000-0000-000000000609", "E2E-NEXT", "COMPLETED",
+                        "DE89370400440532013000", "FR7630006000011234567890189", Timestamp.valueOf("2026-10-16 00:00:00"), "EUR"));
+
+        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
+        request.executionFrom = "2026-10-15";
+        request.executionTo = "2026-10-15";
+
+        assertThat(instantRepository.search(request)).extracting(r -> r.endToEndId)
+                .containsExactly("E2E-LATE", "E2E-MIDNIGHT");
+    }
+
+    @Test
+    void instantSearch_unparseableExecutionBounds_areIgnored() {
+        persist(instant("00000000-0000-0000-0000-000000000610", "E2E-ANY", "COMPLETED",
+                "DE89370400440532013000", "FR7630006000011234567890189", Timestamp.valueOf("2026-10-15 09:15:00"), "EUR"));
+
+        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
+        request.executionFrom = "yesterday";
+        request.executionTo = "2026/10/01";
+
+        assertThat(instantRepository.search(request)).extracting(r -> r.endToEndId).containsExactly("E2E-ANY");
+    }
+
+    @Test
+    void instantSearch_withoutLimit_returnsAtMost50Rows() {
+        for (int i = 0; i < 51; i++) {
+            persist(instant(String.format("00000000-0000-0000-0000-00000001%04d", i), "E2E-L" + i, "COMPLETED",
+                    "DE89370400440532013000", "FR7630006000011234567890189", Timestamp.valueOf("2026-10-15 09:15:00"), "EUR"));
+        }
+
+        assertThat(instantRepository.search(new InstantPaymentSearchRequest())).hasSize(50);
+    }
+
+    @Test
     void instantFindById_foundAndMissing() {
         persist(instant("00000000-0000-0000-0000-000000000605", "E2E-F1", "COMPLETED",
                 "DE89370400440532013000", "FR7630006000011234567890189", Timestamp.valueOf("2026-10-15 09:15:00"), "EUR"));
@@ -158,6 +210,38 @@ class PaymentRepositoryUnitTest {
         assertThat(results.get(0).id).isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000611"));
         assertThat(results.get(0).holdReason).isEqualTo("AML_THRESHOLD");
         assertThat(results.get(0).heldAt).isEqualTo(Timestamp.valueOf("2026-10-14 08:00:00"));
+    }
+
+    @Test
+    void suspendedSearch_debtorIbanFilter_isTrimmedExactAndCaseSensitive() {
+        persist(suspended("00000000-0000-0000-0000-000000000615", "DE89370400440532013000", "AML_THRESHOLD",
+                "PENDING", Timestamp.valueOf("2026-10-14 08:00:00"), null));
+
+        assertThat(suspendedRepository.search(suspendedByDebtorIban("  DE89370400440532013000 "))).hasSize(1);
+        assertThat(suspendedRepository.search(suspendedByDebtorIban("DE89"))).isEmpty();
+        assertThat(suspendedRepository.search(suspendedByDebtorIban("de89370400440532013000"))).isEmpty();
+    }
+
+    @Test
+    void suspendedSearch_ordersByHeldAtDescending() {
+        persist(
+                suspended("00000000-0000-0000-0000-000000000616", "DE89370400440532013000", "AML_THRESHOLD",
+                        "PENDING", Timestamp.valueOf("2026-10-12 08:00:00"), null),
+                suspended("00000000-0000-0000-0000-000000000617", "DE89370400440532013000", "AML_THRESHOLD",
+                        "PENDING", Timestamp.valueOf("2026-10-14 08:00:00"), null));
+
+        assertThat(suspendedRepository.search(new SuspendedPaymentSearchRequest())).extracting(p -> p.id.toString())
+                .containsExactly("00000000-0000-0000-0000-000000000617", "00000000-0000-0000-0000-000000000616");
+    }
+
+    @Test
+    void suspendedSearch_heldBoundNotInLegacyTimestampFormat_returnsNoRows() {
+        persist(suspended("00000000-0000-0000-0000-000000000618", "DE89370400440532013000", "AML_THRESHOLD",
+                "PENDING", Timestamp.valueOf("2026-10-14 08:00:00"), null));
+        SuspendedPaymentSearchRequest request = new SuspendedPaymentSearchRequest();
+        request.heldFrom = "2026-10-01";
+
+        assertThat(suspendedRepository.search(request)).isEmpty();
     }
 
     @Test
@@ -200,6 +284,48 @@ class PaymentRepositoryUnitTest {
     }
 
     @Test
+    void inboundSearch_creditorIbanIsExact_originBicMatchesStoredValueIgnoringCase() {
+        persist(inbound("00000000-0000-0000-0000-000000000625", "CTR-5", "DE89370400440532013000", "bnpafrpp",
+                "RECEIVED", "EUR", Date.valueOf("2026-10-15"), null));
+
+        InboundPaymentSearchRequest byBic = new InboundPaymentSearchRequest();
+        byBic.originBic = "NPAF";
+        InboundPaymentSearchRequest byPartialIban = new InboundPaymentSearchRequest();
+        byPartialIban.creditorIban = "DE89";
+
+        assertThat(inboundRepository.search(byBic)).extracting(r -> r.creditTransferRef).containsExactly("CTR-5");
+        assertThat(inboundRepository.search(byPartialIban)).isEmpty();
+    }
+
+    @Test
+    void inboundSearch_ordersByValueDateThenCreatedAtDescending() {
+        InboundPayment older = inbound("00000000-0000-0000-0000-000000000626", "CTR-OLD", "DE89370400440532013000",
+                "BNPAFRPP", "RECEIVED", "EUR", Date.valueOf("2026-10-14"), null);
+        InboundPayment sameDayEarly = inbound("00000000-0000-0000-0000-000000000627", "CTR-EARLY",
+                "DE89370400440532013000", "BNPAFRPP", "RECEIVED", "EUR", Date.valueOf("2026-10-16"), null);
+        InboundPayment sameDayLate = inbound("00000000-0000-0000-0000-000000000628", "CTR-LATE",
+                "DE89370400440532013000", "BNPAFRPP", "RECEIVED", "EUR", Date.valueOf("2026-10-16"), null);
+        sameDayLate.createdAt = Timestamp.valueOf("2026-10-16 18:00:00");
+        persist(older, sameDayEarly, sameDayLate);
+
+        assertThat(inboundRepository.search(new InboundPaymentSearchRequest())).extracting(r -> r.creditTransferRef)
+                .containsExactly("CTR-LATE", "CTR-EARLY", "CTR-OLD");
+    }
+
+    @Test
+    void inboundSearch_limitAbove200_isNotCapped() {
+        for (int i = 0; i < 201; i++) {
+            persist(inbound(String.format("00000000-0000-0000-0000-00000002%04d", i), "CTR-L" + i,
+                    "DE89370400440532013000", "BNPAFRPP", "RECEIVED", "EUR", Date.valueOf("2026-10-15"), null));
+        }
+        InboundPaymentSearchRequest request = new InboundPaymentSearchRequest();
+        request.limit = 500;
+
+        assertThat(inboundRepository.search(request)).hasSize(201);
+        assertThat(inboundRepository.search(new InboundPaymentSearchRequest())).hasSize(50);
+    }
+
+    @Test
     void inboundFindById_foundAndMissing() {
         persist(inbound("00000000-0000-0000-0000-000000000624", "CTR-4", "DE89370400440532013000", "BNPAFRPP",
                 "RECEIVED", "EUR", Date.valueOf("2026-10-17"), null));
@@ -237,6 +363,47 @@ class PaymentRepositoryUnitTest {
         assertThat(results).hasSize(1);
         assertThat(results.get(0).instructionId).isEqualTo("OUT-1");
         assertThat(results.get(0).requestedExecutionDate).isEqualTo(Date.valueOf("2026-10-16"));
+    }
+
+    @Test
+    void outboundSearch_debtorIbanIsExact_destinationBicDoesNotMatchLowercaseStoredValue() {
+        persist(
+                outbound("00000000-0000-0000-0000-000000000635", "OUT-UPPER", "DE89370400440532013000", "ABNANL2A",
+                        "SHA", "SENT", Date.valueOf("2026-10-16")),
+                outbound("00000000-0000-0000-0000-000000000636", "OUT-LOWER", "DE89370400440532013000", "abnanl2a",
+                        "SHA", "SENT", Date.valueOf("2026-10-16")));
+
+        OutboundPaymentSearchRequest byBic = new OutboundPaymentSearchRequest();
+        byBic.destinationBic = "abna";
+        OutboundPaymentSearchRequest byPartialIban = new OutboundPaymentSearchRequest();
+        byPartialIban.debtorIban = "DE89";
+
+        assertThat(outboundRepository.search(byBic)).extracting(p -> p.instructionId).containsExactly("OUT-UPPER");
+        assertThat(outboundRepository.search(byPartialIban)).isEmpty();
+    }
+
+    @Test
+    void outboundSearch_ordersByRequestedExecutionDateDescending() {
+        persist(
+                outbound("00000000-0000-0000-0000-000000000637", "OUT-EARLY", "DE89370400440532013000", "ABNANL2A",
+                        "SHA", "SENT", Date.valueOf("2026-10-10")),
+                outbound("00000000-0000-0000-0000-000000000638", "OUT-LATE", "DE89370400440532013000", "ABNANL2A",
+                        "SHA", "SENT", Date.valueOf("2026-10-20")));
+
+        assertThat(outboundRepository.search(new OutboundPaymentSearchRequest())).extracting(p -> p.instructionId)
+                .containsExactly("OUT-LATE", "OUT-EARLY");
+    }
+
+    @Test
+    void outboundSearch_limitAbove200_isCappedAt200() {
+        for (int i = 0; i < 201; i++) {
+            persist(outbound(String.format("00000000-0000-0000-0000-00000003%04d", i), "OUT-L" + i,
+                    "DE89370400440532013000", "ABNANL2A", "SHA", "SENT", Date.valueOf("2026-10-16")));
+        }
+        OutboundPaymentSearchRequest request = new OutboundPaymentSearchRequest();
+        request.limit = 500;
+
+        assertThat(outboundRepository.search(request)).hasSize(200);
     }
 
     @Test
@@ -288,6 +455,38 @@ class PaymentRepositoryUnitTest {
     }
 
     @Test
+    void recallSearch_dateOnlyInitiatedTo_excludesThatDay() {
+        persist(recall("00000000-0000-0000-0000-000000000754", "R-COR", Timestamp.valueOf("2026-10-16 12:00:00"),
+                Date.valueOf("2026-10-18")));
+
+        assertThat(recallRepository.search(recallInitiatedTo("2026-10-16"))).isEmpty();
+        assertThat(recallRepository.search(recallInitiatedTo("2026-10-17"))).hasSize(1);
+    }
+
+    @Test
+    void recallSearch_unparseableInitiatedBounds_areIgnored() {
+        persist(recall("00000000-0000-0000-0000-000000000755", "R-COR", Timestamp.valueOf("2026-10-16 12:00:00"),
+                Date.valueOf("2026-10-18")));
+        RecallSearchRequest request = new RecallSearchRequest();
+        request.initiatedFrom = "last week";
+        request.initiatedTo = "16/10/2026";
+
+        assertThat(recallRepository.search(request)).hasSize(1);
+    }
+
+    @Test
+    void recallSearch_ordersByInitiatedAtDescending() {
+        persist(
+                recall("00000000-0000-0000-0000-000000000756", "R-REJ", Timestamp.valueOf("2026-10-14 19:00:00"),
+                        Date.valueOf("2026-10-16")),
+                recall("00000000-0000-0000-0000-000000000757", "R-COR", Timestamp.valueOf("2026-10-16 12:00:00"),
+                        Date.valueOf("2026-10-18")));
+
+        assertThat(recallRepository.search(new RecallSearchRequest())).extracting(r -> r.recallType)
+                .containsExactly("R-COR", "R-REJ");
+    }
+
+    @Test
     void recallFindById_foundAndMissing() {
         persist(recall("00000000-0000-0000-0000-000000000753", "R-COR", Timestamp.valueOf("2026-10-16 12:00:00"),
                 Date.valueOf("2026-10-18")));
@@ -306,6 +505,18 @@ class PaymentRepositoryUnitTest {
         }
         em.flush();
         em.clear();
+    }
+
+    private SuspendedPaymentSearchRequest suspendedByDebtorIban(String debtorIban) {
+        SuspendedPaymentSearchRequest request = new SuspendedPaymentSearchRequest();
+        request.debtorIban = debtorIban;
+        return request;
+    }
+
+    private RecallSearchRequest recallInitiatedTo(String initiatedTo) {
+        RecallSearchRequest request = new RecallSearchRequest();
+        request.initiatedTo = initiatedTo;
+        return request;
     }
 
     private InstantPayment instant(String id, String endToEndId, String status, String debtorIban,

@@ -14,6 +14,9 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -94,6 +97,28 @@ class PaymentServiceUnitTest {
                 .hasMessage("Invalid creditor IBAN");
     }
 
+    @ParameterizedTest(name = "[{index}] IBAN filter \"{0}\" is accepted")
+    @ValueSource(strings = {"AAAAAAAAAAAAAAA", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "DE89 3704 0044 0532 0130 00", "   "})
+    void instantSearch_ibanFilterWithin15To34CharsIgnoringSpacesOrBlank_isAccepted(String iban) {
+        when(instantRepository.search(any())).thenReturn(List.of());
+        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
+        request.debtorIban = iban;
+        request.creditorIban = iban;
+
+        assertThat(instantService.search(request)).isEmpty();
+    }
+
+    @ParameterizedTest(name = "[{index}] IBAN filter \"{0}\" is rejected")
+    @ValueSource(strings = {"AAAAAAAAAAAAAA", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "DE89 3704 0044"})
+    void instantSearch_ibanFilterOutside15To34Chars_isRejected(String iban) {
+        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
+        request.creditorIban = iban;
+
+        assertThatThrownBy(() -> instantService.search(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid creditor IBAN");
+    }
+
     @Test
     void instantGetById_delegatesToRepository() {
         when(instantRepository.findById("1")).thenReturn(new InstantPaymentResponse());
@@ -164,6 +189,25 @@ class PaymentServiceUnitTest {
     }
 
     @Test
+    void inboundGetById_futureValueDate_hasNegativeAgeInDays() {
+        InboundPaymentResponse response = new InboundPaymentResponse();
+        response.id = "i2";
+        response.valueDate = LocalDate.now().plusDays(4).toString();
+        when(inboundRepository.findById("i2")).thenReturn(response);
+
+        assertThat(inboundService.getById("i2").ageInDays).isEqualTo(-4L);
+    }
+
+    @Test
+    void inboundGetById_withoutValueDate_leavesAgeInDaysNull() {
+        InboundPaymentResponse response = new InboundPaymentResponse();
+        response.id = "i3";
+        when(inboundRepository.findById("i3")).thenReturn(response);
+
+        assertThat(inboundService.getById("i3").ageInDays).isNull();
+    }
+
+    @Test
     void inboundGetById_missing_returnsNull() {
         when(inboundRepository.findById("nope")).thenReturn(null);
         assertThat(inboundService.getById("nope")).isNull();
@@ -185,6 +229,39 @@ class PaymentServiceUnitTest {
         assertThat(result.get(1).estimatedFee).isEqualByComparingTo("0.30");
         assertThat(result.get(2).estimatedFee).isEqualByComparingTo("0.00");
         assertThat(result.get(3).estimatedFee).isEqualByComparingTo("0.00");
+    }
+
+    @ParameterizedTest(name = "[{index}] chargesType={0}, amount={1} -> search fee {2}")
+    @CsvSource({
+            "OUR, 1000.00, 10.00",
+            "OUR, 1234.56, 12.35",
+            "OUR, 0.50, 0.01",
+            "BEN, 1000.00, 0.00",
+            "SHA, 1000.00, 0.30",
+            "XYZ, 1000.00, 0.30",
+            "'', 1000.00, 0.30",
+            ", 1000.00, 0.30",
+            "OUR, , 0.00"
+    })
+    void outboundSearch_feeEstimate_followsSearchFeeTable(String chargesType, String amount, String expectedFee) {
+        when(outboundRepository.search(any())).thenReturn(List.of(
+                outboundPayment("00000000-0000-0000-0000-000000000415", amount, chargesType)));
+
+        OutboundPaymentResponse response = outboundService.search(new OutboundPaymentSearchRequest()).get(0);
+
+        assertThat(response.estimatedFee).isEqualByComparingTo(expectedFee);
+    }
+
+    @Test
+    void outboundGetById_mapsRequestedExecutionDateAsIsoDate() {
+        OutboundPayment payment = outboundPayment("00000000-0000-0000-0000-000000000402", "15600.75", "OUR");
+        payment.requestedExecutionDate = Date.valueOf("2026-10-17");
+        when(outboundRepository.findById("00000000-0000-0000-0000-000000000402")).thenReturn(payment);
+
+        OutboundPaymentResponse response = outboundService.getById("00000000-0000-0000-0000-000000000402");
+
+        assertThat(response.requestedExecutionDate).isEqualTo("2026-10-17");
+        assertThat(response.estimatedFee).isEqualByComparingTo("156.01");
     }
 
     @Test
@@ -217,6 +294,26 @@ class PaymentServiceUnitTest {
         assertThatThrownBy(() -> recallService.search(request))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Unknown recall type");
+    }
+
+    @ParameterizedTest(name = "[{index}] recallType \"{0}\" is accepted")
+    @ValueSource(strings = {"R-REJ", "r-cor", " R-UPD ", "   "})
+    void recallSearch_knownTypeIgnoringCaseAndSpacesOrBlank_isAccepted(String recallType) {
+        when(recallRepository.search(any())).thenReturn(List.of());
+        RecallSearchRequest request = new RecallSearchRequest();
+        request.recallType = recallType;
+
+        assertThat(recallService.search(request)).isEmpty();
+    }
+
+    @Test
+    void recallSearch_invalidType_messageEchoesRequestedValue() {
+        RecallSearchRequest request = new RecallSearchRequest();
+        request.recallType = "R-XXX";
+
+        assertThatThrownBy(() -> recallService.search(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Unknown recall type: R-XXX");
     }
 
     @Test

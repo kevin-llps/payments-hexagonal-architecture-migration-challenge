@@ -2,7 +2,9 @@ package fr.kevin.llps.payments.controller;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -16,6 +18,8 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -143,6 +147,21 @@ class PaymentControllerWebTest {
     }
 
     @Test
+    void inboundSearch_futureOrMissingValueDate_ageInDaysNegativeOrNull() throws Exception {
+        InboundPaymentResponse future = new InboundPaymentResponse();
+        future.id = "i1";
+        future.valueDate = LocalDate.now().plusDays(5).toString();
+        InboundPaymentResponse undated = new InboundPaymentResponse();
+        undated.id = "i2";
+        when(inboundService.search(any())).thenReturn(List.of(future, undated));
+
+        mvc.perform(get("/api/v1/inbound-payments/search"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].ageInDays").value(-5))
+                .andExpect(jsonPath("$[1].ageInDays").value(nullValue()));
+    }
+
+    @Test
     void inboundDetails_foundAndMissing() throws Exception {
         InboundPaymentResponse response = new InboundPaymentResponse();
         response.id = "i1";
@@ -180,6 +199,82 @@ class PaymentControllerWebTest {
         mvc.perform(get("/api/v1/outbound-payments/" + id))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.estimatedFee").value(20.00));
+    }
+
+    @ParameterizedTest(name = "[{index}] chargesType={0}, amount={1} -> detail fee {2}")
+    @CsvSource({
+            "OUR, 1000.00, 20.00",
+            "OUR, 15600.75, 312.02",
+            "SHA, 1000.00, 0.50",
+            "BEN, 1000.00, 0",
+            "XYZ, 1000.00, 0",
+            ", 1000.00, 0"
+    })
+    void outboundDetails_feeEstimate_followsDetailFeeTable(String chargesType, String amount, double expectedFee)
+            throws Exception {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000402");
+        OutboundPayment payment = new OutboundPayment();
+        payment.id = id;
+        payment.amount = new BigDecimal(amount);
+        payment.chargesType = chargesType;
+        when(em.find(eq(OutboundPayment.class), eq(id))).thenReturn(payment);
+
+        mvc.perform(get("/api/v1/outbound-payments/" + id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estimatedFee").value(expectedFee));
+    }
+
+    @Test
+    void outboundDetails_ourWithoutAmount_returns500() throws Exception {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000402");
+        OutboundPayment payment = new OutboundPayment();
+        payment.id = id;
+        payment.chargesType = "OUR";
+        when(em.find(eq(OutboundPayment.class), eq(id))).thenReturn(payment);
+
+        mvc.perform(get("/api/v1/outbound-payments/" + id)).andExpect(status().isInternalServerError());
+    }
+
+    @Test
+    void outboundDetails_returnsSnakeCasePayloadWithAuditTimestamps() throws Exception {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000401");
+        OutboundPayment payment = new OutboundPayment();
+        payment.id = id;
+        payment.instructionId = "OUT-2026-9001";
+        payment.amount = new BigDecimal("780.00");
+        payment.currency = "EUR";
+        payment.debtorIban = "DE89370400440532013000";
+        payment.debtorName = "ACME GmbH";
+        payment.destinationBic = "BNPAFRPP";
+        payment.requestedExecutionDate = java.sql.Date.valueOf("2026-10-16");
+        payment.chargesType = "SHA";
+        payment.status = "SENT";
+        payment.createdAt = Timestamp.valueOf("2026-10-16 08:00:00");
+        payment.updatedAt = Timestamp.valueOf("2026-10-16 08:01:00");
+        when(em.find(eq(OutboundPayment.class), eq(id))).thenReturn(payment);
+
+        mvc.perform(get("/api/v1/outbound-payments/" + id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(id.toString()))
+                .andExpect(jsonPath("$.instruction_id").value("OUT-2026-9001"))
+                .andExpect(jsonPath("$.debtor_iban").value("DE89370400440532013000"))
+                .andExpect(jsonPath("$.debtor_name").value("ACME GmbH"))
+                .andExpect(jsonPath("$.destination_bic").value("BNPAFRPP"))
+                .andExpect(jsonPath("$.requested_execution_date").exists())
+                .andExpect(jsonPath("$.charges_type").value("SHA"))
+                .andExpect(jsonPath("$.status").value("SENT"))
+                .andExpect(jsonPath("$.created_at").exists())
+                .andExpect(jsonPath("$.updated_at").exists())
+                .andExpect(jsonPath("$.estimatedFee").value(0.50))
+                .andExpect(jsonPath("$.instructionId").doesNotExist())
+                .andExpect(jsonPath("$.estimated_fee").doesNotExist());
+    }
+
+    @Test
+    void outboundDetails_malformedId_returns404WithoutQuerying() throws Exception {
+        mvc.perform(get("/api/v1/outbound-payments/not-a-uuid")).andExpect(status().isNotFound());
+
+        verifyNoInteractions(em);
     }
 
     @Test
