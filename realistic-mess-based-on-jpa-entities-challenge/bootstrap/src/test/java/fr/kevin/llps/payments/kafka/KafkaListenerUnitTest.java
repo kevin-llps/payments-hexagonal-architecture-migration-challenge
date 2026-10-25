@@ -28,7 +28,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import fr.kevin.llps.payments.entity.InboundPayment;
+import fr.kevin.llps.payments.processing.inbound.adapter.in.kafka.InboundPaymentListener;
+import fr.kevin.llps.payments.processing.inbound.port.in.RecordInboundPaymentCommand;
+import fr.kevin.llps.payments.processing.inbound.port.in.RecordInboundPaymentUseCase;
 import fr.kevin.llps.payments.processing.instant.InstantPayment;
 import fr.kevin.llps.payments.processing.instant.RecordInstantPaymentService;
 import fr.kevin.llps.payments.processing.instant.adapter.in.kafka.InstantPaymentListener;
@@ -54,6 +56,8 @@ class KafkaListenerUnitTest {
     private RecordRecallUseCase recordRecall;
     @Mock
     private RecordSuspendedPaymentUseCase recordSuspendedPayment;
+    @Mock
+    private RecordInboundPaymentUseCase recordInboundPayment;
 
     @Mock
     private InstantPaymentRecordRepository instantRepository;
@@ -187,10 +191,10 @@ class KafkaListenerUnitTest {
                  "valueDate":"2026-10-17","settlementDate":null,"status":"RECEIVED"}
                 """);
 
-        InboundPayment payment = captureMerge(InboundPayment.class);
-        assertThat(payment.creditTransferRef).isEqualTo("CTR-1");
-        assertThat(payment.valueDate).isEqualTo(Date.valueOf("2026-10-17"));
-        assertThat(payment.settlementDate).isNull();
+        RecordInboundPaymentCommand payment = captureInbound();
+        assertThat(payment.creditTransferRef()).isEqualTo("CTR-1");
+        assertThat(payment.valueDate()).isEqualTo(LocalDate.of(2026, 10, 17));
+        assertThat(payment.settlementDate()).isNull();
     }
 
     @Test
@@ -200,15 +204,15 @@ class KafkaListenerUnitTest {
                  "valueDate":"2026-10-17T23:59:59Z","settlementDate":"2026-10-18 01:00:00"}
                 """);
 
-        InboundPayment payment = captureMerge(InboundPayment.class);
-        assertThat(payment.valueDate).isEqualTo(Date.valueOf("2026-10-17"));
-        assertThat(payment.settlementDate).isEqualTo(Date.valueOf("2026-10-18"));
+        RecordInboundPaymentCommand payment = captureInbound();
+        assertThat(payment.valueDate()).isEqualTo(LocalDate.of(2026, 10, 17));
+        assertThat(payment.settlementDate()).isEqualTo(LocalDate.of(2026, 10, 18));
     }
 
     @Test
     void inbound_onMessage_malformedJson_swallowed() {
         assertThatCode(() -> inboundListener.onMessage("{not valid")).doesNotThrowAnyException();
-        verify(em, never()).merge(org.mockito.ArgumentMatchers.any(InboundPayment.class));
+        verify(recordInboundPayment, never()).record(any());
     }
 
     @Test
@@ -269,7 +273,7 @@ class KafkaListenerUnitTest {
     @CsvSource({
             "fr.kevin.llps.payments.processing.instant.adapter.in.kafka.InstantPaymentListener, pay.instant, jpa-instant-group",
             "fr.kevin.llps.payments.compliancehold.adapter.in.kafka.SuspendedPaymentListener, pay.suspended, jpa-suspended-group",
-            "fr.kevin.llps.payments.kafka.InboundPaymentListener, pay.inbound, jpa-inbound-group",
+            "fr.kevin.llps.payments.processing.inbound.adapter.in.kafka.InboundPaymentListener, pay.inbound, jpa-inbound-group",
             "fr.kevin.llps.payments.kafka.OutboundPaymentMessageConsumer, pay.outbound, jpa-outbound-group",
             "fr.kevin.llps.payments.recall.adapter.in.kafka.RecallListener, pay.recall, jpa-recall-group"
     })
@@ -308,6 +312,12 @@ class KafkaListenerUnitTest {
     private RecordRecallCommand captureRecall() {
         ArgumentCaptor<RecordRecallCommand> captor = ArgumentCaptor.forClass(RecordRecallCommand.class);
         verify(recordRecall).record(captor.capture());
+        return captor.getValue();
+    }
+
+    private RecordInboundPaymentCommand captureInbound() {
+        ArgumentCaptor<RecordInboundPaymentCommand> captor = ArgumentCaptor.forClass(RecordInboundPaymentCommand.class);
+        verify(recordInboundPayment).record(captor.capture());
         return captor.getValue();
     }
 

@@ -27,12 +27,15 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import fr.kevin.llps.payments.dto.InboundPaymentResponse;
 import fr.kevin.llps.payments.dto.OutboundPaymentResponse;
 import fr.kevin.llps.payments.compliancehold.SuspendedPayment;
 import fr.kevin.llps.payments.compliancehold.adapter.in.rest.SuspendedPaymentController;
 import fr.kevin.llps.payments.compliancehold.port.in.SuspendedPaymentQueries;
 import fr.kevin.llps.payments.entity.OutboundPayment;
+import fr.kevin.llps.payments.processing.inbound.InboundPayment;
+import fr.kevin.llps.payments.processing.inbound.adapter.in.rest.InboundPaymentController;
+import fr.kevin.llps.payments.processing.inbound.port.in.InboundPaymentQueries;
+import fr.kevin.llps.payments.processing.inbound.port.in.InboundPaymentView;
 import fr.kevin.llps.payments.processing.instant.InstantPayment;
 import fr.kevin.llps.payments.processing.instant.adapter.in.rest.InstantPaymentController;
 import fr.kevin.llps.payments.processing.instant.port.in.InstantPaymentQueries;
@@ -40,7 +43,6 @@ import fr.kevin.llps.payments.recall.adapter.in.rest.RecallController;
 import fr.kevin.llps.payments.recall.port.in.RecallQueries;
 import fr.kevin.llps.payments.recall.OriginalPaymentRef;
 import fr.kevin.llps.payments.recall.Recall;
-import fr.kevin.llps.payments.service.InboundPaymentService;
 import fr.kevin.llps.payments.service.OutboundPaymentService;
 import fr.kevin.llps.payments.shared.domain.InvalidSearchFilterException;
 import fr.kevin.llps.payments.shared.domain.Money;
@@ -66,7 +68,7 @@ class PaymentControllerWebTest {
     @MockitoBean
     private SuspendedPaymentQueries suspendedQueries;
     @MockitoBean
-    private InboundPaymentService inboundService;
+    private InboundPaymentQueries inboundQueries;
     @MockitoBean
     private OutboundPaymentService outboundService;
     @MockitoBean
@@ -202,13 +204,16 @@ class PaymentControllerWebTest {
     }
 
     // ---------------- inbound ----------------
+    // The age is computed by InboundPaymentQueryService (see PaymentServiceUnitTest); the controller renders it.
+
+    private static final String INBOUND_ID = "00000000-0000-0000-0000-000000000301";
+    private static final String OTHER_INBOUND_ID = "00000000-0000-0000-0000-000000000302";
+    private static final String MISSING_INBOUND_ID = "00000000-0000-0000-0000-000000000399";
 
     @Test
     void inboundSearch_computesAgeInDays() throws Exception {
-        InboundPaymentResponse response = new InboundPaymentResponse();
-        response.id = "i1";
-        response.valueDate = LocalDate.now().minusDays(2).toString();
-        when(inboundService.search(any())).thenReturn(List.of(response));
+        when(inboundQueries.search(any())).thenReturn(List.of(
+                inboundView(INBOUND_ID, LocalDate.now().minusDays(2), null, 2L)));
 
         mvc.perform(get("/api/v1/inbound-payments/search"))
                 .andExpect(status().isOk())
@@ -217,12 +222,9 @@ class PaymentControllerWebTest {
 
     @Test
     void inboundSearch_futureOrMissingValueDate_ageInDaysNegativeOrNull() throws Exception {
-        InboundPaymentResponse future = new InboundPaymentResponse();
-        future.id = "i1";
-        future.valueDate = LocalDate.now().plusDays(5).toString();
-        InboundPaymentResponse undated = new InboundPaymentResponse();
-        undated.id = "i2";
-        when(inboundService.search(any())).thenReturn(List.of(future, undated));
+        when(inboundQueries.search(any())).thenReturn(List.of(
+                inboundView(INBOUND_ID, LocalDate.now().plusDays(5), null, -5L),
+                inboundView(OTHER_INBOUND_ID, null, null, null)));
 
         mvc.perform(get("/api/v1/inbound-payments/search"))
                 .andExpect(status().isOk())
@@ -232,13 +234,44 @@ class PaymentControllerWebTest {
 
     @Test
     void inboundDetails_foundAndMissing() throws Exception {
-        InboundPaymentResponse response = new InboundPaymentResponse();
-        response.id = "i1";
-        when(inboundService.getById("i1")).thenReturn(response);
-        when(inboundService.getById("missing")).thenReturn(null);
+        when(inboundQueries.get(PaymentId.parse(INBOUND_ID))).thenReturn(Optional.of(
+                inboundView(INBOUND_ID, null, null, null)));
+        when(inboundQueries.get(PaymentId.parse(MISSING_INBOUND_ID))).thenReturn(Optional.empty());
 
-        mvc.perform(get("/api/v1/inbound-payments/i1")).andExpect(status().isOk());
-        mvc.perform(get("/api/v1/inbound-payments/missing")).andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/inbound-payments/" + INBOUND_ID)).andExpect(status().isOk());
+        mvc.perform(get("/api/v1/inbound-payments/" + MISSING_INBOUND_ID)).andExpect(status().isNotFound());
+    }
+
+    // moved from PaymentRepositoryUnitTest.inboundSearch_appliesFiltersAndDefaultLimit (rendering, D-02)
+    @Test
+    void inboundSearch_formatsValueAndSettlementDates() throws Exception {
+        when(inboundQueries.search(any())).thenReturn(List.of(
+                inboundView(INBOUND_ID, LocalDate.of(2026, 10, 15), LocalDate.of(2026, 10, 15), 10L)));
+
+        mvc.perform(get("/api/v1/inbound-payments/search"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].creditTransferRef").value("CTR-1"))
+                .andExpect(jsonPath("$[0].valueDate").value("2026-10-15"))
+                .andExpect(jsonPath("$[0].settlementDate").value("2026-10-15"));
+    }
+
+    // moved from PaymentRepositoryUnitTest.inboundFindById_foundAndMissing (rendering on details)
+    @Test
+    void inboundDetails_formatsDates() throws Exception {
+        when(inboundQueries.get(PaymentId.parse(INBOUND_ID))).thenReturn(Optional.of(
+                inboundView(INBOUND_ID, LocalDate.of(2026, 10, 17), null, 8L)));
+
+        mvc.perform(get("/api/v1/inbound-payments/" + INBOUND_ID))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valueDate").value("2026-10-17"))
+                .andExpect(jsonPath("$.settlementDate").value(nullValue()));
+    }
+
+    private static InboundPaymentView inboundView(String id, LocalDate valueDate, LocalDate settlementDate,
+                                                  Long ageInDays) {
+        return new InboundPaymentView(new InboundPayment(PaymentId.parse(id), "CTR-1",
+                Money.of(new BigDecimal("3400.00"), "EUR"), "DE89370400440532013000", "ACME", "BNPAFRPP", valueDate,
+                settlementDate, "SETTLED", null), ageInDays);
     }
 
     // ---------------- outbound ----------------

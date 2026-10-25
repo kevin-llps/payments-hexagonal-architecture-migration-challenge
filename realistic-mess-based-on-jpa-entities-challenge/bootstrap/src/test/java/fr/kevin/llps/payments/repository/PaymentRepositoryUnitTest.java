@@ -23,10 +23,10 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import fr.kevin.llps.payments.dto.InboundPaymentResponse;
-import fr.kevin.llps.payments.dto.InboundPaymentSearchRequest;
 import fr.kevin.llps.payments.dto.OutboundPaymentSearchRequest;
-import fr.kevin.llps.payments.entity.InboundPayment;
+import fr.kevin.llps.payments.processing.inbound.InboundPaymentSearchCriteria;
+import fr.kevin.llps.payments.processing.inbound.adapter.out.persistence.JpaInboundPaymentAdapter;
+import fr.kevin.llps.payments.processing.inbound.adapter.out.persistence.entity.InboundPayment;
 import fr.kevin.llps.payments.processing.instant.InstantPaymentSearchCriteria;
 import fr.kevin.llps.payments.processing.instant.adapter.out.persistence.JpaInstantPaymentAdapter;
 import fr.kevin.llps.payments.processing.instant.adapter.out.persistence.entity.InstantPayment;
@@ -42,7 +42,7 @@ import fr.kevin.llps.payments.shared.domain.PaymentId;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({JpaInstantPaymentAdapter.class, JpaSuspendedPaymentAdapter.class, InboundPaymentRepository.class,
+@Import({JpaInstantPaymentAdapter.class, JpaSuspendedPaymentAdapter.class, JpaInboundPaymentAdapter.class,
         OutboundPaymentRepository.class, JpaRecallAdapter.class})
 @Testcontainers
 class PaymentRepositoryUnitTest {
@@ -62,7 +62,7 @@ class PaymentRepositoryUnitTest {
     @Autowired
     private JpaSuspendedPaymentAdapter suspendedRepository;
     @Autowired
-    private InboundPaymentRepository inboundRepository;
+    private JpaInboundPaymentAdapter inboundRepository;
     @Autowired
     private OutboundPaymentRepository outboundRepository;
     @Autowired
@@ -248,6 +248,7 @@ class PaymentRepositoryUnitTest {
 
     // ---------------- inbound ----------------
 
+    // date rendering moved to PaymentControllerWebTest.inboundSearch_formatsValueAndSettlementDates
     @Test
     void inboundSearch_appliesFiltersAndDefaultLimit() {
         persist(
@@ -258,20 +259,13 @@ class PaymentRepositoryUnitTest {
                 inbound("00000000-0000-0000-0000-000000000623", "CTR-3", "DE89370400440532013000", "BNPAFRPP",
                         "SETTLED", "EUR", Date.valueOf("2026-09-01"), Date.valueOf("2026-09-01")));
 
-        InboundPaymentSearchRequest request = new InboundPaymentSearchRequest();
-        request.creditorIban = "DE89370400440532013000";
-        request.originBic = "bnpa";
-        request.status = "settled";
-        request.currency = "eur";
-        request.valueDateFrom = "2026-10-01";
-        request.valueDateTo = "2026-10-31";
-
-        List<InboundPaymentResponse> results = inboundRepository.search(request);
+        var results = inboundRepository.search(InboundPaymentSearchCriteria.from("DE89370400440532013000", "bnpa",
+                "settled", "eur", "2026-10-01", "2026-10-31", null));
 
         assertThat(results).hasSize(1);
-        assertThat(results.get(0).creditTransferRef).isEqualTo("CTR-1");
-        assertThat(results.get(0).valueDate).isEqualTo("2026-10-15");
-        assertThat(results.get(0).settlementDate).isEqualTo("2026-10-15");
+        assertThat(results.get(0).creditTransferRef()).isEqualTo("CTR-1");
+        assertThat(results.get(0).valueDate()).isEqualTo(LocalDate.of(2026, 10, 15));
+        assertThat(results.get(0).settlementDate()).isEqualTo(LocalDate.of(2026, 10, 15));
     }
 
     @Test
@@ -279,13 +273,9 @@ class PaymentRepositoryUnitTest {
         persist(inbound("00000000-0000-0000-0000-000000000625", "CTR-5", "DE89370400440532013000", "bnpafrpp",
                 "RECEIVED", "EUR", Date.valueOf("2026-10-15"), null));
 
-        InboundPaymentSearchRequest byBic = new InboundPaymentSearchRequest();
-        byBic.originBic = "NPAF";
-        InboundPaymentSearchRequest byPartialIban = new InboundPaymentSearchRequest();
-        byPartialIban.creditorIban = "DE89";
-
-        assertThat(inboundRepository.search(byBic)).extracting(r -> r.creditTransferRef).containsExactly("CTR-5");
-        assertThat(inboundRepository.search(byPartialIban)).isEmpty();
+        assertThat(inboundRepository.search(inboundCriteria(null, "NPAF", null)))
+                .extracting(r -> r.creditTransferRef()).containsExactly("CTR-5");
+        assertThat(inboundRepository.search(inboundCriteria("DE89", null, null))).isEmpty();
     }
 
     @Test
@@ -299,7 +289,7 @@ class PaymentRepositoryUnitTest {
         sameDayLate.createdAt = Timestamp.valueOf("2026-10-16 18:00:00");
         persist(older, sameDayEarly, sameDayLate);
 
-        assertThat(inboundRepository.search(new InboundPaymentSearchRequest())).extracting(r -> r.creditTransferRef)
+        assertThat(inboundRepository.search(inboundCriteria(null, null, null))).extracting(r -> r.creditTransferRef())
                 .containsExactly("CTR-LATE", "CTR-EARLY", "CTR-OLD");
     }
 
@@ -309,23 +299,26 @@ class PaymentRepositoryUnitTest {
             persist(inbound(String.format("00000000-0000-0000-0000-00000002%04d", i), "CTR-L" + i,
                     "DE89370400440532013000", "BNPAFRPP", "RECEIVED", "EUR", Date.valueOf("2026-10-15"), null));
         }
-        InboundPaymentSearchRequest request = new InboundPaymentSearchRequest();
-        request.limit = 500;
 
-        assertThat(inboundRepository.search(request)).hasSize(201);
-        assertThat(inboundRepository.search(new InboundPaymentSearchRequest())).hasSize(50);
+        assertThat(inboundRepository.search(inboundCriteria(null, null, 500))).hasSize(201);
+        assertThat(inboundRepository.search(inboundCriteria(null, null, null))).hasSize(50);
     }
 
+    // date rendering moved to PaymentControllerWebTest.inboundDetails_formatsDates
     @Test
     void inboundFindById_foundAndMissing() {
         persist(inbound("00000000-0000-0000-0000-000000000624", "CTR-4", "DE89370400440532013000", "BNPAFRPP",
                 "RECEIVED", "EUR", Date.valueOf("2026-10-17"), null));
 
-        InboundPaymentResponse found = inboundRepository.findById("00000000-0000-0000-0000-000000000624");
-        assertThat(found.creditTransferRef).isEqualTo("CTR-4");
-        assertThat(found.valueDate).isEqualTo("2026-10-17");
-        assertThat(found.settlementDate).isNull();
-        assertThat(inboundRepository.findById("11111111-1111-1111-1111-111111111111")).isNull();
+        var found = inboundRepository.findById(PaymentId.parse("00000000-0000-0000-0000-000000000624")).orElseThrow();
+        assertThat(found.creditTransferRef()).isEqualTo("CTR-4");
+        assertThat(found.valueDate()).isEqualTo(LocalDate.of(2026, 10, 17));
+        assertThat(found.settlementDate()).isNull();
+        assertThat(inboundRepository.findById(PaymentId.parse("11111111-1111-1111-1111-111111111111"))).isEmpty();
+    }
+
+    private InboundPaymentSearchCriteria inboundCriteria(String creditorIban, String originBic, Integer limit) {
+        return InboundPaymentSearchCriteria.from(creditorIban, originBic, null, null, null, null, limit);
     }
 
     // ---------------- outbound ----------------

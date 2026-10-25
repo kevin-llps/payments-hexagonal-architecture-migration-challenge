@@ -8,11 +8,13 @@ import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -22,16 +24,18 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import fr.kevin.llps.payments.dto.InboundPaymentResponse;
 import fr.kevin.llps.payments.dto.OutboundPaymentResponse;
 import fr.kevin.llps.payments.dto.OutboundPaymentSearchRequest;
 import fr.kevin.llps.payments.entity.OutboundPayment;
-import fr.kevin.llps.payments.repository.InboundPaymentRepository;
 import fr.kevin.llps.payments.repository.OutboundPaymentRepository;
 import fr.kevin.llps.payments.compliancehold.SuspendedPayment;
 import fr.kevin.llps.payments.compliancehold.SuspendedPaymentQueryService;
 import fr.kevin.llps.payments.compliancehold.port.in.SuspendedPaymentSearchQuery;
 import fr.kevin.llps.payments.compliancehold.port.out.SuspendedPaymentSearchRepository;
+import fr.kevin.llps.payments.processing.inbound.InboundPayment;
+import fr.kevin.llps.payments.processing.inbound.InboundPaymentQueryService;
+import fr.kevin.llps.payments.processing.inbound.port.in.InboundPaymentSearchQuery;
+import fr.kevin.llps.payments.processing.inbound.port.out.InboundPaymentSearchRepository;
 import fr.kevin.llps.payments.processing.instant.InstantPayment;
 import fr.kevin.llps.payments.processing.instant.InstantPaymentQueryService;
 import fr.kevin.llps.payments.processing.instant.port.in.InstantPaymentSearchQuery;
@@ -52,7 +56,7 @@ class PaymentServiceUnitTest {
     @Mock
     private SuspendedPaymentSearchRepository suspendedRepository;
     @Mock
-    private InboundPaymentRepository inboundRepository;
+    private InboundPaymentSearchRepository inboundRepository;
     @Mock
     private OutboundPaymentRepository outboundRepository;
     @Mock
@@ -63,11 +67,16 @@ class PaymentServiceUnitTest {
     @InjectMocks
     private SuspendedPaymentQueryService suspendedQueries;
     @InjectMocks
-    private InboundPaymentService inboundService;
-    @InjectMocks
     private OutboundPaymentService outboundService;
     @InjectMocks
     private RecallQueryService recallQueries;
+    // the real system clock, as the legacy service used LocalDate.now()
+    private InboundPaymentQueryService inboundQueries;
+
+    @BeforeEach
+    void wireInboundQueries() {
+        inboundQueries = new InboundPaymentQueryService(inboundRepository, Clock.systemDefaultZone());
+    }
 
     // ---------------- instant ----------------
 
@@ -163,45 +172,60 @@ class PaymentServiceUnitTest {
 
     @Test
     void inboundSearch_delegatesToRepository() {
-        when(inboundRepository.search(any())).thenReturn(List.of(new InboundPaymentResponse()));
-        assertThat(inboundService.search(null)).hasSize(1);
+        when(inboundRepository.search(any())).thenReturn(List.of(inbound("00000000-0000-0000-0000-000000000301", null)));
+        assertThat(inboundQueries.search(new InboundPaymentSearchQuery(null, null, null, null, null, null, null)))
+                .hasSize(1);
+    }
+
+    // moved from PaymentControllerWebTest: the age shown in search results is computed by the query service
+    @Test
+    void inboundSearch_computesAgeInDays() {
+        when(inboundRepository.search(any())).thenReturn(List.of(
+                inbound("00000000-0000-0000-0000-000000000301", LocalDate.now().minusDays(2)),
+                inbound("00000000-0000-0000-0000-000000000302", LocalDate.now().plusDays(5)),
+                inbound("00000000-0000-0000-0000-000000000303", null)));
+
+        assertThat(inboundQueries.search(new InboundPaymentSearchQuery(null, null, null, null, null, null, null)))
+                .extracting(view -> view.ageInDays())
+                .containsExactly(2L, -5L, null);
     }
 
     @Test
     void inboundGetById_computesAgeInDays() {
-        InboundPaymentResponse response = new InboundPaymentResponse();
-        response.id = "i1";
-        response.valueDate = LocalDate.now().minusDays(3).toString();
-        when(inboundRepository.findById("i1")).thenReturn(response);
+        PaymentId id = PaymentId.parse("00000000-0000-0000-0000-000000000301");
+        when(inboundRepository.findById(id)).thenReturn(Optional.of(inbound(id.value().toString(),
+                LocalDate.now().minusDays(3))));
 
-        InboundPaymentResponse result = inboundService.getById("i1");
-
-        assertThat(result.ageInDays).isEqualTo(3L);
+        assertThat(inboundQueries.get(id).orElseThrow().ageInDays()).isEqualTo(3L);
     }
 
     @Test
     void inboundGetById_futureValueDate_hasNegativeAgeInDays() {
-        InboundPaymentResponse response = new InboundPaymentResponse();
-        response.id = "i2";
-        response.valueDate = LocalDate.now().plusDays(4).toString();
-        when(inboundRepository.findById("i2")).thenReturn(response);
+        PaymentId id = PaymentId.parse("00000000-0000-0000-0000-000000000302");
+        when(inboundRepository.findById(id)).thenReturn(Optional.of(inbound(id.value().toString(),
+                LocalDate.now().plusDays(4))));
 
-        assertThat(inboundService.getById("i2").ageInDays).isEqualTo(-4L);
+        assertThat(inboundQueries.get(id).orElseThrow().ageInDays()).isEqualTo(-4L);
     }
 
     @Test
     void inboundGetById_withoutValueDate_leavesAgeInDaysNull() {
-        InboundPaymentResponse response = new InboundPaymentResponse();
-        response.id = "i3";
-        when(inboundRepository.findById("i3")).thenReturn(response);
+        PaymentId id = PaymentId.parse("00000000-0000-0000-0000-000000000303");
+        when(inboundRepository.findById(id)).thenReturn(Optional.of(inbound(id.value().toString(), null)));
 
-        assertThat(inboundService.getById("i3").ageInDays).isNull();
+        assertThat(inboundQueries.get(id).orElseThrow().ageInDays()).isNull();
     }
 
     @Test
     void inboundGetById_missing_returnsNull() {
-        when(inboundRepository.findById("nope")).thenReturn(null);
-        assertThat(inboundService.getById("nope")).isNull();
+        PaymentId missing = PaymentId.parse("00000000-0000-0000-0000-000000000399");
+        when(inboundRepository.findById(missing)).thenReturn(Optional.empty());
+        assertThat(inboundQueries.get(missing)).isEmpty();
+    }
+
+    private static InboundPayment inbound(String id, LocalDate valueDate) {
+        return new InboundPayment(PaymentId.parse(id), null, Money.of(new BigDecimal("1.00"), "EUR"), null, null, null,
+                valueDate, null, null, null);
     }
 
     // ---------------- outbound ----------------
