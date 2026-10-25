@@ -25,11 +25,12 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import fr.kevin.llps.payments.dto.InboundPaymentResponse;
 import fr.kevin.llps.payments.dto.InboundPaymentSearchRequest;
-import fr.kevin.llps.payments.dto.InstantPaymentResponse;
-import fr.kevin.llps.payments.dto.InstantPaymentSearchRequest;
 import fr.kevin.llps.payments.dto.OutboundPaymentSearchRequest;
 import fr.kevin.llps.payments.entity.InboundPayment;
-import fr.kevin.llps.payments.entity.InstantPayment;
+import fr.kevin.llps.payments.processing.instant.InstantPaymentSearchCriteria;
+import fr.kevin.llps.payments.processing.instant.adapter.out.persistence.JpaInstantPaymentAdapter;
+import fr.kevin.llps.payments.processing.instant.adapter.out.persistence.entity.InstantPayment;
+import fr.kevin.llps.payments.shared.domain.SearchLimit;
 import fr.kevin.llps.payments.entity.OutboundPayment;
 import fr.kevin.llps.payments.compliancehold.SuspendedPaymentSearchCriteria;
 import fr.kevin.llps.payments.compliancehold.adapter.out.persistence.JpaSuspendedPaymentAdapter;
@@ -41,7 +42,7 @@ import fr.kevin.llps.payments.shared.domain.PaymentId;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({InstantPaymentRepository.class, JpaSuspendedPaymentAdapter.class, InboundPaymentRepository.class,
+@Import({JpaInstantPaymentAdapter.class, JpaSuspendedPaymentAdapter.class, InboundPaymentRepository.class,
         OutboundPaymentRepository.class, JpaRecallAdapter.class})
 @Testcontainers
 class PaymentRepositoryUnitTest {
@@ -57,7 +58,7 @@ class PaymentRepositoryUnitTest {
     }
 
     @Autowired
-    private InstantPaymentRepository instantRepository;
+    private JpaInstantPaymentAdapter instantRepository;
     @Autowired
     private JpaSuspendedPaymentAdapter suspendedRepository;
     @Autowired
@@ -82,6 +83,7 @@ class PaymentRepositoryUnitTest {
 
     // ---------------- instant ----------------
 
+    // executionDatetime rendering moved to PaymentControllerWebTest.instantSearch_formatsExecutionDatetime
     @Test
     void instantSearch_appliesAllFilters_andFormatsExecutionDatetime() {
         InstantPayment match = instant("00000000-0000-0000-0000-000000000601", "E2E-T1", "COMPLETED",
@@ -90,25 +92,17 @@ class PaymentRepositoryUnitTest {
                 "DE89370400440532013000", "FR7630006000011234567890189", Timestamp.valueOf("2026-10-16 10:00:00"), "EUR");
         persist(match, other);
 
-        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
-        request.endToEndId = "E2E-T1";
-        request.debtorIban = "de89";
-        request.creditorIban = "fr76";
-        request.status = "completed";
-        request.currency = "eur";
-        request.executionFrom = "2026-10-01T00:00:00";
-        request.executionTo = "2026-10-31";
-        request.limit = 10;
-
-        List<InstantPaymentResponse> results = instantRepository.search(request);
+        var results = instantRepository.search(InstantPaymentSearchCriteria.from("E2E-T1",
+                "de89370400440532013000", "fr7630006000011234567890189", "completed", "eur", "2026-10-01T00:00:00",
+                "2026-10-31", 10));
 
         assertThat(results).hasSize(1);
-        InstantPaymentResponse response = results.get(0);
-        assertThat(response.id).isEqualTo("00000000-0000-0000-0000-000000000601");
-        assertThat(response.endToEndId).isEqualTo("E2E-T1");
-        assertThat(response.amount).isEqualByComparingTo("1500.00");
-        assertThat(response.executionDatetime).isEqualTo("2026-10-15T09:15:00");
-        assertThat(response.scheme).isEqualTo("SCT INST");
+        var payment = results.get(0);
+        assertThat(payment.id()).isEqualTo(PaymentId.parse("00000000-0000-0000-0000-000000000601"));
+        assertThat(payment.endToEndId()).isEqualTo("E2E-T1");
+        assertThat(payment.amount().amount()).isEqualByComparingTo("1500.00");
+        assertThat(payment.executionDatetime()).isEqualTo(LocalDateTime.of(2026, 10, 15, 9, 15, 0));
+        assertThat(payment.scheme()).isEqualTo("SCT INST");
     }
 
     @Test
@@ -119,23 +113,22 @@ class PaymentRepositoryUnitTest {
                 instant("00000000-0000-0000-0000-000000000604", "E2E-NEW", "COMPLETED",
                         "DE89370400440532013000", "FR7630006000011234567890189", Timestamp.valueOf("2026-10-16 08:00:00"), "EUR"));
 
-        List<InstantPaymentResponse> results = instantRepository.search(new InstantPaymentSearchRequest());
+        var results = instantRepository.search(instantCriteria(null, null, null, null));
 
         assertThat(results).hasSize(2);
-        assertThat(results.get(0).endToEndId).isEqualTo("E2E-NEW");
-        assertThat(results.get(1).endToEndId).isEqualTo("E2E-OLD");
+        assertThat(results.get(0).endToEndId()).isEqualTo("E2E-NEW");
+        assertThat(results.get(1).endToEndId()).isEqualTo("E2E-OLD");
     }
 
+    // Substrings shorter than 15 chars are rejected as IBAN filters by the criteria factory (BR-07), so this adapter
+    // test builds the criteria directly with the trimmed, upper-cased values the factory produces.
     @Test
     void instantSearch_ibanFilters_matchAnySubstringIgnoringCase() {
         persist(instant("00000000-0000-0000-0000-000000000606", "E2E-S1", "COMPLETED",
                 "DE89370400440532013000", "FR7630006000011234567890189", Timestamp.valueOf("2026-10-15 09:15:00"), "EUR"));
 
-        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
-        request.debtorIban = " 0532013 ";
-        request.creditorIban = "6000011234";
-
-        assertThat(instantRepository.search(request)).extracting(r -> r.endToEndId).containsExactly("E2E-S1");
+        assertThat(instantRepository.search(new InstantPaymentSearchCriteria(null, "0532013", "6000011234", null, null,
+                null, null, new SearchLimit(50)))).extracting(r -> r.endToEndId()).containsExactly("E2E-S1");
     }
 
     @Test
@@ -148,11 +141,8 @@ class PaymentRepositoryUnitTest {
                 instant("00000000-0000-0000-0000-000000000609", "E2E-NEXT", "COMPLETED",
                         "DE89370400440532013000", "FR7630006000011234567890189", Timestamp.valueOf("2026-10-16 00:00:00"), "EUR"));
 
-        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
-        request.executionFrom = "2026-10-15";
-        request.executionTo = "2026-10-15";
-
-        assertThat(instantRepository.search(request)).extracting(r -> r.endToEndId)
+        assertThat(instantRepository.search(instantCriteria("2026-10-15", "2026-10-15", null, null)))
+                .extracting(r -> r.endToEndId())
                 .containsExactly("E2E-LATE", "E2E-MIDNIGHT");
     }
 
@@ -161,11 +151,8 @@ class PaymentRepositoryUnitTest {
         persist(instant("00000000-0000-0000-0000-000000000610", "E2E-ANY", "COMPLETED",
                 "DE89370400440532013000", "FR7630006000011234567890189", Timestamp.valueOf("2026-10-15 09:15:00"), "EUR"));
 
-        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
-        request.executionFrom = "yesterday";
-        request.executionTo = "2026/10/01";
-
-        assertThat(instantRepository.search(request)).extracting(r -> r.endToEndId).containsExactly("E2E-ANY");
+        assertThat(instantRepository.search(instantCriteria("yesterday", "2026/10/01", null, null)))
+                .extracting(r -> r.endToEndId()).containsExactly("E2E-ANY");
     }
 
     @Test
@@ -175,18 +162,24 @@ class PaymentRepositoryUnitTest {
                     "DE89370400440532013000", "FR7630006000011234567890189", Timestamp.valueOf("2026-10-15 09:15:00"), "EUR"));
         }
 
-        assertThat(instantRepository.search(new InstantPaymentSearchRequest())).hasSize(50);
+        assertThat(instantRepository.search(instantCriteria(null, null, null, null))).hasSize(50);
     }
 
+    // executionDatetime rendering moved to PaymentControllerWebTest.instantDetails_formatsExecutionDatetime
     @Test
     void instantFindById_foundAndMissing() {
         persist(instant("00000000-0000-0000-0000-000000000605", "E2E-F1", "COMPLETED",
                 "DE89370400440532013000", "FR7630006000011234567890189", Timestamp.valueOf("2026-10-15 09:15:00"), "EUR"));
 
-        InstantPaymentResponse found = instantRepository.findById("00000000-0000-0000-0000-000000000605");
-        assertThat(found.endToEndId).isEqualTo("E2E-F1");
-        assertThat(found.executionDatetime).isEqualTo("2026-10-15T09:15:00");
-        assertThat(instantRepository.findById("11111111-1111-1111-1111-111111111111")).isNull();
+        var found = instantRepository.findById(PaymentId.parse("00000000-0000-0000-0000-000000000605")).orElseThrow();
+        assertThat(found.endToEndId()).isEqualTo("E2E-F1");
+        assertThat(found.executionDatetime()).isEqualTo(LocalDateTime.of(2026, 10, 15, 9, 15, 0));
+        assertThat(instantRepository.findById(PaymentId.parse("11111111-1111-1111-1111-111111111111"))).isEmpty();
+    }
+
+    private InstantPaymentSearchCriteria instantCriteria(String executionFrom, String executionTo, String status,
+                                                         Integer limit) {
+        return InstantPaymentSearchCriteria.from(null, null, null, status, null, executionFrom, executionTo, limit);
     }
 
     // ---------------- suspended ----------------

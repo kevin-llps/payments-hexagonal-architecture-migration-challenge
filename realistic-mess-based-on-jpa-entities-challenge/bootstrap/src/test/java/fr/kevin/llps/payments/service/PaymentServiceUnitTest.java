@@ -23,18 +23,19 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import fr.kevin.llps.payments.dto.InboundPaymentResponse;
-import fr.kevin.llps.payments.dto.InstantPaymentResponse;
-import fr.kevin.llps.payments.dto.InstantPaymentSearchRequest;
 import fr.kevin.llps.payments.dto.OutboundPaymentResponse;
 import fr.kevin.llps.payments.dto.OutboundPaymentSearchRequest;
 import fr.kevin.llps.payments.entity.OutboundPayment;
 import fr.kevin.llps.payments.repository.InboundPaymentRepository;
-import fr.kevin.llps.payments.repository.InstantPaymentRepository;
 import fr.kevin.llps.payments.repository.OutboundPaymentRepository;
 import fr.kevin.llps.payments.compliancehold.SuspendedPayment;
 import fr.kevin.llps.payments.compliancehold.SuspendedPaymentQueryService;
 import fr.kevin.llps.payments.compliancehold.port.in.SuspendedPaymentSearchQuery;
 import fr.kevin.llps.payments.compliancehold.port.out.SuspendedPaymentSearchRepository;
+import fr.kevin.llps.payments.processing.instant.InstantPayment;
+import fr.kevin.llps.payments.processing.instant.InstantPaymentQueryService;
+import fr.kevin.llps.payments.processing.instant.port.in.InstantPaymentSearchQuery;
+import fr.kevin.llps.payments.processing.instant.port.out.InstantPaymentSearchRepository;
 import fr.kevin.llps.payments.recall.RecallQueryService;
 import fr.kevin.llps.payments.recall.port.in.RecallSearchQuery;
 import fr.kevin.llps.payments.recall.Recall;
@@ -47,7 +48,7 @@ import fr.kevin.llps.payments.shared.domain.PaymentId;
 class PaymentServiceUnitTest {
 
     @Mock
-    private InstantPaymentRepository instantRepository;
+    private InstantPaymentSearchRepository instantRepository;
     @Mock
     private SuspendedPaymentSearchRepository suspendedRepository;
     @Mock
@@ -58,7 +59,7 @@ class PaymentServiceUnitTest {
     private RecallSearchRepository recallRepository;
 
     @InjectMocks
-    private InstantPaymentService instantService;
+    private InstantPaymentQueryService instantQueries;
     @InjectMocks
     private SuspendedPaymentQueryService suspendedQueries;
     @InjectMocks
@@ -72,32 +73,24 @@ class PaymentServiceUnitTest {
 
     @Test
     void instantSearch_validIbans_delegatesToRepository() {
-        InstantPaymentResponse response = new InstantPaymentResponse();
-        response.id = "1";
-        when(instantRepository.search(any())).thenReturn(List.of(response));
+        when(instantRepository.search(any())).thenReturn(List.of(instant("00000000-0000-0000-0000-000000000101")));
 
-        List<InstantPaymentResponse> result = instantService.search(new InstantPaymentSearchRequest());
+        List<InstantPayment> result = instantQueries.search(instantQuery(null, null));
 
         assertThat(result).hasSize(1);
     }
 
     @Test
     void instantSearch_invalidDebtorIban_throws() {
-        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
-        request.debtorIban = "DE1";
-
-        assertThatThrownBy(() -> instantService.search(request))
-                .isInstanceOf(IllegalArgumentException.class)
+        assertThatThrownBy(() -> instantQueries.search(instantQuery("DE1", null)))
+                .isInstanceOf(InvalidSearchFilterException.class)
                 .hasMessage("Invalid debtor IBAN");
     }
 
     @Test
     void instantSearch_invalidCreditorIban_throws() {
-        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
-        request.creditorIban = "X";
-
-        assertThatThrownBy(() -> instantService.search(request))
-                .isInstanceOf(IllegalArgumentException.class)
+        assertThatThrownBy(() -> instantQueries.search(instantQuery(null, "X")))
+                .isInstanceOf(InvalidSearchFilterException.class)
                 .hasMessage("Invalid creditor IBAN");
     }
 
@@ -105,29 +98,36 @@ class PaymentServiceUnitTest {
     @ValueSource(strings = {"AAAAAAAAAAAAAAA", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "DE89 3704 0044 0532 0130 00", "   "})
     void instantSearch_ibanFilterWithin15To34CharsIgnoringSpacesOrBlank_isAccepted(String iban) {
         when(instantRepository.search(any())).thenReturn(List.of());
-        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
-        request.debtorIban = iban;
-        request.creditorIban = iban;
 
-        assertThat(instantService.search(request)).isEmpty();
+        assertThat(instantQueries.search(instantQuery(iban, iban))).isEmpty();
     }
 
     @ParameterizedTest(name = "[{index}] IBAN filter \"{0}\" is rejected")
     @ValueSource(strings = {"AAAAAAAAAAAAAA", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "DE89 3704 0044"})
     void instantSearch_ibanFilterOutside15To34Chars_isRejected(String iban) {
-        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
-        request.creditorIban = iban;
-
-        assertThatThrownBy(() -> instantService.search(request))
-                .isInstanceOf(IllegalArgumentException.class)
+        assertThatThrownBy(() -> instantQueries.search(instantQuery(null, iban)))
+                .isInstanceOf(InvalidSearchFilterException.class)
                 .hasMessage("Invalid creditor IBAN");
     }
 
     @Test
     void instantGetById_delegatesToRepository() {
-        when(instantRepository.findById("1")).thenReturn(new InstantPaymentResponse());
-        assertThat(instantService.getById("1")).isNotNull();
-        assertThat(instantService.getById("2")).isNull();
+        PaymentId found = PaymentId.parse("00000000-0000-0000-0000-000000000101");
+        PaymentId missing = PaymentId.parse("00000000-0000-0000-0000-000000000102");
+        when(instantRepository.findById(found)).thenReturn(Optional.of(instant(found.value().toString())));
+        when(instantRepository.findById(missing)).thenReturn(Optional.empty());
+
+        assertThat(instantQueries.get(found)).isPresent();
+        assertThat(instantQueries.get(missing)).isEmpty();
+    }
+
+    private static InstantPaymentSearchQuery instantQuery(String debtorIban, String creditorIban) {
+        return new InstantPaymentSearchQuery(null, debtorIban, creditorIban, null, null, null, null, null);
+    }
+
+    private static InstantPayment instant(String id) {
+        return new InstantPayment(PaymentId.parse(id), null, null, Money.of(new BigDecimal("1.00"), "EUR"), null, null,
+                null, null, null, null, "SCT INST", null);
     }
 
     // ---------------- suspended ----------------

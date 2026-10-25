@@ -1,4 +1,4 @@
-package fr.kevin.llps.payments.entity;
+package fr.kevin.llps.payments.processing.instant.adapter.out.persistence.entity;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;

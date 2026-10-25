@@ -11,10 +11,12 @@ import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -27,7 +29,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import fr.kevin.llps.payments.entity.InboundPayment;
-import fr.kevin.llps.payments.entity.InstantPayment;
+import fr.kevin.llps.payments.processing.instant.InstantPayment;
+import fr.kevin.llps.payments.processing.instant.RecordInstantPaymentService;
+import fr.kevin.llps.payments.processing.instant.adapter.in.kafka.InstantPaymentListener;
+import fr.kevin.llps.payments.processing.instant.port.out.InstantPaymentRecordRepository;
+import fr.kevin.llps.payments.shared.domain.PaymentId;
 import fr.kevin.llps.payments.entity.OutboundPayment;
 import fr.kevin.llps.payments.compliancehold.adapter.in.kafka.SuspendedPaymentListener;
 import fr.kevin.llps.payments.compliancehold.port.in.RecordSuspendedPaymentCommand;
@@ -49,7 +55,9 @@ class KafkaListenerUnitTest {
     @Mock
     private RecordSuspendedPaymentUseCase recordSuspendedPayment;
 
-    @InjectMocks
+    @Mock
+    private InstantPaymentRecordRepository instantRepository;
+    // real use case: scheme default and audit timestamps are part of what the instant listener tests assert
     private InstantPaymentListener instantListener;
     @InjectMocks
     private SuspendedPaymentListener suspendedListener;
@@ -60,6 +68,12 @@ class KafkaListenerUnitTest {
     @InjectMocks
     private RecallListener recallListener;
 
+    @BeforeEach
+    void wireInstantListener() {
+        instantListener = new InstantPaymentListener(
+                new RecordInstantPaymentService(instantRepository, Clock.systemDefaultZone()));
+    }
+
     @Test
     void instant_onMessage_persistsRow() {
         instantListener.onMessage("""
@@ -69,19 +83,19 @@ class KafkaListenerUnitTest {
                  "status":"COMPLETED","scheme":"SCT INST"}
                 """);
 
-        InstantPayment payment = captureMerge(InstantPayment.class);
-        assertThat(payment.id).isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000901"));
-        assertThat(payment.endToEndId).isEqualTo("E2E-1");
-        assertThat(payment.amount).isEqualByComparingTo("42.00");
-        assertThat(payment.executionDatetime).isEqualTo(Timestamp.valueOf("2026-10-17 10:00:00"));
-        assertThat(payment.scheme).isEqualTo("SCT INST");
-        assertThat(payment.createdAt).isNotNull();
+        InstantPayment payment = captureInstant();
+        assertThat(payment.id()).isEqualTo(PaymentId.parse("00000000-0000-0000-0000-000000000901"));
+        assertThat(payment.endToEndId()).isEqualTo("E2E-1");
+        assertThat(payment.amount().amount()).isEqualByComparingTo("42.00");
+        assertThat(payment.executionDatetime()).isEqualTo(LocalDateTime.of(2026, 10, 17, 10, 0, 0));
+        assertThat(payment.scheme()).isEqualTo("SCT INST");
+        assertThat(payment.audit().createdAt()).isNotNull();
     }
 
     @Test
     void instant_onMessage_malformedJson_swallowed() {
         assertThatCode(() -> instantListener.onMessage("not json")).doesNotThrowAnyException();
-        verify(em, never()).merge(org.mockito.ArgumentMatchers.any(InstantPayment.class));
+        verify(instantRepository, never()).upsert(any());
     }
 
     @ParameterizedTest(name = "[{index}] scheme fragment \"{0}\" defaults to SCT INST")
@@ -90,20 +104,20 @@ class KafkaListenerUnitTest {
         instantListener.onMessage("{\"id\":\"00000000-0000-0000-0000-000000000901\",\"amount\":1.00"
                 + schemeFragment + "}");
 
-        assertThat(captureMerge(InstantPayment.class).scheme).isEqualTo("SCT INST");
+        assertThat(captureInstant().scheme()).isEqualTo("SCT INST");
     }
 
     @ParameterizedTest(name = "[{index}] executionDateTime \"{0}\" -> {1}")
     @CsvSource({
-            "2026-10-17T10:00:00Z, 2026-10-17 10:00:00",
-            "2026-10-17T10:00:00, 2026-10-17 10:00:00",
-            "2026-10-17, 2026-10-17 00:00:00"
+            "2026-10-17T10:00:00Z, 2026-10-17T10:00:00",
+            "2026-10-17T10:00:00, 2026-10-17T10:00:00",
+            "2026-10-17, 2026-10-17T00:00:00"
     })
-    void instant_onMessage_executionDateTime_stripsTAndZWithoutTimezoneConversion(String raw, String expected) {
+    void instant_onMessage_executionDateTime_stripsTAndZWithoutTimezoneConversion(String raw, LocalDateTime expected) {
         instantListener.onMessage("{\"id\":\"00000000-0000-0000-0000-000000000901\",\"amount\":1.00,"
                 + "\"executionDateTime\":\"" + raw + "\"}");
 
-        assertThat(captureMerge(InstantPayment.class).executionDatetime).isEqualTo(Timestamp.valueOf(expected));
+        assertThat(captureInstant().executionDatetime()).isEqualTo(expected);
     }
 
     @Test
@@ -112,12 +126,12 @@ class KafkaListenerUnitTest {
                 {"id":"00000000-0000-0000-0000-000000000901","debtorName":null}
                 """);
 
-        InstantPayment payment = captureMerge(InstantPayment.class);
-        assertThat(payment.endToEndId).isEmpty();
-        assertThat(payment.status).isEmpty();
-        assertThat(payment.debtorName).isEqualTo("null");
-        assertThat(payment.amount).isEqualByComparingTo("0");
-        assertThat(payment.executionDatetime).isNull();
+        InstantPayment payment = captureInstant();
+        assertThat(payment.endToEndId()).isEmpty();
+        assertThat(payment.status()).isEmpty();
+        assertThat(payment.debtorName()).isEqualTo("null");
+        assertThat(payment.amount().amount()).isEqualByComparingTo("0");
+        assertThat(payment.executionDatetime()).isNull();
     }
 
     @Test
@@ -128,10 +142,10 @@ class KafkaListenerUnitTest {
                 {"id":"00000000-0000-0000-0000-000000000901","amount":1.00}
                 """);
 
-        InstantPayment payment = captureMerge(InstantPayment.class);
+        InstantPayment payment = captureInstant();
         long after = System.currentTimeMillis();
-        assertThat(payment.createdAt.getTime()).isBetween(before, after);
-        assertThat(payment.updatedAt.getTime()).isBetween(before, after);
+        assertThat(Timestamp.valueOf(payment.audit().createdAt()).getTime()).isBetween(before, after);
+        assertThat(Timestamp.valueOf(payment.audit().updatedAt()).getTime()).isBetween(before, after);
     }
 
     @ParameterizedTest(name = "[{index}] id fragment \"{0}\" drops the message")
@@ -139,7 +153,7 @@ class KafkaListenerUnitTest {
     void instant_onMessage_invalidOrMissingId_isDropped(String idFragment) {
         assertThatCode(() -> instantListener.onMessage("{" + idFragment + "\"amount\":1.00}"))
                 .doesNotThrowAnyException();
-        verify(em, never()).merge(any(InstantPayment.class));
+        verify(instantRepository, never()).upsert(any());
     }
 
     @Test
@@ -253,7 +267,7 @@ class KafkaListenerUnitTest {
 
     @ParameterizedTest(name = "[{index}] {0} listens on {1} with group {2}")
     @CsvSource({
-            "fr.kevin.llps.payments.kafka.InstantPaymentListener, pay.instant, jpa-instant-group",
+            "fr.kevin.llps.payments.processing.instant.adapter.in.kafka.InstantPaymentListener, pay.instant, jpa-instant-group",
             "fr.kevin.llps.payments.compliancehold.adapter.in.kafka.SuspendedPaymentListener, pay.suspended, jpa-suspended-group",
             "fr.kevin.llps.payments.kafka.InboundPaymentListener, pay.inbound, jpa-inbound-group",
             "fr.kevin.llps.payments.kafka.OutboundPaymentMessageConsumer, pay.outbound, jpa-outbound-group",
@@ -294,6 +308,12 @@ class KafkaListenerUnitTest {
     private RecordRecallCommand captureRecall() {
         ArgumentCaptor<RecordRecallCommand> captor = ArgumentCaptor.forClass(RecordRecallCommand.class);
         verify(recordRecall).record(captor.capture());
+        return captor.getValue();
+    }
+
+    private InstantPayment captureInstant() {
+        ArgumentCaptor<InstantPayment> captor = ArgumentCaptor.forClass(InstantPayment.class);
+        verify(instantRepository).upsert(captor.capture());
         return captor.getValue();
     }
 
