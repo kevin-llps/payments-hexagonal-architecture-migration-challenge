@@ -1,0 +1,136 @@
+{
+  "skill": "skill-creator",
+  "rules": [
+    {
+      "id": "R1",
+      "rule": "All five inputs are required before any file is written",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Required inputs" },
+        { "type": "contains", "value": "until all five are present" },
+        { "type": "regex", "value": "Do not invent\\s+inputs" }
+      ]
+    },
+    {
+      "id": "R2",
+      "rule": "Missing inputs are asked in a single batched question",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "single batched question" }
+      ]
+    },
+    {
+      "id": "R3",
+      "rule": "Creation is create-only; an existing ID is refused",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "create-only" },
+        { "type": "regex", "value": "Never overwrite or edit\\s+an\\s+existing skill" }
+      ]
+    },
+    {
+      "id": "R4",
+      "rule": "The skill ID is lowercase kebab-case",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "`^[a-z0-9]+(-[a-z0-9]+)*$`" },
+        { "type": "idMatchesDir" }
+      ]
+    },
+    {
+      "id": "R5",
+      "rule": "Every generated skill carries a mandatory Rules table",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Rules" },
+        { "type": "contains", "value": "mandatory Rules table" },
+        { "type": "ruleTableCoverage" }
+      ]
+    },
+    {
+      "id": "R6",
+      "rule": "Rule decomposition and test authoring are outside this skill",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "outside this skill's responsibility" },
+        { "type": "contains", "value": "`tests/rules.json`" }
+      ]
+    },
+    {
+      "id": "R7",
+      "rule": "This skill calls no skill, agent, or sub-agent",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "must not load, delegate to, invoke, or run any skill, agent, or" },
+        { "type": "notContains", "value": "`skill-" }
+      ]
+    },
+    {
+      "id": "R8",
+      "rule": "The report lists the final path, the skill ID, and the created files",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "list the final path" },
+        { "type": "contains", "value": "the skill ID, and the files created" }
+      ]
+    },
+    {
+      "id": "R9",
+      "rule": "The description states when to use the skill",
+      "check": "static",
+      "assertions": [
+        { "type": "frontmatterField", "value": "description", "matches": "use when" },
+        { "type": "frontmatterField", "value": "name" }
+      ]
+    },
+    {
+      "id": "R10",
+      "rule": "An incomplete request is answered by asking, never by writing files",
+      "check": "agent-evaluation"
+    },
+    {
+      "id": "R11",
+      "rule": "Every created skill ships a README.md documentation file",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "`<id>/README.md`", "section": "Workflow" },
+        { "type": "contains", "value": "README is mandatory", "section": "Workflow" },
+        { "type": "contains", "value": "using the README template below", "section": "Workflow" },
+        { "type": "contains", "value": "`<id>/README.md` exists beside `<id>/SKILL.md` for every created skill", "section": "Acceptance criteria" }
+      ]
+    },
+    {
+      "id": "R12",
+      "rule": "The README documents the skill's purpose, when to use it, and how to run it",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "README template" },
+        { "type": "contains", "value": "documents the skill's purpose, when to use it, and how to run it", "section": "Workflow" },
+        { "type": "contains", "value": "## When to use" },
+        { "type": "contains", "value": "## How to run" },
+        { "type": "contains", "value": "The README stays shorter than `SKILL.md`", "section": "Workflow" },
+        { "type": "contains", "value": "The README documents the skill's purpose, when to use it, and how to run", "section": "Acceptance criteria" }
+      ]
+    },
+    {
+      "id": "R13",
+      "rule": "The README dependency graph shows only this skill's callers, each label indexed",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "## Dependency graph", "section": "Workflow" },
+        { "type": "contains", "value": "only agents or skills that call this skill", "section": "Workflow" },
+        { "type": "contains", "value": "starts with its 1-based index", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R14",
+      "rule": "The README workflow graph shows only this skill's own steps, each label indexed",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "## Workflow graph", "section": "Workflow" },
+        { "type": "contains", "value": "only steps executed by this skill", "section": "Workflow" },
+        { "type": "contains", "value": "1: <first step sentence>", "section": "Workflow" }
+      ]
+    }
+  ]
+}

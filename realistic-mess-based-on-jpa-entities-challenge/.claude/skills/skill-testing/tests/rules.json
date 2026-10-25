@@ -1,0 +1,128 @@
+{
+  "skill": "skill-testing",
+  "rules": [
+    {
+      "id": "R1",
+      "rule": "Tests exist and are authoritative before SKILL.md",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "authoritative" },
+        { "type": "contains", "value": "must exist before `SKILL.md`" },
+        { "type": "heading", "value": "Rules" }
+      ]
+    },
+    {
+      "id": "R2",
+      "rule": "Each rule has a stable ID and an explicit check type",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "one stable ID" },
+        { "type": "contains", "value": "check: \"static\"" },
+        { "type": "pathExists", "value": "references/rules-schema.md" }
+      ]
+    },
+    {
+      "id": "R3",
+      "rule": "Static rules carry at least one executable assertion",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "at least one assertion" }
+      ]
+    },
+    {
+      "id": "R4",
+      "rule": "Spec and Rules table cover each other bidirectionally",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "bidirectional" },
+        { "type": "ruleTableCoverage" }
+      ]
+    },
+    {
+      "id": "R5",
+      "rule": "Agent evaluations are listed after the static run",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "listed after the static run" },
+        { "type": "contains", "value": "agent-evaluation" }
+      ]
+    },
+    {
+      "id": "R6",
+      "rule": "The runner never edits the skill under test",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "never edits the skill under test" }
+      ]
+    },
+    {
+      "id": "R7",
+      "rule": "The verdict is one PASS/FAIL line per static rule",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "PASS/FAIL" }
+      ]
+    },
+    {
+      "id": "R8",
+      "rule": "The runner is zero-dependency Python",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "zero-dependency Python" },
+        { "type": "pathExists", "value": "scripts/run-skill-rule-tests.py" },
+        { "type": "pathExists", "value": "scripts/enforce-new-skill-scope.py" }
+      ]
+    },
+    {
+      "id": "R9",
+      "rule": "Skill is discoverable and the description says when to use it",
+      "check": "static",
+      "assertions": [
+        { "type": "idMatchesDir" },
+        { "type": "frontmatterField", "value": "description", "matches": "use when" },
+        { "type": "frontmatterField", "value": "name" }
+      ]
+    },
+    {
+      "id": "R10",
+      "rule": "Compound acceptance criteria are split into separate atomic rules",
+      "check": "agent-evaluation"
+    },
+    {
+      "id": "R11",
+      "rule": "Every script has a matching test module under scripts/tests",
+      "check": "static",
+      "assertions": [
+        { "type": "scriptTestCoverage" }
+      ]
+    },
+    {
+      "id": "R12",
+      "rule": "TDD proceeds one rule at a time: RED before implementation, GREEN after, then the next rule",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "one rule at a time", "section": "Workflow" },
+        { "type": "contains", "value": "implement only that rule", "section": "Workflow" },
+        { "type": "contains", "value": "Only then move to the next rule", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R13",
+      "rule": "The runner executes a selected rule with --rule and reports that rule's own verdict",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "--rule R1", "section": "Commands" },
+        { "type": "contains", "value": "Selected:", "section": "Commands" }
+      ]
+    },
+    {
+      "id": "R14",
+      "rule": "Agent-evaluation rules run at their position in the per-rule loop",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "at their position in the loop", "section": "Workflow" },
+        { "type": "contains", "value": "execute the prompt", "section": "Workflow" }
+      ]
+    }
+  ]
+}
