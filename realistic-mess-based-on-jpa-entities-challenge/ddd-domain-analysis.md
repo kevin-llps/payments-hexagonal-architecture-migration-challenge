@@ -621,6 +621,8 @@ classDiagram
 | 2026-10-25 | Gate 1 — fee conflict | Model BR-19 / BR-20 as two named policies `SearchFeeEstimate` and `DetailFeeEstimate`. |
 | 2026-10-25 | Gate 1 — quirks | BR-03, BR-11, BR-13, BR-17, BR-24, BR-29 (and other "locked quirk" rules) preserved as required behavior. |
 | 2026-10-25 | Gate 2 — contexts | Three contexts approved: Payment Processing, Compliance Hold, Recall / Investigations, plus a Shared Kernel. |
+| 2026-10-25 | Isolated domain design — D-01 | `Money.amount` is non-null in the domain. The BR-19 clause "null amount → 0" (and BR-20 SHA/other with null amount) becomes unreachable: a null amount is rejected when the aggregate is reconstituted (→ HTTP 500). Production cannot produce it (`amount NOT NULL` on the four payment tables; BR-30 stores a missing amount as 0). The two null-amount cases in `PaymentServiceUnitTest` will be replaced in the migration phase by a test asserting the rejection. Recall amounts remain optional (nullable column). See `isolated-domain-design.md` §19. |
+| 2026-10-25 | Isolated domain design — D-02 | BR-22 (timestamp/date rendering) moves from the Shared Kernel to the REST adapter: presentation, not business. Rendered values are unchanged. |
 | 2026-10-25 | Phase 2 evidence | BR-14 and BR-17 corrected from inferred "400" to verified "500" (`@Repository` exception translation). BR-13, BR-20 (NPE → 500), BR-29, BR-30 confirmed by tests and promoted to E. New risk R-08. Pending user acknowledgement at the Phase 2 gate. |
 
 ## 16. Remaining Risks, Gaps, and Unresolved Items
