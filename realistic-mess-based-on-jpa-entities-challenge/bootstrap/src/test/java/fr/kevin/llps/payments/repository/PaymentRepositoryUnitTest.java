@@ -23,7 +23,6 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import fr.kevin.llps.payments.dto.OutboundPaymentSearchRequest;
 import fr.kevin.llps.payments.processing.inbound.InboundPaymentSearchCriteria;
 import fr.kevin.llps.payments.processing.inbound.adapter.out.persistence.JpaInboundPaymentAdapter;
 import fr.kevin.llps.payments.processing.inbound.adapter.out.persistence.entity.InboundPayment;
@@ -31,7 +30,9 @@ import fr.kevin.llps.payments.processing.instant.InstantPaymentSearchCriteria;
 import fr.kevin.llps.payments.processing.instant.adapter.out.persistence.JpaInstantPaymentAdapter;
 import fr.kevin.llps.payments.processing.instant.adapter.out.persistence.entity.InstantPayment;
 import fr.kevin.llps.payments.shared.domain.SearchLimit;
-import fr.kevin.llps.payments.entity.OutboundPayment;
+import fr.kevin.llps.payments.processing.outbound.OutboundPaymentSearchCriteria;
+import fr.kevin.llps.payments.processing.outbound.adapter.out.persistence.JpaOutboundPaymentAdapter;
+import fr.kevin.llps.payments.processing.outbound.adapter.out.persistence.entity.OutboundPayment;
 import fr.kevin.llps.payments.compliancehold.SuspendedPaymentSearchCriteria;
 import fr.kevin.llps.payments.compliancehold.adapter.out.persistence.JpaSuspendedPaymentAdapter;
 import fr.kevin.llps.payments.compliancehold.adapter.out.persistence.entity.SuspendedPayment;
@@ -43,7 +44,7 @@ import fr.kevin.llps.payments.shared.domain.PaymentId;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({JpaInstantPaymentAdapter.class, JpaSuspendedPaymentAdapter.class, JpaInboundPaymentAdapter.class,
-        OutboundPaymentRepository.class, JpaRecallAdapter.class})
+        JpaOutboundPaymentAdapter.class, JpaRecallAdapter.class})
 @Testcontainers
 class PaymentRepositoryUnitTest {
 
@@ -64,7 +65,7 @@ class PaymentRepositoryUnitTest {
     @Autowired
     private JpaInboundPaymentAdapter inboundRepository;
     @Autowired
-    private OutboundPaymentRepository outboundRepository;
+    private JpaOutboundPaymentAdapter outboundRepository;
     @Autowired
     private JpaRecallAdapter recallRepository;
     @Autowired
@@ -333,20 +334,12 @@ class PaymentRepositoryUnitTest {
                 outbound("00000000-0000-0000-0000-000000000633", "OUT-3", "DE89370400440532013000", "ABNANL2A",
                         "OUR", "SENT", Date.valueOf("2026-10-16")));
 
-        OutboundPaymentSearchRequest request = new OutboundPaymentSearchRequest();
-        request.debtorIban = "DE89370400440532013000";
-        request.destinationBic = "abna";
-        request.chargesType = "sha";
-        request.status = "sent";
-        request.executionFrom = "2026-10-01";
-        request.executionTo = "2026-10-31";
-        request.limit = 20;
-
-        List<OutboundPayment> results = outboundRepository.search(request);
+        var results = outboundRepository.search(OutboundPaymentSearchCriteria.from("DE89370400440532013000", "abna",
+                "sha", "sent", "2026-10-01", "2026-10-31", 20));
 
         assertThat(results).hasSize(1);
-        assertThat(results.get(0).instructionId).isEqualTo("OUT-1");
-        assertThat(results.get(0).requestedExecutionDate).isEqualTo(Date.valueOf("2026-10-16"));
+        assertThat(results.get(0).instructionId()).isEqualTo("OUT-1");
+        assertThat(results.get(0).requestedExecutionDate()).isEqualTo(LocalDate.of(2026, 10, 16));
     }
 
     @Test
@@ -357,13 +350,9 @@ class PaymentRepositoryUnitTest {
                 outbound("00000000-0000-0000-0000-000000000636", "OUT-LOWER", "DE89370400440532013000", "abnanl2a",
                         "SHA", "SENT", Date.valueOf("2026-10-16")));
 
-        OutboundPaymentSearchRequest byBic = new OutboundPaymentSearchRequest();
-        byBic.destinationBic = "abna";
-        OutboundPaymentSearchRequest byPartialIban = new OutboundPaymentSearchRequest();
-        byPartialIban.debtorIban = "DE89";
-
-        assertThat(outboundRepository.search(byBic)).extracting(p -> p.instructionId).containsExactly("OUT-UPPER");
-        assertThat(outboundRepository.search(byPartialIban)).isEmpty();
+        assertThat(outboundRepository.search(outboundCriteria(null, "abna", null)))
+                .extracting(p -> p.instructionId()).containsExactly("OUT-UPPER");
+        assertThat(outboundRepository.search(outboundCriteria("DE89", null, null))).isEmpty();
     }
 
     @Test
@@ -374,7 +363,7 @@ class PaymentRepositoryUnitTest {
                 outbound("00000000-0000-0000-0000-000000000638", "OUT-LATE", "DE89370400440532013000", "ABNANL2A",
                         "SHA", "SENT", Date.valueOf("2026-10-20")));
 
-        assertThat(outboundRepository.search(new OutboundPaymentSearchRequest())).extracting(p -> p.instructionId)
+        assertThat(outboundRepository.search(outboundCriteria(null, null, null))).extracting(p -> p.instructionId())
                 .containsExactly("OUT-LATE", "OUT-EARLY");
     }
 
@@ -384,10 +373,8 @@ class PaymentRepositoryUnitTest {
             persist(outbound(String.format("00000000-0000-0000-0000-00000003%04d", i), "OUT-L" + i,
                     "DE89370400440532013000", "ABNANL2A", "SHA", "SENT", Date.valueOf("2026-10-16")));
         }
-        OutboundPaymentSearchRequest request = new OutboundPaymentSearchRequest();
-        request.limit = 500;
 
-        assertThat(outboundRepository.search(request)).hasSize(200);
+        assertThat(outboundRepository.search(outboundCriteria(null, null, 500))).hasSize(200);
     }
 
     @Test
@@ -395,9 +382,13 @@ class PaymentRepositoryUnitTest {
         persist(outbound("00000000-0000-0000-0000-000000000634", "OUT-4", "DE89370400440532013000", "ABNANL2A",
                 "SHA", "SENT", Date.valueOf("2026-10-18")));
 
-        OutboundPayment found = outboundRepository.findById("00000000-0000-0000-0000-000000000634");
-        assertThat(found.instructionId).isEqualTo("OUT-4");
-        assertThat(outboundRepository.findById("11111111-1111-1111-1111-111111111111")).isNull();
+        var found = outboundRepository.findById(PaymentId.parse("00000000-0000-0000-0000-000000000634")).orElseThrow();
+        assertThat(found.instructionId()).isEqualTo("OUT-4");
+        assertThat(outboundRepository.findById(PaymentId.parse("11111111-1111-1111-1111-111111111111"))).isEmpty();
+    }
+
+    private OutboundPaymentSearchCriteria outboundCriteria(String debtorIban, String destinationBic, Integer limit) {
+        return OutboundPaymentSearchCriteria.from(debtorIban, destinationBic, null, null, null, null, limit);
     }
 
     // ---------------- recalls ----------------

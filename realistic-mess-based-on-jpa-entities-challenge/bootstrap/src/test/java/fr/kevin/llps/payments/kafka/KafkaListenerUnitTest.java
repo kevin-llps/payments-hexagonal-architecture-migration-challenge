@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.sql.Date;
@@ -36,7 +35,10 @@ import fr.kevin.llps.payments.processing.instant.RecordInstantPaymentService;
 import fr.kevin.llps.payments.processing.instant.adapter.in.kafka.InstantPaymentListener;
 import fr.kevin.llps.payments.processing.instant.port.out.InstantPaymentRecordRepository;
 import fr.kevin.llps.payments.shared.domain.PaymentId;
-import fr.kevin.llps.payments.entity.OutboundPayment;
+import fr.kevin.llps.payments.processing.outbound.OutboundPayment;
+import fr.kevin.llps.payments.processing.outbound.RecordOutboundPaymentService;
+import fr.kevin.llps.payments.processing.outbound.adapter.in.kafka.OutboundPaymentMessageConsumer;
+import fr.kevin.llps.payments.processing.outbound.port.out.OutboundPaymentRecordRepository;
 import fr.kevin.llps.payments.compliancehold.adapter.in.kafka.SuspendedPaymentListener;
 import fr.kevin.llps.payments.compliancehold.port.in.RecordSuspendedPaymentCommand;
 import fr.kevin.llps.payments.compliancehold.port.in.RecordSuspendedPaymentUseCase;
@@ -45,13 +47,9 @@ import fr.kevin.llps.payments.recall.port.in.RecordRecallCommand;
 import fr.kevin.llps.payments.recall.port.in.RecordRecallUseCase;
 import fr.kevin.llps.payments.shared.domain.MalformedValueException;
 
-import jakarta.persistence.EntityManager;
-
 @ExtendWith(MockitoExtension.class)
 class KafkaListenerUnitTest {
 
-    @Mock
-    private EntityManager em;
     @Mock
     private RecordRecallUseCase recordRecall;
     @Mock
@@ -67,7 +65,9 @@ class KafkaListenerUnitTest {
     private SuspendedPaymentListener suspendedListener;
     @InjectMocks
     private InboundPaymentListener inboundListener;
-    @InjectMocks
+    @Mock
+    private OutboundPaymentRecordRepository outboundRepository;
+    // real use case: the persistence failure is raised by the repository, as em.merge did
     private OutboundPaymentMessageConsumer outboundConsumer;
     @InjectMocks
     private RecallListener recallListener;
@@ -76,6 +76,12 @@ class KafkaListenerUnitTest {
     void wireInstantListener() {
         instantListener = new InstantPaymentListener(
                 new RecordInstantPaymentService(instantRepository, Clock.systemDefaultZone()));
+    }
+
+    @BeforeEach
+    void wireOutboundConsumer() {
+        outboundConsumer = new OutboundPaymentMessageConsumer(
+                new RecordOutboundPaymentService(outboundRepository, Clock.systemDefaultZone()));
     }
 
     @Test
@@ -223,22 +229,24 @@ class KafkaListenerUnitTest {
                  "requestedExecutionDate":"2026-10-18","chargesType":"SHA","status":"SENT"}
                 """);
 
-        OutboundPayment payment = captureMerge(OutboundPayment.class);
-        assertThat(payment.instructionId).isEqualTo("OUT-1");
-        assertThat(payment.amount).isEqualByComparingTo("300.00");
-        assertThat(payment.requestedExecutionDate).isEqualTo(Date.valueOf("2026-10-18"));
-        assertThat(payment.chargesType).isEqualTo("SHA");
+        ArgumentCaptor<OutboundPayment> captor = ArgumentCaptor.forClass(OutboundPayment.class);
+        verify(outboundRepository).upsert(captor.capture());
+        OutboundPayment payment = captor.getValue();
+        assertThat(payment.instructionId()).isEqualTo("OUT-1");
+        assertThat(payment.amount().amount()).isEqualByComparingTo("300.00");
+        assertThat(payment.requestedExecutionDate()).isEqualTo(LocalDate.of(2026, 10, 18));
+        assertThat(payment.chargesType().code()).isEqualTo("SHA");
     }
 
     @Test
     void outbound_onMessage_malformedJson_swallowed() {
         assertThatCode(() -> outboundConsumer.onMessage("nope")).doesNotThrowAnyException();
-        verify(em, never()).merge(org.mockito.ArgumentMatchers.any(OutboundPayment.class));
+        verify(outboundRepository, never()).upsert(any());
     }
 
     @Test
     void outbound_onMessage_persistenceFailure_swallowed() {
-        when(em.merge(any(OutboundPayment.class))).thenThrow(new RuntimeException("db down"));
+        doThrow(new RuntimeException("db down")).when(outboundRepository).upsert(any());
 
         assertThatCode(() -> outboundConsumer.onMessage("""
                 {"id":"00000000-0000-0000-0000-000000000904","amount":300.00,"chargesType":"SHA"}
@@ -274,7 +282,7 @@ class KafkaListenerUnitTest {
             "fr.kevin.llps.payments.processing.instant.adapter.in.kafka.InstantPaymentListener, pay.instant, jpa-instant-group",
             "fr.kevin.llps.payments.compliancehold.adapter.in.kafka.SuspendedPaymentListener, pay.suspended, jpa-suspended-group",
             "fr.kevin.llps.payments.processing.inbound.adapter.in.kafka.InboundPaymentListener, pay.inbound, jpa-inbound-group",
-            "fr.kevin.llps.payments.kafka.OutboundPaymentMessageConsumer, pay.outbound, jpa-outbound-group",
+            "fr.kevin.llps.payments.processing.outbound.adapter.in.kafka.OutboundPaymentMessageConsumer, pay.outbound, jpa-outbound-group",
             "fr.kevin.llps.payments.recall.adapter.in.kafka.RecallListener, pay.recall, jpa-recall-group"
     })
     void listener_consumesItsTopicWithDedicatedConsumerGroup(String listenerClass, String topic, String groupId)
@@ -324,13 +332,6 @@ class KafkaListenerUnitTest {
     private InstantPayment captureInstant() {
         ArgumentCaptor<InstantPayment> captor = ArgumentCaptor.forClass(InstantPayment.class);
         verify(instantRepository).upsert(captor.capture());
-        return captor.getValue();
-    }
-
-    @SuppressWarnings("unchecked")
-    private <T> T captureMerge(Class<T> type) {
-        ArgumentCaptor<T> captor = ArgumentCaptor.forClass(type);
-        verify(em).merge(captor.capture());
         return captor.getValue();
     }
 }

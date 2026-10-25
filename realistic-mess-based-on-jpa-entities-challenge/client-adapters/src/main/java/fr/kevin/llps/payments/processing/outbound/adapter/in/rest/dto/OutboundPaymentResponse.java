@@ -1,4 +1,4 @@
-package fr.kevin.llps.payments.dto;
+package fr.kevin.llps.payments.processing.outbound.adapter.in.rest.dto;
 
 import java.math.BigDecimal;
 

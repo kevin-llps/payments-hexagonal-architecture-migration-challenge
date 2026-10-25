@@ -24,10 +24,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import fr.kevin.llps.payments.dto.OutboundPaymentResponse;
-import fr.kevin.llps.payments.dto.OutboundPaymentSearchRequest;
-import fr.kevin.llps.payments.entity.OutboundPayment;
-import fr.kevin.llps.payments.repository.OutboundPaymentRepository;
 import fr.kevin.llps.payments.compliancehold.SuspendedPayment;
 import fr.kevin.llps.payments.compliancehold.SuspendedPaymentQueryService;
 import fr.kevin.llps.payments.compliancehold.port.in.SuspendedPaymentSearchQuery;
@@ -37,6 +33,14 @@ import fr.kevin.llps.payments.processing.inbound.InboundPaymentQueryService;
 import fr.kevin.llps.payments.processing.inbound.port.in.InboundPaymentSearchQuery;
 import fr.kevin.llps.payments.processing.inbound.port.out.InboundPaymentSearchRepository;
 import fr.kevin.llps.payments.processing.instant.InstantPayment;
+import fr.kevin.llps.payments.processing.outbound.ChargesType;
+import fr.kevin.llps.payments.processing.outbound.DetailFeeEstimate;
+import fr.kevin.llps.payments.processing.outbound.OutboundPayment;
+import fr.kevin.llps.payments.processing.outbound.OutboundPaymentQueryService;
+import fr.kevin.llps.payments.processing.outbound.SearchFeeEstimate;
+import fr.kevin.llps.payments.processing.outbound.port.in.OutboundPaymentSearchQuery;
+import fr.kevin.llps.payments.processing.outbound.port.in.PricedOutboundPayment;
+import fr.kevin.llps.payments.processing.outbound.port.out.OutboundPaymentSearchRepository;
 import fr.kevin.llps.payments.processing.instant.InstantPaymentQueryService;
 import fr.kevin.llps.payments.processing.instant.port.in.InstantPaymentSearchQuery;
 import fr.kevin.llps.payments.processing.instant.port.out.InstantPaymentSearchRepository;
@@ -44,6 +48,7 @@ import fr.kevin.llps.payments.recall.RecallQueryService;
 import fr.kevin.llps.payments.recall.port.in.RecallSearchQuery;
 import fr.kevin.llps.payments.recall.Recall;
 import fr.kevin.llps.payments.recall.port.out.RecallSearchRepository;
+import fr.kevin.llps.payments.shared.domain.DomainInvariantViolationException;
 import fr.kevin.llps.payments.shared.domain.InvalidSearchFilterException;
 import fr.kevin.llps.payments.shared.domain.Money;
 import fr.kevin.llps.payments.shared.domain.PaymentId;
@@ -58,7 +63,7 @@ class PaymentServiceUnitTest {
     @Mock
     private InboundPaymentSearchRepository inboundRepository;
     @Mock
-    private OutboundPaymentRepository outboundRepository;
+    private OutboundPaymentSearchRepository outboundRepository;
     @Mock
     private RecallSearchRepository recallRepository;
 
@@ -67,15 +72,20 @@ class PaymentServiceUnitTest {
     @InjectMocks
     private SuspendedPaymentQueryService suspendedQueries;
     @InjectMocks
-    private OutboundPaymentService outboundService;
-    @InjectMocks
     private RecallQueryService recallQueries;
     // the real system clock, as the legacy service used LocalDate.now()
     private InboundPaymentQueryService inboundQueries;
+    private OutboundPaymentQueryService outboundQueries;
 
     @BeforeEach
     void wireInboundQueries() {
         inboundQueries = new InboundPaymentQueryService(inboundRepository, Clock.systemDefaultZone());
+    }
+
+    @BeforeEach
+    void wireOutboundQueries() {
+        outboundQueries = new OutboundPaymentQueryService(outboundRepository, new SearchFeeEstimate(),
+                new DetailFeeEstimate());
     }
 
     // ---------------- instant ----------------
@@ -235,15 +245,21 @@ class PaymentServiceUnitTest {
         OutboundPayment our = outboundPayment("00000000-0000-0000-0000-000000000411", "1000.00", "OUR");
         OutboundPayment sha = outboundPayment("00000000-0000-0000-0000-000000000412", "1000.00", "SHA");
         OutboundPayment ben = outboundPayment("00000000-0000-0000-0000-000000000413", "1000.00", "BEN");
-        OutboundPayment nullAmount = outboundPayment("00000000-0000-0000-0000-000000000414", null, "SHA");
-        when(outboundRepository.search(any())).thenReturn(List.of(our, sha, ben, nullAmount));
+        when(outboundRepository.search(any())).thenReturn(List.of(our, sha, ben));
 
-        List<OutboundPaymentResponse> result = outboundService.search(new OutboundPaymentSearchRequest());
+        List<PricedOutboundPayment> result = outboundQueries.search(outboundQuery());
 
-        assertThat(result.get(0).estimatedFee).isEqualByComparingTo("10.00");
-        assertThat(result.get(1).estimatedFee).isEqualByComparingTo("0.30");
-        assertThat(result.get(2).estimatedFee).isEqualByComparingTo("0.00");
-        assertThat(result.get(3).estimatedFee).isEqualByComparingTo("0.00");
+        assertThat(result.get(0).estimatedFee()).isEqualByComparingTo("10.00");
+        assertThat(result.get(1).estimatedFee()).isEqualByComparingTo("0.30");
+        assertThat(result.get(2).estimatedFee()).isEqualByComparingTo("0.00");
+    }
+
+    // D-01 (approved): replaces the null-amount row of outboundSearch_computesFeePerChargesType and the
+    // "OUR, , 0.00" row of outboundSearch_feeEstimate_followsSearchFeeTable — a payment without amount is rejected
+    @Test
+    void outboundSearch_paymentWithoutAmount_isRejected() {
+        assertThatThrownBy(() -> outboundPayment("00000000-0000-0000-0000-000000000414", null, "SHA"))
+                .isInstanceOf(DomainInvariantViolationException.class);
     }
 
     @ParameterizedTest(name = "[{index}] chargesType={0}, amount={1} -> search fee {2}")
@@ -251,52 +267,47 @@ class PaymentServiceUnitTest {
             "OUR, 1000.00, 10.00",
             "OUR, 1234.56, 12.35",
             "OUR, 0.50, 0.01",
+            "OUR, 15600.75, 156.01",
             "BEN, 1000.00, 0.00",
             "SHA, 1000.00, 0.30",
             "XYZ, 1000.00, 0.30",
             "'', 1000.00, 0.30",
-            ", 1000.00, 0.30",
-            "OUR, , 0.00"
+            ", 1000.00, 0.30"
     })
     void outboundSearch_feeEstimate_followsSearchFeeTable(String chargesType, String amount, String expectedFee) {
         when(outboundRepository.search(any())).thenReturn(List.of(
                 outboundPayment("00000000-0000-0000-0000-000000000415", amount, chargesType)));
 
-        OutboundPaymentResponse response = outboundService.search(new OutboundPaymentSearchRequest()).get(0);
+        PricedOutboundPayment response = outboundQueries.search(outboundQuery()).get(0);
 
-        assertThat(response.estimatedFee).isEqualByComparingTo(expectedFee);
+        assertThat(response.estimatedFee()).isEqualByComparingTo(expectedFee);
     }
 
-    @Test
-    void outboundGetById_mapsRequestedExecutionDateAsIsoDate() {
-        OutboundPayment payment = outboundPayment("00000000-0000-0000-0000-000000000402", "15600.75", "OUR");
-        payment.requestedExecutionDate = Date.valueOf("2026-10-17");
-        when(outboundRepository.findById("00000000-0000-0000-0000-000000000402")).thenReturn(payment);
+    // outboundGetById_mapsRequestedExecutionDateAsIsoDate: OutboundPaymentService.getById was reachable from no
+    // endpoint and was not migrated (approved); its date rendering and 156.01 search fee are asserted by
+    // PaymentControllerWebTest.outboundSearch_mapsRequestedExecutionDateAsIsoDate and the "OUR, 15600.75" row above.
 
-        OutboundPaymentResponse response = outboundService.getById("00000000-0000-0000-0000-000000000402");
-
-        assertThat(response.requestedExecutionDate).isEqualTo("2026-10-17");
-        assertThat(response.estimatedFee).isEqualByComparingTo("156.01");
-    }
-
+    // details are priced with the detail tariff, as the details endpoint always was
     @Test
     void outboundGetById_foundAndMissing() {
-        when(outboundRepository.findById("00000000-0000-0000-0000-000000000401"))
-                .thenReturn(outboundPayment("00000000-0000-0000-0000-000000000401", "10.00", "SHA"));
-        when(outboundRepository.findById("nope")).thenReturn(null);
+        PaymentId found = PaymentId.parse("00000000-0000-0000-0000-000000000401");
+        PaymentId missing = PaymentId.parse("00000000-0000-0000-0000-000000000499");
+        when(outboundRepository.findById(found))
+                .thenReturn(Optional.of(outboundPayment(found.value().toString(), "10.00", "SHA")));
+        when(outboundRepository.findById(missing)).thenReturn(Optional.empty());
 
-        assertThat(outboundService.getById("00000000-0000-0000-0000-000000000401")).isNotNull();
-        assertThat(outboundService.getById("nope")).isNull();
+        assertThat(outboundQueries.get(found)).isPresent();
+        assertThat(outboundQueries.get(missing)).isEmpty();
     }
 
-    private OutboundPayment outboundPayment(String id, String amount, String chargesType) {
-        OutboundPayment payment = new OutboundPayment();
-        payment.id = UUID.fromString(id);
-        payment.amount = amount == null ? null : new BigDecimal(amount);
-        payment.currency = "EUR";
-        payment.chargesType = chargesType;
-        payment.status = "SENT";
-        return payment;
+    private static OutboundPaymentSearchQuery outboundQuery() {
+        return new OutboundPaymentSearchQuery(null, null, null, null, null, null, null);
+    }
+
+    private static OutboundPayment outboundPayment(String id, String amount, String chargesType) {
+        return new OutboundPayment(PaymentId.parse(id), null,
+                Money.of(amount == null ? null : new BigDecimal(amount), "EUR"), null, null, null, null,
+                new ChargesType(chargesType), "SENT", null);
     }
 
     // ---------------- recalls ----------------
