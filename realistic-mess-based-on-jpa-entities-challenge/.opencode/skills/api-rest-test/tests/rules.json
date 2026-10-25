@@ -1,0 +1,295 @@
+{
+  "skill": "api-rest-test",
+  "rules": [
+    {
+      "id": "R1",
+      "rule": "The description states when to use the skill",
+      "check": "static",
+      "assertions": [
+        { "type": "frontmatterField", "value": "description", "matches": "use when" },
+        { "type": "frontmatterField", "value": "name" }
+      ]
+    },
+    {
+      "id": "R2",
+      "rule": "The skill ID is lowercase kebab-case and equals the directory name",
+      "check": "static",
+      "assertions": [
+        { "type": "idMatchesDir" }
+      ]
+    },
+    {
+      "id": "R3",
+      "rule": "The source code is analyzed before any test is generated",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Analyze the supplied source code before generating tests", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R4",
+      "rule": "Application behavior, DTO fields, constructors, repository methods, and endpoint contracts are never invented",
+      "check": "static",
+      "assertions": [
+        { "type": "regex", "value": "Do not invent application behavior, DTO fields,\\s+constructors, repository methods, or endpoint contracts" }
+      ]
+    },
+    {
+      "id": "R5",
+      "rule": "Controller unit tests load only the MVC slice with @WebMvcTest, keeping the controller and MockMvc real",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "`@WebMvcTest`", "section": "Controller unit tests" },
+        { "type": "contains", "value": "Keep the controller and `MockMvc` real", "section": "Controller unit tests" }
+      ]
+    },
+    {
+      "id": "R6",
+      "rule": "Controller dependencies such as services and mappers are mocked with @MockitoBean or the project's supported annotation",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "`@MockitoBean`", "section": "Controller unit tests" },
+        { "type": "regex", "value": "deprecated\\s+`@MockBean`", "section": "Controller unit tests" }
+      ]
+    },
+    {
+      "id": "R7",
+      "rule": "Only the dependencies needed for the scenario are stubbed",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Stub only the dependencies needed for the scenario", "section": "Controller unit tests" }
+      ]
+    },
+    {
+      "id": "R8",
+      "rule": "Service delegation and mapping interactions are verified with the expected arguments",
+      "check": "static",
+      "assertions": [
+        { "type": "regex", "value": "Verify service calls and mapping interactions", "section": "Controller unit tests" },
+        { "type": "contains", "value": "expected arguments", "section": "Controller unit tests" }
+      ]
+    },
+    {
+      "id": "R9",
+      "rule": "Controller unit tests cover the full HTTP verification checklist",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "HTTP method, endpoint path, and response status", "section": "Controller unit tests" },
+        { "type": "contains", "value": "Malformed JSON and unsupported content types", "section": "Controller unit tests" },
+        { "type": "contains", "value": "resource-not-found", "section": "Controller unit tests" },
+        { "type": "contains", "value": "Query parameters, path variables, headers, and optional request fields", "section": "Controller unit tests" },
+        { "type": "contains", "value": "Authentication and authorization", "section": "Controller unit tests" },
+        { "type": "contains", "value": "`204 No Content`", "section": "Controller unit tests" }
+      ]
+    },
+    {
+      "id": "R10",
+      "rule": "Validation and exception scenarios assert actual HTTP responses and respect the project's security and exception-handling configuration",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Assert actual HTTP responses for validation and exception-handling scenarios", "section": "Controller unit tests" },
+        { "type": "contains", "value": "Spring Security and exception-handling configuration", "section": "Controller unit tests" }
+      ]
+    },
+    {
+      "id": "R11",
+      "rule": "The controller unit test template is provided and adapted to the actual controller",
+      "check": "static",
+      "assertions": [
+        { "type": "pathExists", "value": "references/controller-unit-test-template.md" },
+        { "type": "contains", "value": "references/controller-unit-test-template.md", "section": "Controller unit tests" }
+      ]
+    },
+    {
+      "id": "R12",
+      "rule": "Integration tests use @SpringBootTest with @AutoConfigureMockMvc unless the project already uses a real HTTP client or random port",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "`@SpringBootTest` with `@AutoConfigureMockMvc`", "section": "Integration tests" },
+        { "type": "contains", "value": "real HTTP client or a random-port server", "section": "Integration tests" }
+      ]
+    },
+    {
+      "id": "R13",
+      "rule": "Integration tests use real collaborators and mock only external dependencies excluded from the boundary",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "real application services, mappers, repositories", "section": "Integration tests" },
+        { "type": "contains", "value": "Mock only external dependencies intentionally excluded from the integration boundary", "section": "Integration tests" }
+      ]
+    },
+    {
+      "id": "R14",
+      "rule": "Integration test data is prepared explicitly on an isolated test database, independent of execution order",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "configured test database or an isolated database environment", "section": "Integration tests" },
+        { "type": "contains", "value": "prevent tests from depending on execution order", "section": "Integration tests" },
+        { "type": "contains", "value": "Testcontainers", "section": "Integration tests" }
+      ]
+    },
+    {
+      "id": "R15",
+      "rule": "Tests never connect to production systems or use production credentials",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Never connect tests to production systems or use production credentials" }
+      ]
+    },
+    {
+      "id": "R16",
+      "rule": "Integration tests verify observable outcomes, including database state when persistence is involved",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Verify observable outcomes rather than relying solely on internal method calls", "section": "Integration tests" },
+        { "type": "contains", "value": "Check database state when persistence is part of the behavior", "section": "Integration tests" },
+        { "type": "contains", "value": "transaction boundaries, asynchronous processing, and external side effects", "section": "Integration tests" }
+      ]
+    },
+    {
+      "id": "R17",
+      "rule": "No repository dependency is introduced when the endpoint does not use persistence",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Do not introduce repository dependencies if the endpoint does not use persistence", "section": "Integration tests" }
+      ]
+    },
+    {
+      "id": "R18",
+      "rule": "The integration scenario list is considered",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Creating, retrieving, updating, and deleting resources", "section": "Integration tests" },
+        { "type": "contains", "value": "Transaction rollback and consistency", "section": "Integration tests" },
+        { "type": "contains", "value": "Pagination, sorting, and filtering", "section": "Integration tests" },
+        { "type": "contains", "value": "Exception translation into the expected HTTP error responses", "section": "Integration tests" },
+        { "type": "contains", "value": "Failures from external systems", "section": "Integration tests" }
+      ]
+    },
+    {
+      "id": "R19",
+      "rule": "The integration test template is provided and adapted to the actual repositories and configuration",
+      "check": "static",
+      "assertions": [
+        { "type": "pathExists", "value": "references/integration-test-template.md" },
+        { "type": "contains", "value": "references/integration-test-template.md", "section": "Integration tests" }
+      ]
+    },
+    {
+      "id": "R20",
+      "rule": "JSON fixtures live under src/test/resources/json/ and are read as UTF-8",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "src/test/resources/json/", "section": "JSON fixtures" },
+        { "type": "contains", "value": "UTF-8", "section": "JSON fixtures" }
+      ]
+    },
+    {
+      "id": "R21",
+      "rule": "Fixtures match the actual API contract, include error structures, and avoid unstable fields",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Match fixtures to the actual API contract and DTO definitions", "section": "JSON fixtures" },
+        { "type": "contains", "value": "expected error structure", "section": "JSON fixtures" },
+        { "type": "contains", "value": "generated IDs, timestamps, or other unstable fields", "section": "JSON fixtures" }
+      ]
+    },
+    {
+      "id": "R22",
+      "rule": "Direct assertions are preferred for simple responses over unnecessary fixtures",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Prefer direct assertions for simple responses", "section": "JSON fixtures" },
+        { "type": "contains", "value": "focused on the scenario", "section": "JSON fixtures" }
+      ]
+    },
+    {
+      "id": "R23",
+      "rule": "Unit and integration test boundaries stay distinct per the boundary table",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Test boundaries" },
+        { "type": "regex", "value": "\\|\\s*Service\\s*\\|\\s*Mocked\\s*\\|\\s*Real, unless explicitly excluded\\s*\\|", "section": "Test boundaries" },
+        { "type": "regex", "value": "\\|\\s*Spring context\\s*\\|\\s*MVC slice\\s*\\|\\s*Full application context\\s*\\|", "section": "Test boundaries" },
+        { "type": "regex", "value": "\\|\\s*Database\\s*\\|\\s*Not required\\s*\\|", "section": "Test boundaries" }
+      ]
+    },
+    {
+      "id": "R24",
+      "rule": "Test classes follow the project's package structure and the ControllerTest / ControllerIntegrationTest naming",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "existing package structure and naming conventions", "section": "Test boundaries" },
+        { "type": "contains", "value": "`<Name>ControllerTest`", "section": "Test boundaries" },
+        { "type": "contains", "value": "`<Name>ControllerIntegrationTest`", "section": "Test boundaries" }
+      ]
+    },
+    {
+      "id": "R25",
+      "rule": "The output lists the six expected deliverables",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Expected output" },
+        { "type": "contains", "value": "controller unit test class for each relevant REST controller", "section": "Expected output" },
+        { "type": "contains", "value": "exact resource paths", "section": "Expected output" },
+        { "type": "contains", "value": "test configuration or database setup", "section": "Expected output" },
+        { "type": "contains", "value": "boundaries of each test class", "section": "Expected output" },
+        { "type": "contains", "value": "missing dependencies, source files, or API contract details", "section": "Expected output" }
+      ]
+    },
+    {
+      "id": "R26",
+      "rule": "Assumptions and unverified behavior are explicitly identified",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "unverified behavior or assumptions are explicitly identified", "section": "Definition of done" }
+      ]
+    },
+    {
+      "id": "R27",
+      "rule": "Tests are never claimed to pass unless their execution has been verified",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Do not claim tests pass unless their execution has been verified", "section": "Definition of done" }
+      ]
+    },
+    {
+      "id": "R28",
+      "rule": "The definition of done requires actual contracts, isolation, real collaborators, failure coverage, side effects, fixtures, and compilation",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "actual endpoint paths, HTTP methods, DTOs, constructors, and response contracts", "section": "Definition of done" },
+        { "type": "contains", "value": "Unit tests isolate the controller's dependencies", "section": "Definition of done" },
+        { "type": "contains", "value": "Success and relevant failure responses are verified", "section": "Definition of done" },
+        { "type": "contains", "value": "compile against the project's actual dependencies", "section": "Definition of done" }
+      ]
+    },
+    {
+      "id": "R29",
+      "rule": "The Rules table lists exactly the spec IDs",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Rules" },
+        { "type": "ruleTableCoverage" }
+      ]
+    },
+    {
+      "id": "R30",
+      "rule": "The skill ships a README.md documentation file",
+      "check": "static",
+      "assertions": [
+        { "type": "pathExists", "value": "README.md" }
+      ]
+    },
+    {
+      "id": "R31",
+      "rule": "A controller unit test request yields a @WebMvcTest slice with mocked services, not a full-context test",
+      "check": "agent-evaluation"
+    },
+    {
+      "id": "R32",
+      "rule": "Missing source code is reported as missing information instead of invented contracts",
+      "check": "agent-evaluation"
+    }
+  ]
+}

@@ -1,0 +1,172 @@
+{
+  "skill": "open-closed-principle",
+  "rules": [
+    {
+      "id": "R1",
+      "rule": "The skill is discoverable, its ID is kebab-case, and its description says when to use it",
+      "check": "static",
+      "assertions": [
+        { "type": "idMatchesDir" },
+        { "type": "frontmatterField", "value": "name" },
+        { "type": "frontmatterField", "value": "description", "matches": "use when" },
+        { "type": "ruleTableCoverage" }
+      ]
+    },
+    {
+      "id": "R2",
+      "rule": "The purpose is to apply OCP before creating classes so new behavior is added without modifying stable code",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Purpose" },
+        { "type": "regex", "value": "before creating classes", "section": "Purpose" },
+        { "type": "regex", "value": "without modifying existing,? stable code", "section": "Purpose" }
+      ]
+    },
+    {
+      "id": "R3",
+      "rule": "Other SOLID principles and unrequested refactoring of existing code are out of scope",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "**Out of scope**", "section": "Scope" },
+        { "type": "regex", "value": "Single Responsibility.*Interface Segregation.*Liskov Substitution.*Dependency Inversion", "flags": "s", "section": "Scope" },
+        { "type": "regex", "value": "refactoring existing code", "flags": "i", "section": "Scope" }
+      ]
+    },
+    {
+      "id": "R4",
+      "rule": "Stable behavior is distinguished from behavior likely to evolve before any class is created",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Identify potential variation" },
+        { "type": "contains", "value": "Distinguish stable behavior from behavior likely to evolve", "section": "Identify potential variation" },
+        { "type": "contains", "value": "vary independently", "section": "Identify potential variation" }
+      ]
+    },
+    {
+      "id": "R5",
+      "rule": "Extension points are never introduced based solely on hypothetical future requirements",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "solely on hypothetical future requirements", "section": "Identify potential variation" }
+      ]
+    },
+    {
+      "id": "R6",
+      "rule": "Extension uses stable contracts and prefers polymorphism or composition over conditionals that must keep changing",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Design for extension" },
+        { "type": "contains", "value": "stable contracts", "section": "Design for extension" },
+        { "type": "regex", "value": "Prefer polymorphism and composition over conditional logic", "section": "Design for extension" }
+      ]
+    },
+    {
+      "id": "R7",
+      "rule": "Each extension point is focused on one specific variation in behavior",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "focused on a specific variation", "section": "Design for extension" }
+      ]
+    },
+    {
+      "id": "R8",
+      "rule": "New variants are added through new implementations without changes to unrelated classes",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Minimize modifications to existing code" },
+        { "type": "contains", "value": "new implementations or components", "section": "Minimize modifications to existing code" },
+        { "type": "contains", "value": "unrelated classes", "section": "Minimize modifications to existing code" }
+      ]
+    },
+    {
+      "id": "R9",
+      "rule": "Conditional logic is not eliminated indiscriminately; abstractions only where they improve maintainability",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Do not eliminate all conditional logic indiscriminately", "section": "Minimize modifications to existing code" },
+        { "type": "contains", "value": "improve maintainability", "section": "Minimize modifications to existing code" }
+      ]
+    },
+    {
+      "id": "R10",
+      "rule": "No interface or abstraction is created without a concrete design need; stable behavior stays straightforward",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Avoid overengineering" },
+        { "type": "contains", "value": "without a concrete design need", "section": "Avoid overengineering" },
+        { "type": "contains", "value": "every conceivable future variation", "section": "Avoid overengineering" },
+        { "type": "contains", "value": "straightforward implementation", "section": "Avoid overengineering" }
+      ]
+    },
+    {
+      "id": "R11",
+      "rule": "The workflow runs Analyze, Classify, Design, Validate, Present, Implement in that order",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Workflow" },
+        { "type": "regex", "value": "1\\. \\*\\*Analyze\\*\\*[\\s\\S]*2\\. \\*\\*Classify\\*\\*[\\s\\S]*3\\. \\*\\*Design\\*\\*[\\s\\S]*4\\. \\*\\*Validate\\*\\*[\\s\\S]*5\\. \\*\\*Present\\*\\*[\\s\\S]*6\\. \\*\\*Implement\\*\\*", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R12",
+      "rule": "No class is created or modified before extension requirements are evaluated and the design is validated",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Constraints" },
+        { "type": "contains", "value": "Do not create or modify classes before evaluating extension requirements", "section": "Constraints" },
+        { "type": "contains", "value": "only after validating the design against OCP", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R13",
+      "rule": "Abstractions are never introduced mechanically, unrelated behavior is untouched, and project conventions are followed",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "solely to satisfy the principle mechanically", "section": "Constraints" },
+        { "type": "contains", "value": "Do not modify unrelated behavior", "section": "Constraints" },
+        { "type": "contains", "value": "existing architecture and conventions", "section": "Constraints" }
+      ]
+    },
+    {
+      "id": "R14",
+      "rule": "Before creating classes the five design deliverables are provided",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Expected deliverables" },
+        { "type": "regex", "value": "1\\. .*stable behaviors and potential variations", "section": "Expected deliverables" },
+        { "type": "regex", "value": "2\\. .*proposed classes and their responsibilities", "section": "Expected deliverables" },
+        { "type": "regex", "value": "3\\. .*interfaces, abstractions, or composition mechanisms", "section": "Expected deliverables" },
+        { "type": "regex", "value": "4\\. .*how new behavior can be added with minimal changes", "section": "Expected deliverables" },
+        { "type": "regex", "value": "5\\. .*assumptions or unresolved design questions", "section": "Expected deliverables" }
+      ]
+    },
+    {
+      "id": "R15",
+      "rule": "The definition of done requires justified extensions without speculative abstractions",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Acceptance criteria" },
+        { "type": "contains", "value": "justified behavioral extensions", "section": "Acceptance criteria" },
+        { "type": "contains", "value": "speculative abstractions", "section": "Acceptance criteria" }
+      ]
+    },
+    {
+      "id": "R16",
+      "rule": "A README documents purpose, when to use, how to run, dependency graph and workflow graph",
+      "check": "static",
+      "assertions": [
+        { "type": "pathExists", "value": "README.md" }
+      ]
+    },
+    {
+      "id": "R17",
+      "rule": "Stable behavior with a single known implementation gets a straightforward design, not a speculative interface",
+      "check": "agent-evaluation"
+    },
+    {
+      "id": "R18",
+      "rule": "A behavior with growing variants gets a focused extension point, presented with the deliverables before any class is written",
+      "check": "agent-evaluation"
+    }
+  ]
+}

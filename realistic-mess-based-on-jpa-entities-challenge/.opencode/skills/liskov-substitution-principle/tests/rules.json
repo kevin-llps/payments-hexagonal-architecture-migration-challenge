@@ -1,0 +1,186 @@
+{
+  "skill": "liskov-substitution-principle",
+  "rules": [
+    {
+      "id": "R1",
+      "rule": "The skill is discoverable and its description says when to use it",
+      "check": "static",
+      "assertions": [
+        { "type": "frontmatterField", "value": "name" },
+        { "type": "frontmatterField", "value": "description", "matches": "use when" },
+        { "type": "idMatchesDir" }
+      ]
+    },
+    {
+      "id": "R2",
+      "rule": "Each abstraction's preconditions, postconditions, invariants and observable behavior are defined before classes are created",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Define behavioral contracts" },
+        { "type": "regex", "value": "preconditions, postconditions, invariants,\\s+and observable behavior", "section": "Define behavioral contracts" },
+        { "type": "contains", "value": "Before creating classes", "section": "Define behavioral contracts" }
+      ]
+    },
+    {
+      "id": "R3",
+      "rule": "The contract specifies valid inputs, expected outputs and error handling, and describes behavior rather than implementation details",
+      "check": "static",
+      "assertions": [
+        { "type": "regex", "value": "valid inputs, expected outputs,\\s+and error-handling behavior", "section": "Define behavioral contracts" },
+        { "type": "regex", "value": "behavior rather than\\s+implementation details", "section": "Define behavioral contracts" },
+        { "type": "regex", "value": "consumers can legitimately expect", "section": "Define behavioral contracts" }
+      ]
+    },
+    {
+      "id": "R4",
+      "rule": "Implementations never strengthen preconditions to reject inputs the base contract accepts",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Evaluate substitutability" },
+        { "type": "regex", "value": "Do not strengthen preconditions", "section": "Evaluate substitutability" },
+        { "type": "regex", "value": "rejects?\\s+inputs accepted by the base contract", "section": "Evaluate substitutability" }
+      ]
+    },
+    {
+      "id": "R5",
+      "rule": "Implementations never weaken postconditions and preserve invariants and observable behavior",
+      "check": "static",
+      "assertions": [
+        { "type": "regex", "value": "Do not weaken postconditions", "section": "Evaluate substitutability" },
+        { "type": "regex", "value": "omit guarantees", "section": "Evaluate substitutability" },
+        { "type": "regex", "value": "Preserve required invariants", "section": "Evaluate substitutability" }
+      ]
+    },
+    {
+      "id": "R6",
+      "rule": "Implementations handle errors and exceptional conditions consistently with the declared contract",
+      "check": "static",
+      "assertions": [
+        { "type": "regex", "value": "errors and exceptional conditions\\s+consistently with the declared contract", "section": "Evaluate substitutability" }
+      ]
+    },
+    {
+      "id": "R7",
+      "rule": "Inheritance is used only for genuine behavioral subtypes; interfaces when several implementations honor one contract",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Choose appropriate abstractions" },
+        { "type": "regex", "value": "inheritance only when the subtype\\s+genuinely satisfies", "section": "Choose appropriate abstractions" },
+        { "type": "regex", "value": "interfaces when multiple implementations\\s+can honor the same contract", "section": "Choose appropriate abstractions" }
+      ]
+    },
+    {
+      "id": "R8",
+      "rule": "Composition is preferred over inheritance when behavioral expectations are incompatible; inheritance is never chosen for code reuse alone",
+      "check": "static",
+      "assertions": [
+        { "type": "regex", "value": "Prefer composition", "section": "Choose appropriate abstractions" },
+        { "type": "regex", "value": "incompatible\\s+behavioral expectations", "section": "Choose appropriate abstractions" },
+        { "type": "regex", "value": "solely on code reuse", "section": "Choose appropriate abstractions" }
+      ]
+    },
+    {
+      "id": "R9",
+      "rule": "Consumers never have to inspect concrete types to know whether an operation is supported",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Avoid misleading hierarchies" },
+        { "type": "regex", "value": "inspect concrete types", "section": "Avoid misleading hierarchies" },
+        { "type": "contains", "value": "instanceof", "section": "Avoid misleading hierarchies" }
+      ]
+    },
+    {
+      "id": "R10",
+      "rule": "Hierarchies do not force unrelated behaviors together, overrides keep the meaning of inherited operations, and restricted operations have explicit contracts",
+      "check": "static",
+      "assertions": [
+        { "type": "regex", "value": "force unrelated behaviors", "section": "Avoid misleading hierarchies" },
+        { "type": "regex", "value": "change the meaning of\\s+inherited operations", "section": "Avoid misleading hierarchies" },
+        { "type": "regex", "value": "explicit contracts for operations that may fail", "section": "Avoid misleading hierarchies" }
+      ]
+    },
+    {
+      "id": "R11",
+      "rule": "The workflow runs Analyze, Define, Evaluate, Design, Validate, Implement in that order, with implementation last",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Workflow" },
+        { "type": "regex", "value": "1\\. \\*\\*Analyze[\\s\\S]*2\\. \\*\\*Define[\\s\\S]*3\\. \\*\\*Evaluate[\\s\\S]*4\\. \\*\\*Design[\\s\\S]*5\\. \\*\\*Validate[\\s\\S]*6\\. \\*\\*Implement", "section": "Workflow" },
+        { "type": "regex", "value": "only after validating the design against LSP", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R12",
+      "rule": "No inheritance hierarchy is created before its behavioral contract, and inheritance is never used merely to share code",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Constraints" },
+        { "type": "regex", "value": "Do not create inheritance hierarchies before defining their\\s+behavioral contracts", "section": "Constraints" },
+        { "type": "regex", "value": "Do not use inheritance merely to share code", "section": "Constraints" }
+      ]
+    },
+    {
+      "id": "R13",
+      "rule": "No unsupported assumptions about implementation behavior are introduced and the established architecture and business rules are preserved",
+      "check": "static",
+      "assertions": [
+        { "type": "regex", "value": "unsupported assumptions about implementation\\s+behavior", "section": "Constraints" },
+        { "type": "regex", "value": "Preserve the established project architecture and business\\s+rules", "section": "Constraints" }
+      ]
+    },
+    {
+      "id": "R14",
+      "rule": "Before classes are created the five deliverables are provided: contracts, guarantees and invariants, implementation compatibility, substitutability risks, and the inheritance/interface/composition justification",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Expected deliverables" },
+        { "type": "regex", "value": "1\\. [^\\n]*abstractions and their behavioral contracts", "section": "Expected deliverables" },
+        { "type": "regex", "value": "2\\. [^\\n]*guarantees and invariants consumers can rely on", "section": "Expected deliverables" },
+        { "type": "regex", "value": "3\\. [^\\n]*implementations and their compatibility", "section": "Expected deliverables" },
+        { "type": "regex", "value": "4\\. [^\\n]*substitutability risks", "section": "Expected deliverables" },
+        { "type": "regex", "value": "5\\. [^\\n]*justification for using inheritance, interfaces, or\\s+composition", "section": "Expected deliverables" }
+      ]
+    },
+    {
+      "id": "R15",
+      "rule": "The definition of done requires every implementation to honor its contract with no implementation-specific consumer workarounds",
+      "check": "static",
+      "assertions": [
+        { "type": "regex", "value": "Definition of done", "section": "Acceptance criteria" },
+        { "type": "regex", "value": "implementation-specific\\s+workarounds", "section": "Acceptance criteria" }
+      ]
+    },
+    {
+      "id": "R16",
+      "rule": "The skill stays LSP-only: other SOLID principles and implementing code before validation are out of scope",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Scope" },
+        { "type": "regex", "value": "Out of scope", "section": "Scope" },
+        { "type": "regex", "value": "single-responsibility-principle", "section": "Scope" },
+        { "type": "regex", "value": "open-closed-principle", "section": "Scope" },
+        { "type": "regex", "value": "interface-segregation-principle", "section": "Scope" },
+        { "type": "regex", "value": "dependency-inversion-principle", "section": "Scope" }
+      ]
+    },
+    {
+      "id": "R17",
+      "rule": "The skill ships a README.md and a Rules table covering exactly the spec IDs",
+      "check": "static",
+      "assertions": [
+        { "type": "pathExists", "value": "README.md" },
+        { "type": "ruleTableCoverage" }
+      ]
+    },
+    {
+      "id": "R18",
+      "rule": "A subtype that throws on an operation its base type supports is flagged as an LSP violation and redesigned before any code is written",
+      "check": "agent-evaluation"
+    },
+    {
+      "id": "R19",
+      "rule": "A request to inherit purely to reuse code with incompatible behavior is redirected to composition with a justification",
+      "check": "agent-evaluation"
+    }
+  ]
+}

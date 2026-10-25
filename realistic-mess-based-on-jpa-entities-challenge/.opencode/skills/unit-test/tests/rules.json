@@ -1,0 +1,217 @@
+{
+  "skill": "unit-test",
+  "rules": [
+    {
+      "id": "R1",
+      "rule": "The skill is discoverable and its description says when to use it",
+      "check": "static",
+      "assertions": [
+        { "type": "frontmatterField", "value": "name" },
+        { "type": "frontmatterField", "value": "description", "matches": "use when" },
+        { "type": "idMatchesDir" }
+      ]
+    },
+    {
+      "id": "R2",
+      "rule": "Tests target a single public method at a time and cover all its atomic acceptance criteria",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "single public method at a time", "section": "Scope" },
+        { "type": "contains", "value": "atomic acceptance criteria", "section": "Scope" }
+      ]
+    },
+    {
+      "id": "R3",
+      "rule": "Tests follow the project's existing testing framework, conventions, and architecture",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "existing testing framework, conventions, and architecture", "section": "Scope" },
+        { "type": "contains", "value": "existing Java, JUnit, AssertJ, and Mockito conventions" }
+      ]
+    },
+    {
+      "id": "R4",
+      "rule": "Test method names use snake_case and describe the scenario and expected behavior",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Naming conventions" },
+        { "type": "contains", "value": "`snake_case`", "section": "Naming conventions" },
+        { "type": "contains", "value": "should_throw_exception_when_order_is_invalid", "section": "Naming conventions" },
+        { "type": "contains", "value": "scenario and expected behavior", "section": "Naming conventions" }
+      ]
+    },
+    {
+      "id": "R5",
+      "rule": "Underscores are forbidden outside test method names; classes are PascalCase, everything else camelCase",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Underscores are allowed exclusively in test method names", "section": "Naming conventions" },
+        { "type": "contains", "value": "PascalCase", "section": "Naming conventions" },
+        { "type": "contains", "value": "camelCase", "section": "Naming conventions" },
+        { "type": "regex", "value": "constants[^\\n]*without\\s+underscores", "section": "Naming conventions" }
+      ]
+    },
+    {
+      "id": "R6",
+      "rule": "Every test is split into commented GIVEN / WHEN / THEN sections",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Test structure: GIVEN / WHEN / THEN" },
+        { "type": "contains", "value": "// GIVEN" },
+        { "type": "contains", "value": "// WHEN" },
+        { "type": "contains", "value": "// THEN" }
+      ]
+    },
+    {
+      "id": "R7",
+      "rule": "WHEN executes the method under test exactly once and each test focuses on one behavior",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "exactly once", "section": "Test structure: GIVEN / WHEN / THEN" },
+        { "type": "contains", "value": "one behavior", "section": "Test structure: GIVEN / WHEN / THEN" }
+      ]
+    },
+    {
+      "id": "R8",
+      "rule": "Dependencies are isolated with @ExtendWith(MockitoExtension.class), @InjectMocks and @Mock",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "`@ExtendWith(MockitoExtension.class)`", "section": "Mockito" },
+        { "type": "contains", "value": "`@InjectMocks`", "section": "Mockito" },
+        { "type": "contains", "value": "`@Mock`", "section": "Mockito" },
+        { "type": "contains", "value": "constructor injection", "section": "Mockito" }
+      ]
+    },
+    {
+      "id": "R9",
+      "rule": "The class under test is neither mocked nor manually instantiated, and simple value objects are real instances",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Do not mock the class under test", "section": "Mockito" },
+        { "type": "contains", "value": "Do not manually instantiate the class under test", "section": "Mockito" },
+        { "type": "contains", "value": "value objects, DTOs, or domain objects", "section": "Mockito" }
+      ]
+    },
+    {
+      "id": "R10",
+      "rule": "Mocks are stubbed with when/thenReturn or when/thenThrow, only as needed, with realistic data",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "`when(...).thenReturn(...)`", "section": "Mockito" },
+        { "type": "contains", "value": "`when(...).thenThrow(...)`", "section": "Mockito" },
+        { "type": "contains", "value": "only the behavior the current test needs", "section": "Mockito" },
+        { "type": "contains", "value": "shared mutable test state", "section": "Mockito" }
+      ]
+    },
+    {
+      "id": "R11",
+      "rule": "Interactions are verified with verify, invocation counts, and verify(mock, never())",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "`verify(...)`", "section": "Mockito" },
+        { "type": "contains", "value": "invocation counts", "section": "Mockito" },
+        { "type": "contains", "value": "`verify(mock, never())`", "section": "Mockito" }
+      ]
+    },
+    {
+      "id": "R12",
+      "rule": "verifyNoMoreInteractions lists all relevant mocks and is used only when strict verification is justified",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "`verifyNoMoreInteractions(...)`", "section": "Mockito" },
+        { "type": "contains", "value": "all relevant mocks", "section": "Mockito" },
+        { "type": "contains", "value": "indiscriminately", "section": "Mockito" }
+      ]
+    },
+    {
+      "id": "R13",
+      "rule": "The actual outcome is always asserted in addition to verifying interactions",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Always assert the actual outcome", "section": "Mockito" },
+        { "type": "contains", "value": "assertThat" }
+      ]
+    },
+    {
+      "id": "R14",
+      "rule": "The reference example ships in references/ and is linked from SKILL.md",
+      "check": "static",
+      "assertions": [
+        { "type": "pathExists", "value": "references/order-service-test-example.md" },
+        { "type": "contains", "value": "references/order-service-test-example.md" }
+      ]
+    },
+    {
+      "id": "R15",
+      "rule": "All tests respect the five FIRST principles",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "FIRST principles" },
+        { "type": "contains", "value": "**Fast**", "section": "FIRST principles" },
+        { "type": "contains", "value": "**Independent**", "section": "FIRST principles" },
+        { "type": "contains", "value": "**Repeatable**", "section": "FIRST principles" },
+        { "type": "contains", "value": "**Self-validating**", "section": "FIRST principles" },
+        { "type": "contains", "value": "**Timely**", "section": "FIRST principles" }
+      ]
+    },
+    {
+      "id": "R16",
+      "rule": "Coverage includes success, boundary, invalid-input and exception scenarios on observable behavior",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Coverage and constraints" },
+        { "type": "contains", "value": "successful scenarios, boundary conditions, invalid inputs, and exception cases", "section": "Coverage and constraints" },
+        { "type": "contains", "value": "observable behavior rather than private implementation details", "section": "Coverage and constraints" }
+      ]
+    },
+    {
+      "id": "R17",
+      "rule": "External collaborators are mocked, unrelated tests are untouched, and assertions are never weakened",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Mock external collaborators rather than invoking real infrastructure", "section": "Coverage and constraints" },
+        { "type": "contains", "value": "Do not modify tests covering unrelated features", "section": "Coverage and constraints" },
+        { "type": "contains", "value": "Do not weaken assertions to make tests pass", "section": "Coverage and constraints" },
+        { "type": "contains", "value": "unnecessary production code, mocks, stubs, and assertions", "section": "Coverage and constraints" }
+      ]
+    },
+    {
+      "id": "R18",
+      "rule": "The deliverables include the atomic behaviors validated and a summary of test execution results",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Deliverables" },
+        { "type": "contains", "value": "atomic behaviors and acceptance criteria being validated", "section": "Deliverables" },
+        { "type": "contains", "value": "summary of test execution results", "section": "Deliverables" },
+        { "type": "contains", "value": "edge-case and exception tests", "section": "Deliverables" }
+      ]
+    },
+    {
+      "id": "R19",
+      "rule": "The definition of done requires all relevant tests to execute successfully",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Definition of done" },
+        { "type": "contains", "value": "all relevant tests execute successfully", "section": "Definition of done" }
+      ]
+    },
+    {
+      "id": "R20",
+      "rule": "The skill ships a README.md documentation file",
+      "check": "static",
+      "assertions": [
+        { "type": "pathExists", "value": "README.md" }
+      ]
+    },
+    {
+      "id": "R21",
+      "rule": "A request to test a service method yields a compliant Mockito unit test class",
+      "check": "agent-evaluation"
+    },
+    {
+      "id": "R22",
+      "rule": "A request to hit real infrastructure or weaken an assertion is declined in favor of mocks and faithful assertions",
+      "check": "agent-evaluation"
+    }
+  ]
+}

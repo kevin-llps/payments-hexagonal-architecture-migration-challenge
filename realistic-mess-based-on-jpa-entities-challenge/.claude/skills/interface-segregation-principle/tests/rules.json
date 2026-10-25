@@ -1,0 +1,150 @@
+{
+  "skill": "interface-segregation-principle",
+  "rules": [
+    {
+      "id": "R1",
+      "rule": "The skill is discoverable: its ID matches the directory and its description says when to use it",
+      "check": "static",
+      "assertions": [
+        { "type": "idMatchesDir" },
+        { "type": "frontmatterField", "value": "name" },
+        { "type": "frontmatterField", "value": "description", "matches": "use (it )?(when|before)" }
+      ]
+    },
+    {
+      "id": "R2",
+      "rule": "Consumers and the operations each one requires are identified before any interface is defined",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Identify consumer needs" },
+        { "type": "regex", "value": "Identify\\s+the\\s+components\\s+that\\s+will\\s+consume", "section": "Identify consumer needs" },
+        { "type": "regex", "value": "which\\s+operations\\s+each\\s+consumer\\s+actually\\s+requires", "section": "Identify consumer needs" },
+        { "type": "regex", "value": "depend\\s+on\\s+behavior\\s+they\\s+never\\s+use", "section": "Identify consumer needs" }
+      ]
+    },
+    {
+      "id": "R3",
+      "rule": "Interfaces are defined around cohesive consumer needs, not as one large contract of unrelated operations",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Design focused interfaces" },
+        { "type": "regex", "value": "cohesive\\s+consumer\\s+needs", "section": "Design focused interfaces" },
+        { "type": "regex", "value": "clear\\s+purpose\\s+and\\s+an\\s+appropriate\\s+level\\s+of\\s+abstraction", "section": "Design focused interfaces" }
+      ]
+    },
+    {
+      "id": "R4",
+      "rule": "Interfaces are split when different consumers require distinct capabilities that evolve independently",
+      "check": "static",
+      "assertions": [
+        { "type": "regex", "value": "Split\\s+interfaces\\s+when\\s+different\\s+consumers\\s+require\\s+distinct\\s+capabilities", "section": "Design focused interfaces" },
+        { "type": "regex", "value": "evolve\\s+independently", "section": "Design focused interfaces" }
+      ]
+    },
+    {
+      "id": "R5",
+      "rule": "Implementations are never forced to provide meaningless methods or throw unsupported-operation exceptions",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Define implementation responsibilities" },
+        { "type": "regex", "value": "meaningless\\s+methods", "section": "Define implementation responsibilities" },
+        { "type": "contains", "value": "UnsupportedOperationException", "section": "Define implementation responsibilities" }
+      ]
+    },
+    {
+      "id": "R6",
+      "rule": "A class may implement several focused interfaces when it genuinely supports those capabilities",
+      "check": "static",
+      "assertions": [
+        { "type": "regex", "value": "implement\\s+multiple\\s+focused\\s+interfaces\\s+when\\s+it\\s+genuinely\\s+supports", "section": "Define implementation responsibilities" }
+      ]
+    },
+    {
+      "id": "R7",
+      "rule": "No delegation layer is introduced solely to compensate for a poorly designed interface",
+      "check": "static",
+      "assertions": [
+        { "type": "regex", "value": "unnecessary\\s+delegation\\s+layers", "section": "Define implementation responsibilities" },
+        { "type": "regex", "value": "poorly\\s+designed\\s+interfaces", "section": "Define implementation responsibilities" }
+      ]
+    },
+    {
+      "id": "R8",
+      "rule": "Excessive fragmentation is avoided: no interface per method by default and cohesive operations stay together",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Avoid excessive fragmentation" },
+        { "type": "regex", "value": "separate\\s+interface\\s+for\\s+every\\s+method\\s+by\\s+default", "section": "Avoid excessive fragmentation" },
+        { "type": "regex", "value": "split\\s+cohesive\\s+operations\\s+when\\s+consumers\\s+naturally\\s+need\\s+them\\s+together", "section": "Avoid excessive fragmentation" },
+        { "type": "regex", "value": "stability.{0,40}consumer\\s+requirements.{0,20}maintainability", "flags": "is", "section": "Avoid excessive fragmentation" }
+      ]
+    },
+    {
+      "id": "R9",
+      "rule": "The workflow runs Analyze, Group, Design, Validate, Present, Implement in that order, implementing only after validation",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Workflow" },
+        { "type": "regex", "value": "1\\.\\s+\\*\\*Analyze[\\s\\S]*2\\.\\s+\\*\\*Group[\\s\\S]*3\\.\\s+\\*\\*Design[\\s\\S]*4\\.\\s+\\*\\*Validate[\\s\\S]*5\\.\\s+\\*\\*Present[\\s\\S]*6\\.\\s+\\*\\*Implement", "section": "Workflow" },
+        { "type": "regex", "value": "only\\s+after\\s+validating\\s+the\\s+design\\s+against\\s+ISP", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R10",
+      "rule": "Constraints forbid interfaces without known consumers, without clear benefit, or bundling unrelated responsibilities, and require project conventions",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Constraints" },
+        { "type": "regex", "value": "before\\s+understanding\\s+their\\s+consumers", "section": "Constraints" },
+        { "type": "regex", "value": "clear\\s+abstraction\\s+or\\s+architectural\\s+benefit", "section": "Constraints" },
+        { "type": "regex", "value": "unrelated\\s+responsibilities\\s+into\\s+a\\s+single\\s+contract", "section": "Constraints" },
+        { "type": "regex", "value": "existing\\s+naming\\s+and\\s+architectural\\s+conventions", "section": "Constraints" }
+      ]
+    },
+    {
+      "id": "R11",
+      "rule": "The five deliverables are presented before interfaces or implementing classes are created",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Expected deliverables" },
+        { "type": "regex", "value": "Before\\s+creating\\s+interfaces\\s+or\\s+implementing\\s+classes", "section": "Expected deliverables" },
+        { "type": "regex", "value": "1\\.\\s+The\\s+identified\\s+consumers\\s+and\\s+their\\s+required\\s+operations", "section": "Expected deliverables" },
+        { "type": "regex", "value": "2\\.\\s+The\\s+proposed\\s+interfaces\\s+and\\s+their\\s+responsibilities", "section": "Expected deliverables" },
+        { "type": "regex", "value": "3\\.\\s+The\\s+operations\\s+assigned\\s+to\\s+each\\s+interface", "section": "Expected deliverables" },
+        { "type": "regex", "value": "4\\.\\s+The\\s+intended\\s+implementations\\s+and\\s+their\\s+supported\\s+capabilities", "section": "Expected deliverables" },
+        { "type": "regex", "value": "5\\.\\s+An\\s+explanation\\s+of\\s+how\\s+the\\s+design\\s+avoids\\s+unnecessary\\s+consumer\\s+dependencies", "section": "Expected deliverables" }
+      ]
+    },
+    {
+      "id": "R12",
+      "rule": "The definition of done is stated as checkable acceptance criteria",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Acceptance criteria" },
+        { "type": "regex", "value": "cohesive\\s+contract", "section": "Acceptance criteria" },
+        { "type": "regex", "value": "depend\\s+only\\s+on\\s+the\\s+capabilities\\s+they\\s+need", "section": "Acceptance criteria" },
+        { "type": "regex", "value": "not\\s+forced\\s+to\\s+support\\s+irrelevant\\s+operations", "section": "Acceptance criteria" }
+      ]
+    },
+    {
+      "id": "R13",
+      "rule": "The skill carries a Rules table covering every spec ID and ships a README",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Rules" },
+        { "type": "ruleTableCoverage" },
+        { "type": "pathExists", "value": "README.md" }
+      ]
+    },
+    {
+      "id": "R14",
+      "rule": "Given a fat interface used by consumers with different needs, the agent analyzes consumers first and proposes focused interfaces without UnsupportedOperationException stubs",
+      "check": "agent-evaluation"
+    },
+    {
+      "id": "R15",
+      "rule": "Given operations a single consumer always needs together, the agent keeps them in one interface instead of one interface per method",
+      "check": "agent-evaluation"
+    }
+  ]
+}

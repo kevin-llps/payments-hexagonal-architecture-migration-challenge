@@ -1,0 +1,147 @@
+{
+  "skill": "tdd",
+  "rules": [
+    {
+      "id": "R1",
+      "rule": "The skill is discoverable and its description states when to use it",
+      "check": "static",
+      "assertions": [
+        { "type": "frontmatterField", "value": "name" },
+        { "type": "frontmatterField", "value": "description", "matches": "use when" },
+        { "type": "idMatchesDir" }
+      ]
+    },
+    {
+      "id": "R2",
+      "rule": "A feature description and acceptance criteria are both required before anything is written",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Required inputs" },
+        { "type": "contains", "value": "Feature description", "section": "Required inputs" },
+        { "type": "contains", "value": "Acceptance criteria", "section": "Required inputs" },
+        { "type": "contains", "value": "until both are present", "section": "Required inputs" }
+      ]
+    },
+    {
+      "id": "R3",
+      "rule": "The development scope is a single public method",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "single public method", "section": "Scope" },
+        { "type": "regex", "value": "exactly one public method", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R4",
+      "rule": "Tests covering other features are never reworked",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Reworking tests covering other features", "section": "Scope" },
+        { "type": "contains", "value": "never modified, deleted, or rewritten", "section": "Scope" }
+      ]
+    },
+    {
+      "id": "R5",
+      "rule": "Acceptance criteria are decomposed into atomic rules with stable IDs",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "atomic rules", "section": "Workflow" },
+        { "type": "contains", "value": "one rule, one observable behavior", "section": "Workflow" },
+        { "type": "regex", "value": "`R1`, `R2`", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R6",
+      "rule": "The Java method signature is defined and compiles without implementation, returning null by default",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "return null;", "section": "Workflow" },
+        { "type": "contains", "value": "must compile", "section": "Workflow" },
+        { "type": "regex", "value": "before (the|any) (first )?test", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R7",
+      "rule": "Exactly one atomic rule is tested first, before its implementation",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Test first", "section": "Workflow" },
+        { "type": "contains", "value": "one test for the current rule only", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R8",
+      "rule": "The targeted test is run with the project's build tool",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "mvn test -Dtest=<TestClass>#<testMethod>", "section": "Workflow" },
+        { "type": "contains", "value": "project's build tool", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R9",
+      "rule": "The test must be RED because the actual result does not match the expected result",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "must be RED", "section": "Workflow" },
+        { "type": "contains", "value": "actual result does not match the expected result", "section": "Workflow" },
+        { "type": "contains", "value": "is not a valid RED", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R10",
+      "rule": "Only the code needed by the current atomic rule is implemented",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Implement the rule", "section": "Workflow" },
+        { "type": "contains", "value": "minimal code", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R11",
+      "rule": "The test must be GREEN because the actual result matches the expected result",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "must be GREEN", "section": "Workflow" },
+        { "type": "contains", "value": "actual result matches the expected result", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R12",
+      "rule": "Every atomic rule is iterated in order, the next one starting only once the current one is GREEN",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Iterate on all atomic rules", "section": "Workflow" },
+        { "type": "contains", "value": "Do not start the next rule before the current one is GREEN", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R13",
+      "rule": "All test rule results are shown with RED then GREEN evidence per rule",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Show all test rule results", "section": "Workflow" },
+        { "type": "regex", "value": "RED evidence.*GREEN evidence", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R14",
+      "rule": "The Rules table covers the spec bidirectionally and a README documents the skill",
+      "check": "static",
+      "assertions": [
+        { "type": "ruleTableCoverage" },
+        { "type": "pathExists", "value": "README.md" }
+      ]
+    },
+    {
+      "id": "R15",
+      "rule": "A request without acceptance criteria is answered by asking, never by writing code or tests",
+      "check": "agent-evaluation"
+    },
+    {
+      "id": "R16",
+      "rule": "A complete request starts with atomic rules and a null-returning signature, then one rule at a time RED then GREEN",
+      "check": "agent-evaluation"
+    }
+  ]
+}

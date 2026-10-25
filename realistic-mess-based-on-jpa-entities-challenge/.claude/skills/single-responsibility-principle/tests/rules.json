@@ -1,0 +1,179 @@
+{
+  "skill": "single-responsibility-principle",
+  "rules": [
+    {
+      "id": "R1",
+      "rule": "The skill is discoverable, kebab-case, and its description says when to use it",
+      "check": "static",
+      "assertions": [
+        { "type": "frontmatterField", "value": "name" },
+        { "type": "frontmatterField", "value": "description", "matches": "Use (it )?(when|before)" },
+        { "type": "idMatchesDir" }
+      ]
+    },
+    {
+      "id": "R2",
+      "rule": "Each proposed class has one clearly defined responsibility and one primary reason to change",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "one clearly defined responsibility", "section": "Purpose" },
+        { "type": "contains", "value": "one primary reason to change", "section": "Purpose" }
+      ]
+    },
+    {
+      "id": "R3",
+      "rule": "SRP is applied from the beginning of the design, not by subsequent refactoring",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "from the beginning rather than relying on subsequent refactoring", "section": "Scope" }
+      ]
+    },
+    {
+      "id": "R4",
+      "rule": "Requirements and acceptance criteria are read and analyzed before any class is designed",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Analyze requirements first" },
+        { "type": "contains", "value": "feature description and acceptance criteria", "section": "Analyze requirements first" },
+        { "type": "contains", "value": "business rules, operations, and external concerns", "section": "Analyze requirements first" }
+      ]
+    },
+    {
+      "id": "R5",
+      "rule": "Core business logic is distinguished from supporting concerns when they are separate responsibilities",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "persistence, validation, formatting, and external communication", "section": "Analyze requirements first" }
+      ]
+    },
+    {
+      "id": "R6",
+      "rule": "Every proposed class states its purpose in one clear sentence with cohesive methods",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Define class responsibilities" },
+        { "type": "contains", "value": "one clear sentence", "section": "Define class responsibilities" },
+        { "type": "contains", "value": "same cohesive purpose", "section": "Define class responsibilities" }
+      ]
+    },
+    {
+      "id": "R7",
+      "rule": "Unrelated business concerns never share a class merely because they belong to the same feature",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "merely because they belong to the same feature", "section": "Define class responsibilities" }
+      ]
+    },
+    {
+      "id": "R8",
+      "rule": "Responsibilities with independent reasons to change go to separate classes; related data and behavior stay together",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Determine class boundaries" },
+        { "type": "contains", "value": "independent reasons to change", "section": "Determine class boundaries" },
+        { "type": "contains", "value": "closely related data and behavior together", "section": "Determine class boundaries" }
+      ]
+    },
+    {
+      "id": "R9",
+      "rule": "Collaboration is defined before implementation, wired with dependency injection when appropriate",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "collaborate before implementing", "section": "Determine class boundaries" },
+        { "type": "contains", "value": "dependency injection", "section": "Determine class boundaries" }
+      ]
+    },
+    {
+      "id": "R10",
+      "rule": "The design follows the project's existing architectural and package conventions",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "existing architectural and package conventions" }
+      ]
+    },
+    {
+      "id": "R11",
+      "rule": "Overengineering is avoided: no class per method, no unnecessary abstractions, cohesion preferred",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Avoid overengineering" },
+        { "type": "contains", "value": "one class per method", "section": "Avoid overengineering" },
+        { "type": "contains", "value": "unnecessary interfaces, abstractions, utilities, or delegation layers", "section": "Avoid overengineering" },
+        { "type": "contains", "value": "solely to reduce the number of methods", "section": "Avoid overengineering" },
+        { "type": "contains", "value": "Prefer a cohesive class over an artificial separation", "section": "Avoid overengineering" }
+      ]
+    },
+    {
+      "id": "R12",
+      "rule": "The workflow runs Analyze, Decompose, Design, Validate, Present, Implement in that order",
+      "check": "static",
+      "assertions": [
+        { "type": "regex", "value": "1\\. \\*\\*Analyze[\\s\\S]*2\\. \\*\\*Decompose[\\s\\S]*3\\. \\*\\*Design[\\s\\S]*4\\. \\*\\*Validate[\\s\\S]*5\\. \\*\\*Present[\\s\\S]*6\\. \\*\\*Implement", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R13",
+      "rule": "No class is created or modified before its responsibilities are analyzed and the design is validated",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Do not create or modify classes before analyzing their responsibilities", "section": "Constraints" },
+        { "type": "contains", "value": "only after the design has been evaluated against SRP", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R14",
+      "rule": "Implementation does not start while significant responsibility boundaries remain unclear; ambiguity is explained first",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "significant responsibility boundaries remain unclear", "section": "Constraints" },
+        { "type": "contains", "value": "explain the ambiguity before proceeding", "section": "Constraints" }
+      ]
+    },
+    {
+      "id": "R15",
+      "rule": "No invented requirements and no unrelated architectural changes",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Do not invent additional requirements or business responsibilities", "section": "Constraints" },
+        { "type": "contains", "value": "Do not introduce unrelated architectural changes", "section": "Constraints" }
+      ]
+    },
+    {
+      "id": "R16",
+      "rule": "Before creating classes the six expected deliverables are provided",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Expected deliverables" },
+        { "type": "regex", "value": "1\\. [^\\n]*responsibilities identified[\\s\\S]*2\\. [^\\n]*proposed classes[\\s\\S]*3\\. [^\\n]*behaviors and data[\\s\\S]*4\\. [^\\n]*dependencies and collaboration[\\s\\S]*5\\. [^\\n]*complies with SRP[\\s\\S]*6\\. [^\\n]*unresolved design questions", "section": "Expected deliverables" }
+      ]
+    },
+    {
+      "id": "R17",
+      "rule": "Other design principles and refactoring-only work are out of scope",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "**Out of scope**", "section": "Scope" },
+        { "type": "regex", "value": "Open/Closed[\\s\\S]*Liskov[\\s\\S]*Interface Segregation[\\s\\S]*Dependency Inversion", "section": "Scope" }
+      ]
+    },
+    {
+      "id": "R18",
+      "rule": "The skill ships a Rules table covering every spec ID and a README",
+      "check": "static",
+      "assertions": [
+        { "type": "ruleTableCoverage" },
+        { "type": "pathExists", "value": "README.md" }
+      ]
+    },
+    {
+      "id": "R19",
+      "rule": "A feature request is answered with the SRP design deliverables before any class is written",
+      "check": "agent-evaluation"
+    },
+    {
+      "id": "R20",
+      "rule": "A request to split a cohesive class into one class per method is pushed back as overengineering",
+      "check": "agent-evaluation"
+    }
+  ]
+}

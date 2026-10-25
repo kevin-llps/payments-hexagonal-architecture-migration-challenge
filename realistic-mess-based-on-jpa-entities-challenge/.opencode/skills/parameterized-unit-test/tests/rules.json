@@ -1,0 +1,207 @@
+{
+  "skill": "parameterized-unit-test",
+  "rules": [
+    {
+      "id": "R1",
+      "rule": "The description states when to use the skill",
+      "check": "static",
+      "assertions": [
+        { "type": "frontmatterField", "value": "description", "matches": "use when" },
+        { "type": "frontmatterField", "value": "description", "matches": "parameteri[sz]ed" }
+      ]
+    },
+    {
+      "id": "R2",
+      "rule": "The skill directory name is the lowercase kebab-case skill ID",
+      "check": "static",
+      "assertions": [
+        { "type": "idMatchesDir" }
+      ]
+    },
+    {
+      "id": "R3",
+      "rule": "Tests focus on a single public method at a time",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "single public method at a time" }
+      ]
+    },
+    {
+      "id": "R4",
+      "rule": "A parameterized test is preferred when several tests exercise the same method with different data sets or expected results",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "prefer a parameterized test" },
+        { "type": "regex", "value": "same method\\s+(with|using) different input data sets" }
+      ]
+    },
+    {
+      "id": "R5",
+      "rule": "The common GIVEN / WHEN / THEN structure is mutualized into a single parameterized test",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "GIVEN / WHEN / THEN" },
+        { "type": "contains", "value": "single parameterized test" }
+      ]
+    },
+    {
+      "id": "R6",
+      "rule": "JUnit 5 @ParameterizedTest with @MethodSource, @CsvSource, or @ValueSource is used, chosen per data shape",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "@ParameterizedTest" },
+        { "type": "contains", "value": "@MethodSource" },
+        { "type": "contains", "value": "@CsvSource" },
+        { "type": "contains", "value": "@ValueSource" }
+      ]
+    },
+    {
+      "id": "R7",
+      "rule": "The project's existing testing framework and conventions are followed",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "existing testing framework" },
+        { "type": "contains", "value": "existing parameterized testing capabilities" }
+      ]
+    },
+    {
+      "id": "R8",
+      "rule": "Test data is kept separate from test execution logic when that improves readability",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Keep test data separate from test execution logic" }
+      ]
+    },
+    {
+      "id": "R9",
+      "rule": "Every data set is a meaningful test case with an explicit expected outcome",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "meaningful test case with an explicit expected outcome" }
+      ]
+    },
+    {
+      "id": "R10",
+      "rule": "Test methods that differ only in input values or expected results are not duplicated",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "differ only in their input values or expected results" }
+      ]
+    },
+    {
+      "id": "R11",
+      "rule": "Unrelated behaviors are never forced into one parameterized test; materially different setup, execution, or assertions stay separate",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Do not force unrelated behaviors into a single parameterized test" },
+        { "type": "contains", "value": "materially different", "section": "Out of scope" }
+      ]
+    },
+    {
+      "id": "R12",
+      "rule": "Readability and diagnostic value of individual test cases are preserved",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "readability and diagnostic value of individual test cases" }
+      ]
+    },
+    {
+      "id": "R13",
+      "rule": "Every parameterized test has an explicit display name identifying both the test case and the data set",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "@ParameterizedTest(name = \"" },
+        { "type": "regex", "value": "identif(y|ies) both the \\*\\*test case\\*\\* and the \\*\\*data set\\*\\*" }
+      ]
+    },
+    {
+      "id": "R14",
+      "rule": "Display names never rely solely on generated defaults or numeric indexes; Named arguments or a test-case description are used",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Do not rely solely on generated default display names or numeric indexes" },
+        { "type": "contains", "value": "`Named`" },
+        { "type": "contains", "value": "Named.of(" }
+      ]
+    },
+    {
+      "id": "R15",
+      "rule": "Display names are neither ambiguous, excessively verbose, nor dependent on object memory addresses",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "ambiguous, excessively verbose, or dependent on object memory addresses" }
+      ]
+    },
+    {
+      "id": "R16",
+      "rule": "Failure reports clearly identify which scenario and data set failed",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "failure reports clearly identify which scenario and data set failed" }
+      ]
+    },
+    {
+      "id": "R17",
+      "rule": "The customerLookupCases reference example and its expected display names are included",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Reference example" },
+        { "type": "contains", "value": "static Stream<Arguments> customerLookupCases()" },
+        { "type": "contains", "value": "@MethodSource(\"customerLookupCases\")" },
+        { "type": "contains", "value": "verifyNoMoreInteractions(customerRepository);" },
+        { "type": "contains", "value": "`existing customer with id 1 returns the customer`" },
+        { "type": "contains", "value": "`unknown customer with id 2 returns empty`" },
+        { "type": "contains", "value": "examples are illustrative" }
+      ]
+    },
+    {
+      "id": "R18",
+      "rule": "General unit-test conventions still apply and are owned by the unit-test skill, not duplicated here",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "`unit-test`", "section": "Out of scope" },
+        { "type": "notContains", "value": "@InjectMocks" }
+      ]
+    },
+    {
+      "id": "R19",
+      "rule": "The definition of done covers mutualization, data-set coverage, display names, FIRST, Mockito verification, and passing tests",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Definition of done" },
+        { "type": "contains", "value": "Repeated test logic is mutualized where appropriate", "section": "Definition of done" },
+        { "type": "contains", "value": "cover the relevant data sets", "section": "Definition of done" },
+        { "type": "contains", "value": "explicit and informative display name", "section": "Definition of done" },
+        { "type": "contains", "value": "FIRST principles are respected", "section": "Definition of done" },
+        { "type": "contains", "value": "Mockito interactions are verified appropriately", "section": "Definition of done" },
+        { "type": "contains", "value": "all relevant tests execute successfully", "section": "Definition of done" }
+      ]
+    },
+    {
+      "id": "R20",
+      "rule": "The Rules table covers exactly the spec rule IDs",
+      "check": "static",
+      "assertions": [
+        { "type": "ruleTableCoverage" }
+      ]
+    },
+    {
+      "id": "R21",
+      "rule": "A README documents purpose, when to use, how to run, dependency graph, and workflow graph",
+      "check": "static",
+      "assertions": [
+        { "type": "pathExists", "value": "README.md" }
+      ]
+    },
+    {
+      "id": "R22",
+      "rule": "Duplicated tests differing only in data are merged into one parameterized test whose invocations have explicit scenario-and-data display names",
+      "check": "agent-evaluation"
+    },
+    {
+      "id": "R23",
+      "rule": "Tests of the same method with materially different setup or assertions are kept separate instead of being forced into one parameterized test",
+      "check": "agent-evaluation"
+    }
+  ]
+}
