@@ -1,0 +1,8 @@
+# Same schema handling as the application (bootstrap application.yml): schema.sql / data.sql are the only DDL source.
+spring:
+  sql:
+    init:
+      mode: always
+  jpa:
+    hibernate:
+      ddl-auto: none

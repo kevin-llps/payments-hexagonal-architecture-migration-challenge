@@ -15,11 +15,11 @@ The code smells are **intentional**. Do not "clean up", fix, deduplicate, or ref
 No lint, formatter, typecheck, codegen, or CI config exists — don't go looking. There is no Maven wrapper; use the installed `mvn`.
 
 - All modules: `mvn test` from the repo root (root `pom.xml` is a pure aggregator). This includes the Docker-dependent integration suites.
-- One module: `cd <module> && mvn test` — modules parent `spring-boot-starter-parent` directly, so `-pl`/`-am` from the root adds nothing. Exception: `realistic-mess-based-on-jpa-entities-challenge` is now a multi-module parent (see its `AGENTS.md`); run its commands from its own directory.
+- One module: `cd <module> && mvn test` — modules parent `spring-boot-starter-parent` directly, so `-pl`/`-am` from the root adds nothing. Exception: `realistic-mess-based-on-jpa-entities-challenge` has been migrated to hexagonal architecture and is a multi-module parent (`domain`, `infrastructure-adapters`, `client-adapters`, `bootstrap`); its test classes and commands differ — see its `AGENTS.md`.
 - One test class: `mvn test -Dtest=PaymentServiceUnitTest` (run from inside the module); use `-Dtest=PaymentApplicationIntegrationTest` for the integration suite.
 - Test tiers:
   - Fast unit/web tests (`PaymentServiceUnitTest`, `KafkaListenerUnitTest`, `PaymentControllerWebTest`, `PaymentUtilsTest`): Mockito or `@WebMvcTest` slices with `@MockitoBean` services — run with **no Docker, no DB, no Kafka**. Use `@MockitoBean` (Spring Boot 3.4+), not the deprecated `@MockBean`.
-  - Caveat: the JPA module's `PaymentRepositoryUnitTest` is actually `@DataJpaTest` + Testcontainers (`@AutoConfigureTestDatabase(replace = NONE)`) and **requires Docker**, despite the `*UnitTest` name.
+  - The JPA module no longer has these classes: its tests are split per component across its Maven modules, and its `infrastructure-adapters` tests (`@DataJpaTest` + Testcontainers) **require Docker** (see its `AGENTS.md`).
   - `integration/PaymentApplicationIntegrationTest`: `@SpringBootTest` + `@EmbeddedKafka` + Testcontainers Postgres (`postgres:16-alpine`) — **requires Docker**. This is the expensive suite; use the fast tier for iteration and run Docker-backed tests before declaring done.
 
 ## Testing conventions (easy to break)
