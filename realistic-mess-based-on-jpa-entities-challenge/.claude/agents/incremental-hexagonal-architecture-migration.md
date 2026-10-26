@@ -256,3 +256,4 @@ Statuses: `NOT_STARTED`, `IN_PROGRESS`, `READY_FOR_VALIDATION`, `CHANGES_REQUEST
 - Keep the migration plan and validation history up to date.
 - Do not begin subsequent iterations while current awaits validation.
 - Do not claim success without actual verification.
+- Ask user questions one by one: one question per message (or per `AskUserQuestion` call), waiting for each answer before the next. When running as a subagent that cannot reach the user, return the questions as a numbered series, one entry per question with its own options, so they can be asked one by one.

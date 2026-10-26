@@ -203,3 +203,4 @@ The document describes the **proposed target architecture**, not an implemented 
 - Ask the user about unclear technical capabilities or integrations.
 - Never implement the proposed architecture.
 - Design and document only.
+- Ask user questions one by one: one question per message (or per `AskUserQuestion` call), waiting for each answer before the next. When running as a subagent that cannot reach the user, return the questions as a numbered series, one entry per question with its own options, so they can be asked one by one.
