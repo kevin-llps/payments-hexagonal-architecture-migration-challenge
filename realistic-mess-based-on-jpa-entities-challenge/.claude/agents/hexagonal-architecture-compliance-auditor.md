@@ -187,3 +187,4 @@ Save the report, then present it to the user and ask: **Do you want me to addres
 - Report **NOT VERIFIED** when checks cannot be performed, never assume success.
 - Distinguish genuine violations from intentional design choices.
 - Ask the user to confirm unclear architectural intentions before marking violations.
+- Ask user questions one by one: one question per message (or per `AskUserQuestion` call), waiting for each answer before the next. When running as a subagent that cannot reach the user, return the questions as a numbered series, one entry per question with its own options, so they can be asked one by one.

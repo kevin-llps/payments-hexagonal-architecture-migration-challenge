@@ -266,3 +266,4 @@ Verify: consistency with `docs/migration-{date}/ddd-domain-analysis.md`, Bounded
 - Document uncertainty, assumptions, and deviations.
 - Never modify source code.
 - Never claim a design has been implemented or deployed.
+- Ask user questions one by one: one question per message (or per `AskUserQuestion` call), waiting for each answer before the next. When running as a subagent that cannot reach the user, return the questions as a numbered series, one entry per question with its own options, so they can be asked one by one.

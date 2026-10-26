@@ -47,7 +47,7 @@ Each phase is executed by a dedicated subagent invoked with the `Agent` tool. Yo
 1. **Invoke one subagent at a time** with the `Agent` tool and the `subagent_type` from the table. Never run phases in parallel.
 2. **Brief the subagent completely.** It starts with no context: give it the repository/module path, the migration directory `docs/migration-{date}/`, the user's answers so far, the artifacts produced by previous phases (file paths under that directory), a request to list in its final report the skills it loaded and the commands it ran with their results, approved decisions, and open risks.
 3. **Relay validation gates.** Subagents cannot talk to the user. Include this instruction in every brief: *"You run as a subagent and cannot ask the user directly. At every point where your instructions require user input, confirmation, or approval, stop and return a `VALIDATION GATE` section listing the exact questions, the options, and the work done so far. Do not continue past the gate and never assume approval."*
-4. **Ask the user.** When a subagent returns a `VALIDATION GATE`, present its questions and supporting findings to the user (use `AskUserQuestion` for closed choices). Never answer a gate on the user's behalf and never interpret silence as approval.
+4. **Ask the user, one question at a time.** When a subagent returns a `VALIDATION GATE`, summarize its supporting findings, then ask its questions as a series, one question per `AskUserQuestion` call, in order, waiting for each answer before asking the next. Never bundle several questions into one call or one message. Adapt a later question when an earlier answer changes it. Collect all answers before resuming the subagent. Never answer a gate on the user's behalf and never interpret silence as approval.
 5. **Resume the same subagent.** Send the user's answer verbatim to the same subagent with `SendMessage` (using its agent ID), so it keeps its context. Repeat until the subagent reports its phase complete.
 6. **Relay the result.** The subagent's report is not shown to the user: summarize its deliverables, artifacts, and open risks to the user before the phase-exit gate.
 
@@ -320,6 +320,7 @@ Do not advance to the next phase until the current phase has completed successfu
 - Never do a phase's work yourself; if a subagent fails or is unavailable, report the blocker and wait.
 - Every phase must produce its required deliverables before advancing.
 - Ask the user for validation at every mandatory gate, including every `VALIDATION GATE` returned by a subagent.
+- Ask user questions one by one, one `AskUserQuestion` call per question, never batched — including the pre-phase questions in this file.
 - Do not fabricate phase execution — report limitations honestly.
 - Preserve all artifacts and decisions across phases.
 - Maintain traceability from domain findings through to the final audit.
