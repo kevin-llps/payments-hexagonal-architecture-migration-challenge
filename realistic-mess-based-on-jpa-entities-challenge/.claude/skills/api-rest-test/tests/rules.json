@@ -290,6 +290,16 @@
       "id": "R32",
       "rule": "Missing source code is reported as missing information instead of invented contracts",
       "check": "agent-evaluation"
+    },
+    {
+      "id": "R33",
+      "rule": "The first output line announces the skill invocation",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Invocation Announcement" },
+        { "type": "contains", "value": "▶ Skill invoked: API REST Test — generate REST controller unit tests and REST API integration tests", "section": "Invocation Announcement" },
+        { "type": "contains", "value": "first output", "section": "Invocation Announcement" }
+      ]
     }
   ]
 }

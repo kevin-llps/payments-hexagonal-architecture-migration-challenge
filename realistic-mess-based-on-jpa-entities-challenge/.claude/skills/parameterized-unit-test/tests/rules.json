@@ -202,6 +202,16 @@
       "id": "R23",
       "rule": "Tests of the same method with materially different setup or assertions are kept separate instead of being forced into one parameterized test",
       "check": "agent-evaluation"
+    },
+    {
+      "id": "R24",
+      "rule": "The first output line announces the skill invocation",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Invocation Announcement" },
+        { "type": "contains", "value": "▶ Skill invoked: Parameterized Unit Test — merge data-driven unit test cases into parameterized tests", "section": "Invocation Announcement" },
+        { "type": "contains", "value": "first output", "section": "Invocation Announcement" }
+      ]
     }
   ]
 }

@@ -123,6 +123,16 @@
         { "type": "contains", "value": "at their position in the loop", "section": "Workflow" },
         { "type": "contains", "value": "execute the prompt", "section": "Workflow" }
       ]
+    },
+    {
+      "id": "R15",
+      "rule": "The first output line announces the skill invocation",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Invocation Announcement" },
+        { "type": "contains", "value": "▶ Skill invoked: Skill Testing — turn skill acceptance criteria into rule tests, iterated RED to GREEN", "section": "Invocation Announcement" },
+        { "type": "contains", "value": "first output", "section": "Invocation Announcement" }
+      ]
     }
   ]
 }

@@ -5,6 +5,14 @@ description: Apply the Dependency Inversion Principle before creating classes an
 
 # Dependency Inversion Principle
 
+## Invocation Announcement
+
+Before any other output or tool call, display exactly this line as the skill's first output:
+
+`▶ Skill invoked: Dependency Inversion Principle — decide abstractions and dependency direction before creating classes`
+
+Display it on every invocation, whether triggered by the user, an agent, or a skill. When delegating to a subagent or loading a skill, do not print its announcement on its behalf; it prints its own. The announcement never replaces or delays a mandatory approval gate.
+
 Design dependency direction before writing classes: high-level business logic
 depends on abstractions it owns, and low-level mechanisms satisfy them.
 
@@ -138,6 +146,7 @@ Before creating classes, provide:
 | R17 | Rules table matches the spec and a README ships beside SKILL.md                   | static           |
 | R18 | Infrastructure needs get a consumer-owned abstraction and a design before code    | agent-evaluation |
 | R19 | A simple stable collaborator is not wrapped in a needless interface               | agent-evaluation |
+| R20 | The first output line announces the skill invocation                              | static           |
 
 ## Acceptance criteria
 
@@ -152,3 +161,4 @@ Before creating classes, provide:
       locator, hidden global, or unnecessary static access.
 - [ ] Unnecessary coupling is avoided and no abstraction exists without a
       concrete design benefit.
+- [ ] The first output line is `▶ Skill invoked: Dependency Inversion Principle — decide abstractions and dependency direction before creating classes`.

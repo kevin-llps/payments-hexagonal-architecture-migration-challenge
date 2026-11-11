@@ -5,6 +5,14 @@ description: Apply the Liskov Substitution Principle before creating class hiera
 
 # Liskov Substitution Principle
 
+## Invocation Announcement
+
+Before any other output or tool call, display exactly this line as the skill's first output:
+
+`▶ Skill invoked: Liskov Substitution Principle — ensure every subtype can replace its declared base type`
+
+Display it on every invocation, whether triggered by the user, an agent, or a skill. When delegating to a subagent or loading a skill, do not print its announcement on its behalf; it prints its own. The announcement never replaces or delays a mandatory approval gate.
+
 ## Purpose
 
 Apply the Liskov Substitution Principle (LSP) before creating class
@@ -135,6 +143,7 @@ Before creating classes, provide:
 | R17 | The skill ships a README.md and a Rules table covering exactly the spec IDs                  | static           |
 | R18 | A subtype that throws on a supported operation is flagged and redesigned before coding        | agent-evaluation |
 | R19 | Inheritance requested only for code reuse is redirected to composition with a justification   | agent-evaluation |
+| R20 | The first output line announces the skill invocation                                         | static           |
 
 ## Acceptance criteria
 
@@ -150,3 +159,4 @@ Before creating classes, provide:
       abstraction's behavioral contract, and consumers do not need
       implementation-specific workarounds to use valid implementations
       correctly.
+- [ ] The first output line is `▶ Skill invoked: Liskov Substitution Principle — ensure every subtype can replace its declared base type`.

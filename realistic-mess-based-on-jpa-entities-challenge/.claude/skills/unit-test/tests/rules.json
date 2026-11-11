@@ -212,6 +212,16 @@
       "id": "R22",
       "rule": "A request to hit real infrastructure or weaken an assertion is declined in favor of mocks and faithful assertions",
       "check": "agent-evaluation"
+    },
+    {
+      "id": "R23",
+      "rule": "The first output line announces the skill invocation",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Invocation Announcement" },
+        { "type": "contains", "value": "▶ Skill invoked: Unit Test — write focused, FIRST-compliant JUnit 5 and Mockito unit tests", "section": "Invocation Announcement" },
+        { "type": "contains", "value": "first output", "section": "Invocation Announcement" }
+      ]
     }
   ]
 }

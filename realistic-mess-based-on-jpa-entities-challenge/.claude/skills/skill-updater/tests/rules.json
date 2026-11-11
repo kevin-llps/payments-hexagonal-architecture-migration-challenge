@@ -86,6 +86,16 @@
       "id": "R10",
       "rule": "An incomplete update request is answered by asking, never by writing files",
       "check": "agent-evaluation"
+    },
+    {
+      "id": "R11",
+      "rule": "The first output line announces the skill invocation",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Invocation Announcement" },
+        { "type": "contains", "value": "▶ Skill invoked: Skill Updater — update an existing skill and keep its rule tests GREEN", "section": "Invocation Announcement" },
+        { "type": "contains", "value": "first output", "section": "Invocation Announcement" }
+      ]
     }
   ]
 }

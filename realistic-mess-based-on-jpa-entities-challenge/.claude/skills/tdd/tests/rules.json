@@ -142,6 +142,16 @@
       "id": "R16",
       "rule": "A complete request starts with atomic rules and a null-returning signature, then one rule at a time RED then GREEN",
       "check": "agent-evaluation"
+    },
+    {
+      "id": "R17",
+      "rule": "The first output line announces the skill invocation",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Invocation Announcement" },
+        { "type": "contains", "value": "▶ Skill invoked: Test Driven Development — drive one public Java method test-first, one rule at a time", "section": "Invocation Announcement" },
+        { "type": "contains", "value": "first output", "section": "Invocation Announcement" }
+      ]
     }
   ]
 }

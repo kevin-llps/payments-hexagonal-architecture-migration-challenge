@@ -5,6 +5,14 @@ description: Update an existing OpenCode skill's responsibility, scope, out-of-s
 
 # Skill Updater
 
+## Invocation Announcement
+
+Before any other output or tool call, display exactly this line as the skill's first output:
+
+`▶ Skill invoked: Skill Updater — update an existing skill and keep its rule tests GREEN`
+
+Display it on every invocation, whether triggered by the user, an agent, or a skill. When delegating to a subagent or loading a skill, do not print its announcement on its behalf; it prints its own. The announcement never replaces or delays a mandatory approval gate.
+
 Update one existing OpenCode skill from the inputs the user provides. Do not
 invent inputs, and do not write files until every required input is known.
 
@@ -82,6 +90,7 @@ item). Do not write or update any file until all three are present.
 | R8  | The description still states when to use the skill                         | static           |
 | R9  | The report includes before/after evidence and the test results             | static           |
 | R10 | An incomplete update request is answered by asking, never by writing files | agent-evaluation |
+| R11 | The first output line announces the skill invocation                       | static           |
 
 ## Acceptance criteria
 
@@ -96,3 +105,4 @@ item). Do not write or update any file until all three are present.
 - [ ] The rule-test run is GREEN before success is reported.
 - [ ] The description still says when to use the skill.
 - [ ] The report shows a before/after diff and the GREEN output.
+- [ ] The first output line is `▶ Skill invoked: Skill Updater — update an existing skill and keep its rule tests GREEN`.

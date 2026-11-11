@@ -5,6 +5,14 @@ description: Write focused, FIRST-compliant JUnit 5 + Mockito unit tests for one
 
 # Unit Test
 
+## Invocation Announcement
+
+Before any other output or tool call, display exactly this line as the skill's first output:
+
+`▶ Skill invoked: Unit Test — write focused, FIRST-compliant JUnit 5 and Mockito unit tests`
+
+Display it on every invocation, whether triggered by the user, an agent, or a skill. When delegating to a subagent or loading a skill, do not print its announcement on its behalf; it prints its own. The announcement never replaces or delays a mandatory approval gate.
+
 ## Purpose
 
 Write high-quality, reliable, and maintainable unit tests that validate the
@@ -222,6 +230,7 @@ where meaningful, and all relevant tests execute successfully.
 | R20 | The skill ships a README.md documentation file                                               | static           |
 | R21 | A request to test a service method yields a compliant Mockito unit test class                | agent-evaluation |
 | R22 | Requests to hit real infrastructure or weaken an assertion are declined                      | agent-evaluation |
+| R23 | The first output line announces the skill invocation                                         | static           |
 
 ## Acceptance criteria
 
@@ -238,3 +247,4 @@ where meaningful, and all relevant tests execute successfully.
 - [ ] Success, boundary, invalid-input, and exception cases are covered.
 - [ ] The relevant tests run and pass, and the report lists the validated
       behaviors plus the execution results.
+- [ ] The first output line is `▶ Skill invoked: Unit Test — write focused, FIRST-compliant JUnit 5 and Mockito unit tests`.

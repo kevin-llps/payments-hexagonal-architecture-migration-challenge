@@ -5,6 +5,14 @@ description: Generate Spring Boot REST controller unit tests (@WebMvcTest, MockM
 
 # API REST Test
 
+## Invocation Announcement
+
+Before any other output or tool call, display exactly this line as the skill's first output:
+
+`▶ Skill invoked: API REST Test — generate REST controller unit tests and REST API integration tests`
+
+Display it on every invocation, whether triggered by the user, an agent, or a skill. When delegating to a subagent or loading a skill, do not print its announcement on its behalf; it prints its own. The announcement never replaces or delays a mandatory approval gate.
+
 Act as a senior Java developer specializing in Spring Boot, REST APIs, JUnit 5, Mockito, and Spring MockMvc.
 
 ## Purpose
@@ -190,6 +198,7 @@ After analyzing the supplied source code, generate:
 | R30 | The skill ships a README.md documentation file | static |
 | R31 | A controller unit test request yields a `@WebMvcTest` slice with mocked services, not a full-context test | agent-evaluation |
 | R32 | Missing source code is reported as missing information instead of invented contracts | agent-evaluation |
+| R33 | The first output line announces the skill invocation | static |
 
 ## Acceptance criteria
 
@@ -206,3 +215,4 @@ The skill has executed successfully when every item of the definition of done ho
 - [ ] Tests follow existing project conventions and compile against the project's actual dependencies.
 - [ ] Any unverified behavior or assumptions are explicitly identified.
 - [ ] Do not claim tests pass unless their execution has been verified.
+- [ ] The first output line is `▶ Skill invoked: API REST Test — generate REST controller unit tests and REST API integration tests`.

@@ -5,6 +5,14 @@ description: Write or refactor JUnit 5 unit tests so that cases exercising the s
 
 # Parameterized Unit Test
 
+## Invocation Announcement
+
+Before any other output or tool call, display exactly this line as the skill's first output:
+
+`▶ Skill invoked: Parameterized Unit Test — merge data-driven unit test cases into parameterized tests`
+
+Display it on every invocation, whether triggered by the user, an agent, or a skill. When delegating to a subagent or loading a skill, do not print its announcement on its behalf; it prints its own. The announcement never replaces or delays a mandatory approval gate.
+
 Write high-quality, maintainable unit tests that minimize duplication by using
 parameterized tests whenever multiple test cases exercise the same method with
 different input data sets or expected outcomes.
@@ -199,6 +207,7 @@ actual project (its assertion library, entities, and repositories).
 | R21 | README ships beside SKILL.md                                           | static           |
 | R22 | Data-only duplicates are merged with explicit display names            | agent-evaluation |
 | R23 | Materially different behaviors are not merged                          | agent-evaluation |
+| R24 | The first output line announces the skill invocation                   | static           |
 
 ## Definition of done
 
@@ -208,3 +217,4 @@ actual project (its assertion library, entities, and repositories).
 - [ ] The FIRST principles are respected.
 - [ ] Mockito interactions are verified appropriately.
 - [ ] The test run is green: all relevant tests execute successfully.
+- [ ] The first output line is `▶ Skill invoked: Parameterized Unit Test — merge data-driven unit test cases into parameterized tests`.

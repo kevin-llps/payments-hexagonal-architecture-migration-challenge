@@ -131,6 +131,16 @@
         { "type": "contains", "value": "only steps executed by this skill", "section": "Workflow" },
         { "type": "contains", "value": "1: <first step sentence>", "section": "Workflow" }
       ]
+    },
+    {
+      "id": "R15",
+      "rule": "The first output line announces the skill invocation",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Invocation Announcement" },
+        { "type": "contains", "value": "▶ Skill invoked: Skill Creator — create a new skill test-first from user-provided inputs", "section": "Invocation Announcement" },
+        { "type": "contains", "value": "first output", "section": "Invocation Announcement" }
+      ]
     }
   ]
 }

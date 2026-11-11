@@ -5,6 +5,14 @@ description: Create a new OpenCode skill from user-provided inputs (responsibili
 
 # Skill Creator
 
+## Invocation Announcement
+
+Before any other output or tool call, display exactly this line as the skill's first output:
+
+`▶ Skill invoked: Skill Creator — create a new skill test-first from user-provided inputs`
+
+Display it on every invocation, whether triggered by the user, an agent, or a skill. When delegating to a subagent or loading a skill, do not print its announcement on its behalf; it prints its own. The announcement never replaces or delays a mandatory approval gate.
+
 Create one OpenCode skill from the inputs the user provides. Do not invent
 inputs, and do not write files until every required input is known.
 
@@ -149,6 +157,7 @@ README template rules:
 | R12 | The README documents the skill's purpose, when to use it, and how to run it | static |
 | R13 | The README dependency graph shows only this skill's callers, each label indexed | static |
 | R14 | The README workflow graph shows only this skill's own steps, each label indexed   | static |
+| R15 | The first output line announces the skill invocation                | static |
 
 ## Template
 
@@ -210,3 +219,4 @@ Template rules:
       label indexed as `1: <caller>`.
 - [ ] The README's workflow graph shows only this skill's own steps, each
       label indexed as `1: <step>`.
+- [ ] The first output line is `▶ Skill invoked: Skill Creator — create a new skill test-first from user-provided inputs`.

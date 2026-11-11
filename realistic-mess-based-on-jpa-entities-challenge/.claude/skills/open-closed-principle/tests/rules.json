@@ -167,6 +167,16 @@
       "id": "R18",
       "rule": "A behavior with growing variants gets a focused extension point, presented with the deliverables before any class is written",
       "check": "agent-evaluation"
+    },
+    {
+      "id": "R19",
+      "rule": "The first output line announces the skill invocation",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Invocation Announcement" },
+        { "type": "contains", "value": "▶ Skill invoked: Open/Closed Principle — design justified extension points for behaviors that may vary", "section": "Invocation Announcement" },
+        { "type": "contains", "value": "first output", "section": "Invocation Announcement" }
+      ]
     }
   ]
 }

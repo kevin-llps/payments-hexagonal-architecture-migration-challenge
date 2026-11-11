@@ -5,6 +5,14 @@ description: Apply the Open/Closed Principle before creating classes, identifyin
 
 # Open/Closed Principle
 
+## Invocation Announcement
+
+Before any other output or tool call, display exactly this line as the skill's first output:
+
+`▶ Skill invoked: Open/Closed Principle — design justified extension points for behaviors that may vary`
+
+Display it on every invocation, whether triggered by the user, an agent, or a skill. When delegating to a subagent or loading a skill, do not print its announcement on its behalf; it prints its own. The announcement never replaces or delays a mandatory approval gate.
+
 ## Purpose
 
 Apply the Open/Closed Principle before creating classes, so that the system
@@ -135,6 +143,7 @@ Before creating classes, provide:
 | R16 | A README documents purpose, usage, dependency graph and workflow graph                       | static           |
 | R17 | Stable single-implementation behavior gets no speculative interface                          | agent-evaluation |
 | R18 | Growing variants get a focused extension point, presented before any class is written        | agent-evaluation |
+| R19 | The first output line announces the skill invocation                                         | static           |
 
 ## Acceptance criteria
 
@@ -151,3 +160,4 @@ speculative abstractions.
 - [ ] Stable behavior with no identified variation is implemented
       straightforwardly, without speculative abstractions.
 - [ ] The five expected deliverables are presented before implementation.
+- [ ] The first output line is `▶ Skill invoked: Open/Closed Principle — design justified extension points for behaviors that may vary`.

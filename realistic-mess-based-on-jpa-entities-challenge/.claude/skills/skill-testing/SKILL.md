@@ -5,6 +5,14 @@ description: Decompose a skill's acceptance criteria into atomic rules, write ex
 
 # Skill Testing
 
+## Invocation Announcement
+
+Before any other output or tool call, display exactly this line as the skill's first output:
+
+`▶ Skill invoked: Skill Testing — turn skill acceptance criteria into rule tests, iterated RED to GREEN`
+
+Display it on every invocation, whether triggered by the user, an agent, or a skill. When delegating to a subagent or loading a skill, do not print its announcement on its behalf; it prints its own. The announcement never replaces or delays a mandatory approval gate.
+
 Turn a skill's acceptance criteria into atomic, stable rule IDs and executable
 checks. Tests are the specification: they are written before the skill they
 describe, and the runner reports one PASS/FAIL line per static rule. The whole
@@ -87,6 +95,7 @@ regression-test any existing skill.
 | R12 | TDD goes one rule at a time: RED, implement, GREEN, next rule  | static           |
 | R13 | The runner executes one selected rule via --rule and reports it | static          |
 | R14 | Agent-evaluation rules run at their position in the loop       | static           |
+| R15 | The first output line announces the skill invocation           | static           |
 
 ## Commands
 
@@ -123,3 +132,4 @@ python3 -m unittest discover -s .opencode/skills/skill-testing/scripts/tests -v
 - [ ] Each static rule is RED under `--rule <id>` before its implementation and GREEN after it.
 - [ ] `--rule <id>` runs only the selected rule, prints `Selected:`, and exits `2` on an unknown ID.
 - [ ] Each agent-evaluation prompt is executed at its rule's position, before the next rule starts.
+- [ ] The first output line is `▶ Skill invoked: Skill Testing — turn skill acceptance criteria into rule tests, iterated RED to GREEN`.

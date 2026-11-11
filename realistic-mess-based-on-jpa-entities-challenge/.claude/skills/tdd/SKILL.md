@@ -5,6 +5,14 @@ description: Drive the development of one public Java method test-first, one ato
 
 # Test Driven Development
 
+## Invocation Announcement
+
+Before any other output or tool call, display exactly this line as the skill's first output:
+
+`▶ Skill invoked: Test Driven Development — drive one public Java method test-first, one rule at a time`
+
+Display it on every invocation, whether triggered by the user, an agent, or a skill. When delegating to a subagent or loading a skill, do not print its announcement on its behalf; it prints its own. The announcement never replaces or delays a mandatory approval gate.
+
 ## Purpose
 
 The development of a given feature is driven by tests: every behavior of the
@@ -109,6 +117,7 @@ write a test, or write any implementation until both are present.
 | R14 | The Rules table covers the spec bidirectionally and a README documents the skill      | static           |
 | R15 | A request without acceptance criteria is answered by asking, never by writing code    | agent-evaluation |
 | R16 | A complete request starts with rules and a null signature, then one rule RED then GREEN | agent-evaluation |
+| R17 | The first output line announces the skill invocation                                 | static           |
 
 ## Acceptance criteria
 
@@ -122,3 +131,4 @@ write a test, or write any implementation until both are present.
 - [ ] Only the single public method under development and its new tests are
       changed; tests covering other features are untouched.
 - [ ] The final report shows the results of all test rules.
+- [ ] The first output line is `▶ Skill invoked: Test Driven Development — drive one public Java method test-first, one rule at a time`.

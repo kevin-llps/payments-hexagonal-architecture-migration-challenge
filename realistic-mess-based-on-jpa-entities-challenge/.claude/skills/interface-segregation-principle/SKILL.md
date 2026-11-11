@@ -5,6 +5,14 @@ description: Apply the Interface Segregation Principle (ISP) so each interface e
 
 # Interface Segregation Principle
 
+## Invocation Announcement
+
+Before any other output or tool call, display exactly this line as the skill's first output:
+
+`▶ Skill invoked: Interface Segregation Principle — keep each interface limited to the operations its consumers need`
+
+Display it on every invocation, whether triggered by the user, an agent, or a skill. When delegating to a subagent or loading a skill, do not print its announcement on its behalf; it prints its own. The announcement never replaces or delays a mandatory approval gate.
+
 ## Purpose
 
 Apply the Interface Segregation Principle before creating interfaces and their
@@ -118,6 +126,7 @@ Definition of done:
       meaningless methods, no `UnsupportedOperationException`).
 - [ ] The five deliverables were presented before any interface or
       implementation was created.
+- [ ] The first output line is `▶ Skill invoked: Interface Segregation Principle — keep each interface limited to the operations its consumers need`.
 
 ## Rules
 
@@ -138,3 +147,4 @@ Definition of done:
 | R13 | A Rules table covers every spec ID and a README ships with the skill                   | static           |
 | R14 | A fat interface with divergent consumers is split without unsupported stubs            | agent-evaluation |
 | R15 | Operations one consumer always needs together stay in one interface                    | agent-evaluation |
+| R16 | The first output line announces the skill invocation                                   | static           |

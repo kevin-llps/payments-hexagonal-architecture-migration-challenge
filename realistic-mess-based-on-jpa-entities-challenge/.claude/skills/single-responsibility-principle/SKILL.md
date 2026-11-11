@@ -5,6 +5,14 @@ description: Apply the Single Responsibility Principle before creating classes s
 
 # Single Responsibility Principle
 
+## Invocation Announcement
+
+Before any other output or tool call, display exactly this line as the skill's first output:
+
+`▶ Skill invoked: Single Responsibility Principle — give each proposed class one responsibility before implementation`
+
+Display it on every invocation, whether triggered by the user, an agent, or a skill. When delegating to a subagent or loading a skill, do not print its announcement on its behalf; it prints its own. The announcement never replaces or delays a mandatory approval gate.
+
 Design classes so that each one has a single, cohesive responsibility, and do
 it before any class exists. Analysis and design come first; implementation
 comes last.
@@ -122,6 +130,7 @@ Before creating classes, provide:
 | R18 | The skill ships a Rules table covering every spec ID and a README | static |
 | R19 | A feature request is answered with the SRP design deliverables before any class is written | agent-evaluation |
 | R20 | A request to split a cohesive class into one class per method is pushed back as overengineering | agent-evaluation |
+| R21 | The first output line announces the skill invocation | static |
 
 ## Acceptance criteria
 
@@ -131,3 +140,4 @@ Before creating classes, provide:
 - [ ] The design avoids unnecessary complexity: no class per method, no needless abstraction.
 - [ ] The six expected deliverables were presented before any class was created.
 - [ ] Ambiguous responsibilities were explained before proceeding, and no requirement was invented.
+- [ ] The first output line is `▶ Skill invoked: Single Responsibility Principle — give each proposed class one responsibility before implementation`.

@@ -145,6 +145,16 @@
       "id": "R15",
       "rule": "Given operations a single consumer always needs together, the agent keeps them in one interface instead of one interface per method",
       "check": "agent-evaluation"
+    },
+    {
+      "id": "R16",
+      "rule": "The first output line announces the skill invocation",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Invocation Announcement" },
+        { "type": "contains", "value": "▶ Skill invoked: Interface Segregation Principle — keep each interface limited to the operations its consumers need", "section": "Invocation Announcement" },
+        { "type": "contains", "value": "first output", "section": "Invocation Announcement" }
+      ]
     }
   ]
 }

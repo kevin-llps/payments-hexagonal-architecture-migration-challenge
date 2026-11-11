@@ -181,6 +181,16 @@
       "id": "R19",
       "rule": "A request to inherit purely to reuse code with incompatible behavior is redirected to composition with a justification",
       "check": "agent-evaluation"
+    },
+    {
+      "id": "R20",
+      "rule": "The first output line announces the skill invocation",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Invocation Announcement" },
+        { "type": "contains", "value": "▶ Skill invoked: Liskov Substitution Principle — ensure every subtype can replace its declared base type", "section": "Invocation Announcement" },
+        { "type": "contains", "value": "first output", "section": "Invocation Announcement" }
+      ]
     }
   ]
 }
