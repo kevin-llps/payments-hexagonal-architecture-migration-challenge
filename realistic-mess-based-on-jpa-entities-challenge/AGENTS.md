@@ -37,3 +37,7 @@ Run from this directory (no Maven wrapper, no lint/format/typecheck config):
 - `InboundPaymentController.search` adds `ageInDays` to each row; `InboundPaymentService.getById` also computes it. Output is date-dependent.
 - Kafka listeners (`*Listener` plus the misnamed `OutboundPaymentMessageConsumer`) each declare their own `groupId` (`jpa-*-group`), ignoring `spring.kafka.consumer.group-id`, and swallow all parse/persistence exceptions after logging. `em.merge` is the upsert.
 - `GlobalExceptionHandler` maps `IllegalArgumentException` to 400 and everything else to 500; `OutboundPaymentController.get` catches invalid UUIDs and returns 404.
+
+## Java coding conventions
+
+Agents and skills must read [docs/java-coding-conventions.md](docs/java-coding-conventions.md) before writing Java code. These conventions apply to new and migrated code only; intentional legacy smells stay untouched until migrated.
