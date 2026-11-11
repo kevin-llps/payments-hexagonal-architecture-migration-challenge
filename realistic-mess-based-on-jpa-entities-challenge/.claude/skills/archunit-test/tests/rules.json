@@ -1,0 +1,244 @@
+{
+  "skill": "archunit-test",
+  "rules": [
+    {
+      "id": "R1",
+      "rule": "The skill is discoverable and its description says when to use it",
+      "check": "static",
+      "assertions": [
+        { "type": "frontmatterField", "value": "name", "matches": "^ArchUnit Test$" },
+        { "type": "frontmatterField", "value": "description", "matches": "use when" },
+        { "type": "frontmatterField", "value": "description", "matches": "composition.root" },
+        { "type": "idMatchesDir" }
+      ]
+    },
+    {
+      "id": "R2",
+      "rule": "The first output line announces the skill invocation",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Invocation Announcement" },
+        { "type": "contains", "value": "▶ Skill invoked: ArchUnit Test — write ArchUnit tests enforcing hexagonal architecture rules in the composition root", "section": "Invocation Announcement" },
+        { "type": "contains", "value": "first output", "section": "Invocation Announcement" },
+        { "type": "regex", "value": "^# ArchUnit Test\\s*\\n+## Invocation Announcement", "flags": "m" }
+      ]
+    },
+    {
+      "id": "R3",
+      "rule": "The four required inputs are named: target module (default bootstrap), base package, rule sources, rules requested",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Required inputs" },
+        { "type": "contains", "value": "**Target module**", "section": "Required inputs" },
+        { "type": "contains", "value": "default `bootstrap`", "section": "Required inputs" },
+        { "type": "contains", "value": "**Base package**", "section": "Required inputs" },
+        { "type": "contains", "value": "**Rule sources**", "section": "Required inputs" },
+        { "type": "contains", "value": "**Rules requested**", "section": "Required inputs" }
+      ]
+    },
+    {
+      "id": "R4",
+      "rule": "No file is written while a required input is missing; missing inputs are asked in one batched question",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "single batched question", "section": "Required inputs" },
+        { "type": "contains", "value": "Do not write any file while a required input is missing", "section": "Required inputs" }
+      ]
+    },
+    {
+      "id": "R5",
+      "rule": "ArchUnit is declared as archunit-junit5 with test scope in the target module's POM",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Dependency setup" },
+        { "type": "contains", "value": "com.tngtech.archunit:archunit-junit5", "section": "Dependency setup" },
+        { "type": "contains", "value": "<scope>test</scope>", "section": "Dependency setup" },
+        { "type": "contains", "value": "only in the target module's POM", "section": "Dependency setup" }
+      ]
+    },
+    {
+      "id": "R6",
+      "rule": "The ArchUnit version is managed in the parent POM dependencyManagement",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "parent POM `dependencyManagement`", "section": "Dependency setup" },
+        { "type": "contains", "value": "<dependencyManagement>", "section": "Dependency setup" }
+      ]
+    },
+    {
+      "id": "R7",
+      "rule": "ArchUnit is never added to any module other than the target module, even in test scope",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Never add ArchUnit to any other module, even in `test` scope", "section": "Dependency setup" },
+        { "type": "contains", "value": "Adding ArchUnit to any module other than the target module", "section": "Scope" }
+      ]
+    },
+    {
+      "id": "R8",
+      "rule": "Tests live in <target-module>/src/test/java/<base-package-path>/architecture/",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Test location" },
+        { "type": "contains", "value": "`<target-module>/src/test/java/<base-package-path>/architecture/`", "section": "Test location" }
+      ]
+    },
+    {
+      "id": "R9",
+      "rule": "There is exactly one test class per rule family, with the six named families",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Rule families" },
+        { "type": "contains", "value": "one test class per rule family", "section": "Rule families" },
+        { "type": "contains", "value": "`HexagonalArchitectureTest`", "section": "Rule families" },
+        { "type": "contains", "value": "`DomainIsolationTest`", "section": "Rule families" },
+        { "type": "contains", "value": "`AdapterDependenciesTest`", "section": "Rule families" },
+        { "type": "contains", "value": "`PortsTest`", "section": "Rule families" },
+        { "type": "contains", "value": "`CyclesTest`", "section": "Rule families" },
+        { "type": "contains", "value": "`CodingConventionsTest`", "section": "Rule families" }
+      ]
+    },
+    {
+      "id": "R10",
+      "rule": "Rule families state their constraints: onion/layered architecture, domain isolation, adapter dependencies, ports as interfaces, cycles, coding conventions",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "onionArchitecture()", "section": "Rule families" },
+        { "type": "contains", "value": "Spring, Jakarta Persistence / Hibernate, Jackson, Kafka, JDBC", "section": "Rule families" },
+        { "type": "contains", "value": "outbound adapters implement outbound ports", "section": "Rule families" },
+        { "type": "contains", "value": "inbound adapters call inbound ports only", "section": "Rule families" },
+        { "type": "contains", "value": "ports are interfaces", "section": "Rule families" },
+        { "type": "contains", "value": "beFreeOfCycles()", "section": "Rule families" },
+        { "type": "contains", "value": "no field injection", "section": "Rule families" }
+      ]
+    },
+    {
+      "id": "R11",
+      "rule": "Every rule is an @ArchTest field in an @AnalyzeClasses class",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Test style" },
+        { "type": "contains", "value": "@ArchTest", "section": "Test style" },
+        { "type": "contains", "value": "@AnalyzeClasses(packages = \"<base-package>\"", "section": "Test style" }
+      ]
+    },
+    {
+      "id": "R12",
+      "rule": "Test classes are excluded from analysis with ImportOption.DoNotIncludeTests",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "importOptions = ImportOption.DoNotIncludeTests.class", "section": "Test style" },
+        { "type": "contains", "value": "excludes test classes from analysis", "section": "Test style" }
+      ]
+    },
+    {
+      "id": "R13",
+      "rule": "One rule enforces one architectural constraint and carries an explicit .because(...) reason",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "One rule = one architectural constraint", "section": "Test style" },
+        { "type": "contains", "value": ".because(", "section": "Test style" }
+      ]
+    },
+    {
+      "id": "R14",
+      "rule": "Every package, port, and layer comes from the rule sources; nothing is invented and gaps are asked",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "never invent them", "section": "Scope" },
+        { "type": "contains", "value": "If a source is missing or ambiguous, ask", "section": "Scope" },
+        { "type": "contains", "value": "resolve the real package names", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R15",
+      "rule": "failOnEmptyShould is kept; a rule is never made to pass on an empty package",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "failOnEmptyShould", "section": "Test style" },
+        { "type": "contains", "value": "never made to pass on an empty package", "section": "Test style" }
+      ]
+    },
+    {
+      "id": "R16",
+      "rule": "Temporary exceptions are explicit and narrow (ignoreDependency or FreezingArchRule) with a comment referencing the iteration or ticket",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Temporary exceptions" },
+        { "type": "contains", "value": "ignoreDependency(...)", "section": "Temporary exceptions" },
+        { "type": "contains", "value": "FreezingArchRule", "section": "Temporary exceptions" },
+        { "type": "contains", "value": "explicit, narrow", "section": "Temporary exceptions" },
+        { "type": "contains", "value": "referencing the iteration or ticket ID", "section": "Temporary exceptions" }
+      ]
+    },
+    {
+      "id": "R17",
+      "rule": "Every exception is reported to the caller so it can be tracked and removed",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "report every exception to the caller", "section": "Temporary exceptions" }
+      ]
+    },
+    {
+      "id": "R18",
+      "rule": "No ArchUnit test is disabled or emptied and no rule is weakened to pass without explicit user approval",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "`@Disabled`", "section": "Scope" },
+        { "type": "contains", "value": "weakening a rule to make it pass, without explicit user approval", "section": "Scope" }
+      ]
+    },
+    {
+      "id": "R19",
+      "rule": "Rules are written test-first, before the code they constrain is migrated, and RED or GREEN is reported honestly",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "**before** the code it constrains is migrated", "section": "Running the tests" },
+        { "type": "contains", "value": "report its RED or GREEN result honestly", "section": "Running the tests" }
+      ]
+    },
+    {
+      "id": "R20",
+      "rule": "The ArchUnit tests are run without Docker and results are reported as actually observed",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Running the tests" },
+        { "type": "contains", "value": "mvn test -Dtest='*ArchitectureTest,*IsolationTest,*DependenciesTest,PortsTest,CyclesTest,CodingConventionsTest'", "section": "Running the tests" },
+        { "type": "contains", "value": "without Docker", "section": "Running the tests" },
+        { "type": "contains", "value": "actually observed", "section": "Running the tests" }
+      ]
+    },
+    {
+      "id": "R21",
+      "rule": "The report contains the rule catalogue (rule, target, reason, source document, result, exceptions), the files changed, and the results",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Report" },
+        { "type": "contains", "value": "rule, target, reason, source document, result, exceptions", "section": "Report" },
+        { "type": "contains", "value": "files changed", "section": "Report" },
+        { "type": "contains", "value": "test results", "section": "Report" }
+      ]
+    },
+    {
+      "id": "R22",
+      "rule": "Deciding the architecture, migrating production code, and deciding when tests are created stay out of scope",
+      "check": "static",
+      "assertions": [
+        { "type": "contains", "value": "Deciding the architecture, layers, packages, or ports", "section": "Scope" },
+        { "type": "contains", "value": "Migrating or refactoring production code to satisfy a rule", "section": "Scope" },
+        { "type": "contains", "value": "the calling agent's job", "section": "Scope" },
+        { "type": "pathExists", "value": "README.md" }
+      ]
+    },
+    {
+      "id": "R23",
+      "rule": "A request with missing inputs is answered with one batched question and no file is written",
+      "check": "agent-evaluation"
+    },
+    {
+      "id": "R24",
+      "rule": "A request to disable a failing ArchUnit test or relax it onto an empty package is declined without user approval",
+      "check": "agent-evaluation"
+    }
+  ]
+}

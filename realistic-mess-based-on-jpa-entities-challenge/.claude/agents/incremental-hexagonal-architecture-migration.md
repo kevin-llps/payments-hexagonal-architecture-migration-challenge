@@ -87,12 +87,21 @@ project-parent/
 - May depend on domain, client-adapters, and infrastructure-adapters.
 - Domain must not depend on bootstrap.
 - Client-adapters and infrastructure-adapters must not depend on bootstrap.
+- Hosts the ArchUnit architecture tests (see **Architecture Tests (ArchUnit)**).
 
 ### Dependency rules
 - Domain must not depend on infrastructure, client adapters, or bootstrap.
 - Bootstrap depends on modules it assembles.
 - Adapters depend inward on abstractions.
 - No circular Maven dependencies.
+
+## Architecture Tests (ArchUnit)
+
+ArchUnit tests enforce the hexagonal architecture rules at build time. They live **only** in the `bootstrap` module, the composition root whose test classpath sees every production class.
+
+- Write and extend them with the `archunit-test` skill, which defines the dependency setup, test location, rule families, rule style, exception mechanics, and how to run them. Inputs to give it: target module `bootstrap`, base package `fr.kevin.llps.payments`, rule sources `docs/migration-{date}/isolated-domain-design.md`, `docs/migration-{date}/technical-layer-design.md`, and `docs/java-coding-conventions.md`, and the rules to add or tighten.
+- This agent owns **when** they are written (Phase 1 proposal, Phase 2 creation, Phase 4 test-first extension, Phase 5 verification) and their tracking: keep the rule catalogue (rule, target, reason, source document, phase or iteration that introduced it, current result) in `docs/migration-{date}/hexagonal-migration-plan.md`.
+- Every temporary exception returned by the skill is recorded in `docs/migration-{date}/hexagonal-migration-plan.md` with its iteration ID and must be removed by the end of the migration.
 
 ## Mandatory Workflow and Approval Gates
 
@@ -111,7 +120,7 @@ Ask the user about any build or environment constraints not apparent from the re
 
 **Step 2: Propose the target module structure**
 
-Present: proposed modules, component placement, domain/port locations, dependency graph, POM responsibilities, risks, and a Mermaid module dependency diagram.
+Present: proposed modules, component placement, domain/port locations, dependency graph, POM responsibilities, the initial ArchUnit rule catalogue, risks, and a Mermaid module dependency diagram.
 
 **Step 3: Request approval**
 
@@ -125,8 +134,9 @@ After approval:
 - Create/update parent and child POMs.
 - Configure module aggregation and dependencies.
 - Ensure domain POM has no production framework dependencies.
+- Add the ArchUnit dependency and create the ArchUnit test classes in `bootstrap` with the rules applicable to the new structure, using the `archunit-test` skill; they must be GREEN.
 - Run Maven validation commands.
-- Verify: aggregation works, dependencies resolve, no circular dependencies, domain has no framework dependencies.
+- Verify: aggregation works, dependencies resolve, no circular dependencies, domain has no framework dependencies, ArchUnit tests GREEN.
 
 Ask the user to confirm the build environment if Maven validation fails.
 
@@ -136,7 +146,7 @@ Ask the user to confirm the build environment if Maven validation fails.
 
 **Step 2: Design successive limited iterations.** Prefer one Bounded Context per iteration.
 
-Each iteration specifies: ID, name, Bounded Context, business rules, affected components, target classes/ports, adapters, tests, risks, deliverables, completion criteria.
+Each iteration specifies: ID, name, Bounded Context, business rules, affected components, target classes/ports, adapters, tests, ArchUnit rules to add or tighten, risks, deliverables, completion criteria.
 
 **Step 3: Define sequencing** based on dependencies and risk.
 
@@ -155,17 +165,17 @@ For each iteration:
 **Step 1: Start the iteration.** Read the approved definition. Confirm scope, rules, ports, tests, dependencies.
 
 **Step 2: Follow Red-Green-Refactor.**
-- **Red:** Write a failing test for the relevant behavior.
+- **Red:** Write a failing test for the relevant behavior, and add or tighten the ArchUnit rules covering the components migrated in this iteration **before** migrating them.
 - **Green:** Implement minimum changes to pass.
 - **Refactor:** Improve while keeping tests green.
 
 **Step 3: Migrate the selected components** within the current iteration scope only.
 
-**Step 4: Verify the iteration.** Run new and existing tests, compilation checks, regression tests.
+**Step 4: Verify the iteration.** Run new and existing tests, compilation checks, regression tests, and all ArchUnit tests in `bootstrap`; every ArchUnit test must be GREEN, with any temporary exception recorded.
 
-**Step 5: Update tracking documents** in `docs/migration-{date}/hexagonal-migration-plan.md`.
+**Step 5: Update tracking documents** in `docs/migration-{date}/hexagonal-migration-plan.md`, including the ArchUnit rules added in the iteration, their results, and any temporary exception.
 
-**Step 6: Mandatory final compilation gate.** Run Maven build. Record exact command and result.
+**Step 6: Mandatory final compilation gate.** All ArchUnit tests must be GREEN before this gate. Run Maven build. Record exact command and result.
 
 **Step 7: Request validation.**
 
@@ -186,6 +196,7 @@ After all iterations are approved:
 - Verify Maven reactor builds.
 - Check domain has no framework dependencies.
 - Check no circular module dependencies.
+- Verify all ArchUnit tests in `bootstrap` are GREEN with no remaining temporary exception.
 - Verify adapters implement approved ports.
 - Verify business rule traceability to tests.
 - Verify technical features remain available.
@@ -197,7 +208,7 @@ Ask the user: **Do you want me to address any remaining issues?**
 
 Use `docs/migration-{date}/hexagonal-migration-plan.md` as source of truth for iteration planning and validation.
 
-Track per iteration: ID, Bounded Context, business rules, scope, tests, status, verification, issues, user validation, final compilation, commit.
+Track per iteration: ID, Bounded Context, business rules, scope, tests, ArchUnit rules and exceptions, status, verification, issues, user validation, final compilation, commit.
 
 Statuses: `NOT_STARTED`, `IN_PROGRESS`, `READY_FOR_VALIDATION`, `CHANGES_REQUESTED`, `APPROVED`, `BLOCKED`.
 
@@ -227,6 +238,8 @@ Statuses: `NOT_STARTED`, `IN_PROGRESS`, `READY_FOR_VALIDATION`, `CHANGES_REQUEST
 - **AC-17:** Failures, blockers, and gaps documented honestly.
 - **AC-18:** Final compilation gate passed per iteration.
 - **AC-19:** Commits only after user approval.
+- **AC-20:** ArchUnit tests exist only in `bootstrap`, are created in Phase 2, extended test-first in every iteration, and GREEN before each final compilation gate and at final verification.
+- **AC-21:** Every temporary ArchUnit exception is tracked in `docs/migration-{date}/hexagonal-migration-plan.md` and removed by the end of the migration.
 
 ## Operating Rules
 
@@ -238,6 +251,7 @@ Statuses: `NOT_STARTED`, `IN_PROGRESS`, `READY_FOR_VALIDATION`, `CHANGES_REQUEST
 - Follow TDD and preserve regression coverage.
 - Never add framework dependencies to the domain module.
 - Use bootstrap as the composition root.
+- Never add ArchUnit to any module other than `bootstrap`; never disable or empty an ArchUnit test.
 - Never place JPA entities inside the domain.
 - Keep the migration plan and validation history up to date.
 - Do not begin subsequent iterations while current awaits validation.
