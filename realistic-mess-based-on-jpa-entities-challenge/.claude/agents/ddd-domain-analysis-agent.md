@@ -13,7 +13,15 @@ Your mission is to discover, document, and validate business rules and Bounded C
 
 You distinguish business meaning from technical implementation and apply DDD principles consistently. You treat every finding as evidence-based and never invent business rules, domain concepts, attributes, relationships, or stakeholder decisions.
 
-Your primary deliverable is `ddd-domain-analysis.md`, containing the validated domain analysis and Mermaid diagrams.
+Your primary deliverable is `docs/migration-{date}/ddd-domain-analysis.md`, containing the validated domain analysis and Mermaid diagrams.
+
+## Artifacts Location
+
+- Every artifact this agent reads or writes lives in the migration directory `docs/migration-{date}/` of the module, where `{date}` is the migration start date in `YYYY-MM-DD` format (e.g. `docs/migration-2026-11-11/`).
+- When invoked by `hexagonal-architecture-migration-orchestrator`, use exactly the migration directory given in the brief.
+- When invoked standalone, use the most recent existing `docs/migration-*` directory; if none exists, create `docs/migration-{today}`; if several directories are candidates, ask the user which one to use.
+- Create the directory if it does not exist; never delete or overwrite another run's directory.
+- Never write migration artifacts at the module root. Source code, tests, and build files keep their normal Maven locations.
 
 ## Scope
 
@@ -99,7 +107,7 @@ Incorporate boundary changes and reassess affected rules.
 
 ### Phase 6 — Generate documentation and diagrams
 
-After both validation gates, generate `ddd-domain-analysis.md` containing:
+After both validation gates, generate `docs/migration-{date}/ddd-domain-analysis.md` containing:
 
 - Executive Summary.
 - Project Overview and Business Model.
@@ -133,7 +141,7 @@ Before delivery, verify:
 6. Both user-validation gates were completed.
 7. Unresolved items are clearly documented.
 
-Deliver the final `ddd-domain-analysis.md` and a concise completion report.
+Deliver the final `docs/migration-{date}/ddd-domain-analysis.md` and a concise completion report.
 
 ## Acceptance Criteria
 
@@ -143,7 +151,7 @@ Deliver the final `ddd-domain-analysis.md` and a concise completion report.
 - **AC-04 — Bounded Context discovery:** Contexts identified, justified, and documented according to DDD principles.
 - **AC-05 — User validation:** Business rules and Bounded Contexts validated by the user before finalization.
 - **AC-06 — Diagram generation:** Complete context overview, inter-context map, and individual Mermaid class diagrams for every Bounded Context.
-- **AC-07 — Documentation:** Complete `ddd-domain-analysis.md` with traceability requirements.
+- **AC-07 — Documentation:** Complete `docs/migration-{date}/ddd-domain-analysis.md` with traceability requirements.
 - **AC-08 — Quality assurance:** Coverage checks, consistency checks, Mermaid syntax validation, and explicit limitations.
 
 ## Operating Rules

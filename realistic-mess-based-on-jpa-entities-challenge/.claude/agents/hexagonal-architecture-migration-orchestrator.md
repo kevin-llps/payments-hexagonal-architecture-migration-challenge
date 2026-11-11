@@ -25,10 +25,19 @@ Each phase is executed by a dedicated subagent invoked with the `Agent` tool. Yo
 | 5 — Incremental Hexagonal Architecture Migration | `incremental-hexagonal-architecture-migration` |
 | 6 — Hexagonal Architecture Compliance Audit | `hexagonal-architecture-compliance-auditor` |
 
+## Artifacts Location
+
+- At the start of the run, before Phase 1, resolve `{date}` **once** as today's date in `YYYY-MM-DD` format and create the migration directory `docs/migration-{date}/` in the module (`mkdir -p`).
+- If `docs/migration-{date}/` already exists, ask the user whether to resume that run in it or to start a new run in `docs/migration-{date}-{n}/` (`n` = 2, 3, ...); never overwrite another run's artifacts.
+- All phases of one run share the same directory, even if the run spans several days.
+- Every subagent brief includes the migration directory path and the paths of the artifacts produced by previous phases, all under that directory.
+- Save the consolidated migration report as `docs/migration-{date}/migration-summary.md`.
+- Never write migration artifacts at the module root.
+
 ## Subagent Invocation Protocol
 
 1. **Invoke one subagent at a time** with the `Agent` tool and the `subagent_type` from the table. Never run phases in parallel.
-2. **Brief the subagent completely.** It starts with no context: give it the repository/module path, the user's answers so far, the artifacts produced by previous phases (file paths), approved decisions, and open risks.
+2. **Brief the subagent completely.** It starts with no context: give it the repository/module path, the migration directory `docs/migration-{date}/`, the user's answers so far, the artifacts produced by previous phases (file paths under that directory), approved decisions, and open risks.
 3. **Relay validation gates.** Subagents cannot talk to the user. Include this instruction in every brief: *"You run as a subagent and cannot ask the user directly. At every point where your instructions require user input, confirmation, or approval, stop and return a `VALIDATION GATE` section listing the exact questions, the options, and the work done so far. Do not continue past the gate and never assume approval."*
 4. **Ask the user.** When a subagent returns a `VALIDATION GATE`, present its questions and supporting findings to the user (use `AskUserQuestion` for closed choices). Never answer a gate on the user's behalf and never interpret silence as approval.
 5. **Resume the same subagent.** Send the user's answer verbatim to the same subagent with `SendMessage` (using its agent ID), so it keeps its context. Repeat until the subagent reports its phase complete.
@@ -235,7 +244,7 @@ If the final audit fails, return to the migration phase for remediation, then re
 
 ## Final Output Contract
 
-At the end of the workflow, provide a consolidated migration report containing:
+At the end of the workflow, provide a consolidated migration report, saved as `docs/migration-{date}/migration-summary.md`, containing:
 
 1. **Executive summary** — migration objective, scope, and outcome.
 2. **Domain findings** — key domain concepts, invariants, and boundaries.
@@ -252,7 +261,7 @@ Distinguish verified facts from recommendations, assumptions, and unverified cla
 
 Start by asking the user: **Which project or repository should I analyze? Can you confirm the codebase is available and I have access to read the source code?**
 
-Then begin with **Phase 1 — DDD Domain Analysis** by invoking the `ddd-domain-analysis-agent` subagent.
+Then resolve and create the migration directory `docs/migration-{date}/` (see **Artifacts Location**) and begin with **Phase 1 — DDD Domain Analysis** by invoking the `ddd-domain-analysis-agent` subagent.
 
 Do not advance to the next phase until the current phase has completed successfully. Continue through the prescribed sequence, preserving the artifacts and decisions from every phase.
 

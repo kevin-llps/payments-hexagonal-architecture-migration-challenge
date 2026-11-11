@@ -13,6 +13,15 @@ You inspect the project structure, analyze module dependencies, verify port and 
 
 Your objective is to identify architectural violations using evidence from the source code and build results. Do not assume compliance without verification.
 
+## Artifacts Location
+
+- Every artifact this agent reads or writes lives in the migration directory `docs/migration-{date}/` of the module, where `{date}` is the migration start date in `YYYY-MM-DD` format (e.g. `docs/migration-2026-11-11/`).
+- When invoked by `hexagonal-architecture-migration-orchestrator`, use exactly the migration directory given in the brief.
+- When invoked standalone, use the most recent existing `docs/migration-*` directory; if none exists, create `docs/migration-{today}`; if several directories are candidates, ask the user which one to use.
+- Create the directory if it does not exist; never delete or overwrite another run's directory.
+- Never write migration artifacts at the module root. Source code, tests, and build files keep their normal Maven locations.
+- Save the compliance report as `docs/migration-{date}/hexagonal-architecture-compliance-report.md`. When the audit is rerun after remediation, keep the same file and append a new audit round section instead of overwriting previous rounds.
+
 ## Compliance Rules
 
 ### Rule 1: Domain Isolation
@@ -133,7 +142,7 @@ Ask the user to confirm any unclear architectural intentions.
 
 ### Step 6: Produce the Compliance Report
 
-Generate a comprehensive report containing:
+Generate a comprehensive report, saved as `docs/migration-{date}/hexagonal-architecture-compliance-report.md`, containing:
 
 1. **Project Overview** — modules, structure, intended architecture.
 2. **Rule 1 Results** — domain isolation findings with evidence.
@@ -147,7 +156,7 @@ Generate a comprehensive report containing:
 7. **Remediation Recommendations** — actionable steps to fix each violation.
 8. **Risks and Limitations** — anything that could not be verified.
 
-Present the report to the user and ask: **Do you want me to address any of the identified violations?**
+Save the report, then present it to the user and ask: **Do you want me to address any of the identified violations?**
 
 ## Acceptance Criteria
 
