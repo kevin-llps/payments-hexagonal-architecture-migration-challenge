@@ -8,6 +8,15 @@ Three deliberately messy legacy payment applications, built as the **starting po
 | `maximum-spaghetti-challenge/` | Strawman spaghetti: one ~1400-line god service, static mutable caches, string-concatenated SQL everywhere, one Kafka listener class for all topics | 8081 |
 | `realistic-mess-based-on-jpa-entities-challenge/` | Same realistic mess, but backed by JPA entities: hand-written `EntityManager` repositories with dynamically built JPQL, entity↔DTO mapping duplication, `em.merge` upserts in listeners, controller still bypasses the service layer | 8082 |
 
+## Branches
+
+| Branch | Purpose |
+|---|---|
+| [`main`](https://github.com/kevin-llps/payments-hexagonal-architecture-migration-challenge/tree/main) | The untouched legacy codebases — the starting point of the challenge. |
+| [`harness`](https://github.com/kevin-llps/payments-hexagonal-architecture-migration-challenge/tree/harness) | The AI harness on top of `main`, no migration applied yet: `AGENTS.md` files (repo rules and per-module traps), Java coding conventions, and the `.claude/` config with the hexagonal-migration agents (orchestrator, domain/technical design, …) and skills (SOLID design, testing, ArchUnit tests, skill-creator / skill-testing / skill-updater tooling). This is the reference branch where the harness keeps evolving. |
+| [`demo-hexagonal-architecture-migration`](https://github.com/kevin-llps/payments-hexagonal-architecture-migration-challenge/tree/demo-hexagonal-architecture-migration) | Codebase used for the live demo at the **AI For Devs (Exalt IT)** meetup ([event page](https://luma.com/0upab1zy)), talk *"Migration vers l'Architecture Hexagonale : les Agents IA face au code spaghetti, mythe ou réalité ?"*. It is a snapshot of the `harness` branch, slightly simplified for the demo (skill dependency inversion removed), ready to run the migration live. |
+| [`hexagonal-architecture-migration-1`](https://github.com/kevin-llps/payments-hexagonal-architecture-migration-challenge/tree/hexagonal-architecture-migration-1) | Result of a full migration run of `realistic-mess-based-on-jpa-entities-challenge/` driven by the agents: domain model and ports design docs, module split into `domain` / `adapters` / `bootstrap`, a shared kernel, each bounded context (instant, inbound, outbound, compliance hold, recall) migrated to hexagonal architecture, tests reorganized by context, and a final hexagonal compliance audit report. |
+
 ## Domain
 
 Five payment types, each with **its own data model, table, search API and Kafka topic**:
