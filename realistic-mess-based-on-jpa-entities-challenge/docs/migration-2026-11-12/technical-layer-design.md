@@ -57,7 +57,7 @@ Dependencies point inward:
 - **Driving adapters** (REST controllers and the REST exception handler; Kafka listeners) call **application input ports** (`Search<X>s`, `Get<X>Details`, `Record<X>`).
 - **Plain-Java use-case services** implement those ports. They orchestrate the **isolated domain**: aggregates, criteria, fee policies, `ageInDaysOn` and the Shared Kernel.
 - The use cases reach persistence through **domain-owned repository ports** (`Load<X>s`, `Save<X>`), which the **JPA persistence adapter** implements.
-- The domain-model packages (`domain.<ctx>`, `domain.sharedkernel`) and the use-case packages (`domain.<ctx>.usecase[.port.in]`) live together in the `domain` Maven module; the REST and Kafka adapters in `client-adapters`; the JPA adapter in `infrastructure-adapters`.
+- Per context, the `domain` Maven module holds the aggregate and the use-case services (`*Service`) in `domain.<ctx>`, commands in `domain.<ctx>.command`, search queries and criteria in `domain.<ctx>.query`, input-port interfaces in `domain.<ctx>.port.in` and output-port interfaces in `domain.<ctx>.port.out`, next to `domain.sharedkernel`; the REST and Kafka adapters in `client-adapters`; the JPA adapter in `infrastructure-adapters`.
 - **`bootstrap`** is the composition root. It holds the Spring Boot application, bean wiring, `Clock`, `application.yml`, the integration tests and the ArchUnit tests.
 
 ### 3.1 Technical architecture diagram
@@ -78,7 +78,7 @@ flowchart LR
     subgraph KAFM[client-adapters: Kafka]
         KL["Kafka X Listener x5 Transactional onMessage"]
     end
-    subgraph APPM[domain module: use-case packages domain.ctx.usecase]
+    subgraph APPM[domain module: use-case services and port.in]
         PIN[["Search X s / Get X Details / Record X"]]
         SVC["Use case services x15"]
     end
@@ -136,7 +136,7 @@ flowchart LR
 
 | Module dir = artifactId | Compile dependencies | Contents |
 |---|---|---|
-| `domain` | none (JDK only) | **domain packages** `fr.kevin.llps.payments.domain.{sharedkernel,instant,suspended,inbound,outbound,recall}` (model, shared kernel, repository/output ports `Load<X>s`, `Save<X>`); **use-case packages** `fr.kevin.llps.payments.domain.<ctx>.usecase` (use-case services) and `fr.kevin.llps.payments.domain.<ctx>.usecase.port.in` (input ports, queries, commands, `InboundPaymentView`, `OutboundPaymentWithFee`), confirmed at the Phase 5 IT-00 gate. Plain Java, no annotations; services wired as `@Bean`s in `bootstrap`. |
+| `domain` | none (JDK only) | **domain packages** `fr.kevin.llps.payments.domain.{sharedkernel,instant,suspended,inbound,outbound,recall}` (shared kernel and contexts); per context `fr.kevin.llps.payments.domain.<ctx>` (aggregate and use-case services `*Service`), `...<ctx>.command` (`*Command`), `...<ctx>.query` (`*Query`, `*Criteria`), `...<ctx>.port.in` (input-port interfaces) and `...<ctx>.port.out` (output-port interfaces `Load<X>s`, `Save<X>`); layout set at the Phase 5 IT-02 gate (no `usecase` package). Use-case views (`InboundPaymentView`, `OutboundPaymentWithFee`) are placed when their contexts migrate. Plain Java, no annotations; services wired as `@Bean`s in `bootstrap`. |
 | `client-adapters` | `domain`, `spring-boot-starter-web`, `spring-kafka`, `spring-tx` | driving side: `fr.kevin.llps.payments.adapter.in.rest` (`RestDomainExceptionHandler`; in the final iteration also the legacy handler, renamed `RestGlobalExceptionHandler`, body unchanged); `fr.kevin.llps.payments.adapter.in.rest.<ctx>` (controllers, response records, response mappers, outbound details formatter); `fr.kevin.llps.payments.adapter.in.kafka.<ctx>` (listeners) |
 | `infrastructure-adapters` | `domain`, `spring-boot-starter-data-jpa`; `postgresql` runtime | driven side: `fr.kevin.llps.payments.adapter.out.persistence.<ctx>` (adapters, mappers); entities **unchanged in package `fr.kevin.llps.payments.entity`**; `src/main/resources/schema.sql` and `data.sql` (**content unchanged**, Q3) |
 | `bootstrap` | all modules above | `fr.kevin.llps.payments.PaymentsApplication`; `fr.kevin.llps.payments.bootstrap.config` (`ClockConfiguration`, one `<X>UseCaseConfiguration` per context); `application.yml`; tests `integration/*` and `architecture/*` (ArchUnit, test scope only) |
@@ -169,11 +169,11 @@ With four modules, Maven **no longer** separates the following; ArchUnit enforce
 
 | Separation | Previously enforced by | Now enforced by |
 |---|---|---|
-| domain-model packages must not depend on use-case packages (`..domain.*.usecase..`) | `domain` / `application` modules | AR-04 |
+| domain model must not depend on use-case services (`*Service`) or ports | `domain` / `application` modules | AR-04 (name + package based), AR-06 |
 | use-case packages framework-free | `application` module POM | `domain` module POM (no dependencies) + AR-01 + AR-05 |
 | REST adapter must not depend on Kafka adapter and vice versa | `adapter-rest` / `adapter-kafka` modules | AR-10 |
 | persistence adapter must not depend on use-case packages | `adapter-persistence-jpa` → `domain` only | AR-09 |
-| driving adapters use the use cases only through `..usecase.port.in..` | (ArchUnit already) | AR-08 |
+| driving adapters use the use cases only through `..port.in..` | (ArchUnit already) | AR-08 |
 
 ArchUnit (§9) also covers the other package-level rules.
 
@@ -299,7 +299,7 @@ The diagram has 25 port nodes and 15 adapter classes, matching §6.1, §6.2 and 
 
 ### 6.4 Application use-case inventory (15 services)
 
-All services are plain Java `final` classes in `domain.<ctx>.usecase` (input ports, queries, commands and views in `domain.<ctx>.usecase.port.in`). They use constructor injection with `private final` fields, carry no Spring annotations, and are instantiated as `@Bean`s in `bootstrap.config.<X>UseCaseConfiguration`.
+All services are plain Java `final` classes named `*Service` in the context package `domain.<ctx>` (commands in `domain.<ctx>.command`, queries and criteria in `domain.<ctx>.query`, input ports in `domain.<ctx>.port.in`, output ports in `domain.<ctx>.port.out`). They use constructor injection with `private final` fields, carry no Spring annotations, and are instantiated as `@Bean`s in `bootstrap.config.<X>UseCaseConfiguration`.
 
 | Service | Implements | Collaborators | Behaviour |
 |---|---|---|---|
@@ -422,13 +422,13 @@ DR-1..DR-5 from Phase 3 still hold. In addition:
 
 | ID | Rule |
 |---|---|
-| TL-DR-1 | Driving adapters (`..adapter.in..`) depend on the use cases only through `..domain.*.usecase.port.in..`, never on `*Service` classes in `..domain.*.usecase`; they may use domain-model types returned by the ports. |
-| TL-DR-2 | Driven adapters (`..adapter.out..`) depend only on domain-model ports and types, never on `..domain.*.usecase..`. |
-| TL-DR-3 | `..domain.*.usecase..` depends only on domain-model packages and the JDK: no Spring, `jakarta.*`, `java.sql`, Jackson, Kafka or Hibernate. |
+| TL-DR-1 | Driving adapters (`..adapter.in..`) use the use cases only through `..port.in..`; they may use aggregates, `command`, `query` and shared-kernel types; they never depend on `*Service` classes or `..port.out..`. |
+| TL-DR-2 | Driven adapters (`..adapter.out..`) depend on `..port.out..` and on model types (aggregates, `command`, `query`, shared kernel); never on `*Service` or `..port.in..`. |
+| TL-DR-3 | Use-case services and both port packages (and, through AR-01/AR-01b, the whole domain module) depend only on the domain module and the JDK: no Spring, `jakarta.*`, `java.sql`, Jackson, Kafka or Hibernate. |
 | TL-DR-4 | Adapters never depend on each other (`adapter.in.rest`, `adapter.in.kafka`, `adapter.out.persistence`). |
 | TL-DR-5 | `fr.kevin.llps.payments.entity..` is accessed only by `..adapter.out.persistence..` among production classes. |
 | TL-DR-6 | `EntityManager` / `@PersistenceContext` appear only in `..adapter.out.persistence..`. |
-| TL-DR-7 | `domain.<ctx>.usecase[.port.in]` depends only on its own context (`domain.<ctx>`) and `domain.sharedkernel`; the domain model (`domain.<ctx>`, `domain.sharedkernel`) never depends on `..usecase..` (extends DR-2, DR-6). |
+| TL-DR-7 | A context (`domain.<ctx>` with `command`, `query`, `port.in`, `port.out`) depends only on itself and `domain.sharedkernel`; the domain model never depends on `*Service` or on the ports (extends DR-2, DR-6). |
 | TL-DR-8 | Only `bootstrap` depends on every module; nothing depends on `bootstrap`. |
 | TL-DR-9 | `java.sql` is used only in `..adapter.out.persistence..` and `..adapter.in.kafka..` (legacy grammars) among new production packages; never in `..adapter.in.rest..` (Q5). |
 | TL-DR-10 | `@Transactional` appears only on Kafka listener methods (no new transaction boundaries). |
@@ -439,20 +439,20 @@ The tests go in `bootstrap/src/test/java/fr/kevin/llps/payments/architecture/`, 
 
 | ID | Rule | Family | Source |
 |---|---|---|---|
-| AR-01 | `..domain..` (model and use-case packages) does not depend on `org.springframework..`, `jakarta..`, `org.hibernate..`, `com.fasterxml..`, `org.apache.kafka..`, `java.sql..` | DomainIsolationTest | DR-1 |
-| AR-02 | `domain.(*)..` context slices (each including its `usecase` sub-packages) do not depend on each other; only `sharedkernel` is shared | DomainIsolationTest | DR-2 |
+| AR-01 | `..domain..` (model, use-case services and ports) does not depend on `org.springframework..`, `jakarta..`, `org.hibernate..`, `com.fasterxml..`, `org.apache.kafka..`, `java.sql..`; AR-01b: it only depends on `java.lang..`, `java.util..`, `java.math..`, `java.time..`, `fr.kevin.llps.payments.domain..` | DomainIsolationTest | DR-1 |
+| AR-02 | `domain.(*)..` context slices (each including its `command`, `query`, `port.in`, `port.out` sub-packages) do not depend on each other; only `sharedkernel` is shared | DomainIsolationTest | DR-2 |
 | AR-03 | `domain.sharedkernel` depends on no other domain package | DomainIsolationTest | DR-3 |
-| AR-04 | domain-model packages (`..domain..` excluding `..domain.*.usecase..`) do not depend on `..usecase..`; the whole `..domain..` does not depend on `..adapter..`, `..bootstrap..`, `fr.kevin.llps.payments.entity..` | DomainIsolationTest | DR-4, DR-6 |
-| AR-05 | `..domain.*.usecase..` does not depend on Spring, `jakarta..`, `java.sql..`, Jackson, Kafka, `..adapter..`, `..entity..` | HexagonalArchitectureTest | TL-DR-3 |
-| AR-06 | `onionArchitecture()`: domainModels = domain-model packages (`fr.kevin.llps.payments.domain.sharedkernel..` and the five `fr.kevin.llps.payments.domain.<ctx>` packages, without `usecase`), applicationServices `..domain.*.usecase..`, adapters `rest` / `kafka` / `persistence` | HexagonalArchitectureTest | §3 |
-| AR-07 | `domain.<ctx>.usecase..` depends only on `domain.<ctx>` (own model and ports), its own `usecase` packages, `domain.sharedkernel..` and the JDK | HexagonalArchitectureTest | TL-DR-7 |
-| AR-08 | `..adapter.in..` accesses `..domain.*.usecase..` only through `..domain.*.usecase.port.in..` | AdapterDependenciesTest | TL-DR-1 |
-| AR-09 | `..adapter.out..` does not depend on `..domain.*.usecase..` | AdapterDependenciesTest | TL-DR-2 |
+| AR-04 | the domain model (aggregates, `command`, `query`, shared kernel) does not depend on `*Service` or `..port..`; the whole `..domain..` does not depend on `..adapter..`, `..bootstrap..`, `fr.kevin.llps.payments.entity..` | DomainIsolationTest | DR-4, DR-6 |
+| AR-05 | use-case services, `port.in` and `port.out` do not depend on Spring, `jakarta..`, `java.sql..`, Jackson, Kafka, Hibernate, `..adapter..`, `..entity..` (commands and queries are covered by AR-01/AR-01b) | HexagonalArchitectureTest | TL-DR-3 |
+| AR-06 | `onionArchitecture()` with class predicates (`architecture/DomainLayout`): domainModels = aggregates + `command` + `query` + shared kernel; domainServices = `..domain.*.port.out..`; applicationServices = `*Service` + `..port.in..`; adapters `rest` / `kafka` / `persistence` / `composition root` (`fr.kevin.llps.payments.bootstrap..`). No optional layers. | HexagonalArchitectureTest | §3 |
+| AR-07 | a context's `*Service` classes and ports depend only on that context, `domain.sharedkernel..` and the JDK (covered by AR-02 slices since the IT-02 layout) | HexagonalArchitectureTest | TL-DR-7 |
+| AR-08 | `..adapter.in..` does not depend on `*Service` classes or `..port.out..` | AdapterDependenciesTest | TL-DR-1 |
+| AR-09 | `..adapter.out..` does not depend on `*Service` classes or `..port.in..` | AdapterDependenciesTest | TL-DR-2 |
 | AR-10 | Adapter packages do not depend on each other | AdapterDependenciesTest | TL-DR-4 |
 | AR-11 | `fr.kevin.llps.payments.entity..` and `jakarta.persistence.EntityManager` only accessed from `..adapter.out.persistence..` | AdapterDependenciesTest | TL-DR-5/6 |
 | AR-12 | `..adapter.in.rest..` does not depend on `java.sql..` | AdapterDependenciesTest | TL-DR-9, Q5 |
-| AR-13 | `Jpa*RepositoryAdapter` classes implement a domain `Load*` and `Save*` interface | AdapterDependenciesTest | §6 |
-| AR-14 | Input ports (`Search*`, `Get*Details`, `Record*` in `..domain.*.usecase.port.in..`) and repository ports (`Load*`, `Save*` in the domain-model packages `domain.<ctx>`) are interfaces | PortsTest | Phase 3 §11 |
+| AR-13 | `*RepositoryAdapter` classes in `..adapter.out.persistence..` implement a `Load*` and a `Save*` interface of `..domain.*.port.out..` | AdapterDependenciesTest | §6 |
+| AR-14 | every top-level type of `..port.in..` and `..port.out..` is an interface; `..command..` only holds `*Command`, `..query..` only `*Query` / `*Criteria`; input-port implementations are named `*Service` outside the port packages | PortsTest | Phase 3 §11, IT-02 gate |
 | AR-15 | No cycles between `fr.kevin.llps.payments.(*)..` slices | CyclesTest | §4.2 |
 | AR-16 | Classes annotated `@RestController`/`@RestControllerAdvice` in new packages are prefixed `Rest`; classes with `@KafkaListener` methods prefixed `Kafka`; classes in `..adapter.out.persistence..` prefixed `Jpa` | CodingConventionsTest | conventions |
 | AR-17 | No `@Autowired` fields and no `System.out`/`System.err` in new packages; no public non-final fields in `..domain..` | CodingConventionsTest | conventions |
@@ -610,9 +610,18 @@ Changes after the gate:
 - TD-01..TD-14 now record the answers.
 
 | 2026-11-12 | Phase 5 IT-00 gate: module structure (user-approved change) | Changes requested: "only two adapters modules must exist : client-adapters and infrastructure-adapters. Domain must be named domain only"; clarified "Drop prefixes, keep application"; then corrected: "application must be merged in domain". Result: four modules `domain`, `client-adapters`, `infrastructure-adapters`, `bootstrap`, plain artifactIds, Java packages unchanged. |
-| 2026-11-12 | Phase 5 IT-00 gate: use-case / input-port packages (user-approved change) | (b) `fr.kevin.llps.payments.domain.<ctx>.usecase` for use-case services and `fr.kevin.llps.payments.domain.<ctx>.usecase.port.in` for input ports, queries, commands and views; AR-01..AR-08, DR-2, TL-DR-7 retargeted; the model must not depend on `usecase` packages (ArchUnit). |
+| 2026-11-12 | Phase 5 IT-02 gate, 3rd presentation (user-approved) | (b) `command` and `query` belong entirely to the domain-model ring (package-based); user: "adapters can use queries and commands". AR-08 keeps forbidding `*Service` and `port.out` to driving adapters, AR-09 keeps forbidding `*Service` and `port.in` to driven adapters; the `*Query` / `*Criteria` restrictions are removed. AR-14 package-content rules kept. |
+| 2026-11-12 | Phase 5 IT-02 gate, 2nd presentation: `command` / `query` packages (user-approved change) | User: "can you move commands classes in command package and do the same for criteria", then "replace package criteria package by query". Commands in `domain.<ctx>.command`, `*Query` and `*Criteria` in `domain.<ctx>.query`; port packages hold interfaces only; template for IT-03..IT-06. Ring assignment (AR-06) proposed then: `command` and `*Query` in the application ring, `*Criteria` in the domain-model ring (superseded at the 3rd presentation). Also answered: model/use-case split by `*Service` naming (a); intra-context package cycle accepted, `CyclesTest` stays at top-level packages (a); AR-06 approved. |
+| 2026-11-12 | Phase 5 IT-02 gate: package layout (user-approved change) | User: "do not use usecase package. port.out package is missing". Per context: model and `*Service` use-case services in `domain.<ctx>`, input ports in `domain.<ctx>.port.in`, output ports in `domain.<ctx>.port.out`; no `usecase` package. Supersedes the IT-00 `usecase` layout. TL-DR-1/2/3/7 and AR-01..AR-09, AR-13, AR-14 retargeted; AR-06 uses class predicates (output ports as the domain-service ring), so `withOptionalLayers` is no longer needed; the composition-root ring stays. |
+| 2026-11-12 | Phase 5 IT-00 gate: use-case / input-port packages (user-approved change) | (superseded at the IT-02 gate) (b) `fr.kevin.llps.payments.domain.<ctx>.usecase` for use-case services and `fr.kevin.llps.payments.domain.<ctx>.usecase.port.in` for input ports, queries, commands and views; AR-01..AR-08, DR-2, TL-DR-7 retargeted; the model must not depend on `usecase` packages (ArchUnit). |
 | 2026-11-12 | Phase 5 IT-01 gate F-01 (user-approved) | (a) `MalformedDateException` keeps the number-format message; `RestDomainExceptionHandler` renders it, or `Bad request` when null (§7). |
 | 2026-11-12 | Phase 5 plan gate: `GlobalExceptionHandler` naming (AR-16) | (a) rename to `RestGlobalExceptionHandler` (and its test) when it moves in the final iteration, body unchanged; no ArchUnit exception. |
+
+Changes after the Phase 5 IT-02 gate (3rd presentation): `command` / `query` in the model ring; TL-DR-1/2/3/7, AR-04, AR-05, AR-06, AR-08, AR-09.
+
+Changes after the Phase 5 IT-02 gate (2nd presentation): `command` and `query` packages (§3, §4.1, §6.4, TL-DR-1/2/3/7, AR-02, AR-04..AR-09, AR-14).
+
+Changes after the Phase 5 IT-02 gate: `usecase` package removed; `*Service` in `domain.<ctx>`, `port.in`, `port.out` (§3, §4.1, §4.2, §6.4, TL-DR-1/2/3/7, AR-01..AR-09, AR-13, AR-14).
 
 Changes after the Phase 5 IT-00 gate: use-case packages moved from `application.<ctx>[.port.in]` to `domain.<ctx>.usecase[.port.in]` (§3, §4.1, §4.2, §6.4, TL-DR-1/2/3/7, AR-01..AR-09, AR-14); §3 diagram labels, §4.1 (four modules), §4.2 (graph and ArchUnit takeover table), §4.3, §4.4, §8.3, §9.2 exceptions, §10, §12, TD-01, TD-03, TL-R8.
 

@@ -31,24 +31,18 @@ import fr.kevin.llps.payments.dto.OutboundPaymentResponse;
 import fr.kevin.llps.payments.dto.OutboundPaymentSearchRequest;
 import fr.kevin.llps.payments.dto.RecallResponse;
 import fr.kevin.llps.payments.dto.RecallSearchRequest;
-import fr.kevin.llps.payments.dto.SuspendedPaymentResponse;
-import fr.kevin.llps.payments.dto.SuspendedPaymentSearchRequest;
 import fr.kevin.llps.payments.entity.OutboundPayment;
 import fr.kevin.llps.payments.entity.Recall;
-import fr.kevin.llps.payments.entity.SuspendedPayment;
 import fr.kevin.llps.payments.repository.InboundPaymentRepository;
 import fr.kevin.llps.payments.repository.InstantPaymentRepository;
 import fr.kevin.llps.payments.repository.OutboundPaymentRepository;
 import fr.kevin.llps.payments.repository.RecallRepository;
-import fr.kevin.llps.payments.repository.SuspendedPaymentRepository;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentServiceUnitTest {
 
     @Mock
     private InstantPaymentRepository instantRepository;
-    @Mock
-    private SuspendedPaymentRepository suspendedRepository;
     @Mock
     private InboundPaymentRepository inboundRepository;
     @Mock
@@ -58,8 +52,6 @@ class PaymentServiceUnitTest {
 
     @InjectMocks
     private InstantPaymentService instantService;
-    @InjectMocks
-    private SuspendedPaymentService suspendedService;
     @InjectMocks
     private InboundPaymentService inboundService;
     @InjectMocks
@@ -105,48 +97,6 @@ class PaymentServiceUnitTest {
         when(instantRepository.findById("1")).thenReturn(new InstantPaymentResponse());
         assertThat(instantService.getById("1")).isNotNull();
         assertThat(instantService.getById("2")).isNull();
-    }
-
-    // ---------------- suspended ----------------
-
-    @Test
-    void suspendedSearch_mapsAllFields() {
-        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000201");
-        SuspendedPayment payment = new SuspendedPayment();
-        payment.id = id;
-        payment.amount = new BigDecimal("100.00");
-        payment.currency = "EUR";
-        payment.debtorIban = "DE89";
-        payment.debtorName = "ACME";
-        payment.creditorIban = "FR76";
-        payment.creditorName = "Dupont";
-        payment.holdReason = "AML_THRESHOLD";
-        payment.complianceCaseRef = "CASE-1";
-        payment.reviewStatus = "PENDING";
-        payment.heldAt = Timestamp.valueOf("2026-10-14 08:00:00");
-        payment.releasedAt = null;
-        when(suspendedRepository.search(any())).thenReturn(List.of(payment));
-
-        SuspendedPaymentResponse response = suspendedService.search(new SuspendedPaymentSearchRequest()).get(0);
-
-        assertThat(response.id).isEqualTo(id.toString());
-        assertThat(response.holdReason).isEqualTo("AML_THRESHOLD");
-        assertThat(response.heldAt).isEqualTo("2026-10-14T08:00:00");
-        assertThat(response.releasedAt).isNull();
-    }
-
-    @Test
-    void suspendedGetById_foundAndMissing() {
-        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000202");
-        SuspendedPayment payment = new SuspendedPayment();
-        payment.id = id;
-        payment.reviewStatus = "RELEASED";
-        payment.releasedAt = Timestamp.valueOf("2026-10-13 15:45:00");
-        when(suspendedRepository.findById(id.toString())).thenReturn(payment);
-        when(suspendedRepository.findById("nope")).thenReturn(null);
-
-        assertThat(suspendedService.getById(id.toString()).releasedAt).isEqualTo("2026-10-13T15:45:00");
-        assertThat(suspendedService.getById("nope")).isNull();
     }
 
     // ---------------- inbound ----------------
@@ -454,37 +404,5 @@ class PaymentServiceUnitTest {
 
         // THEN
         assertThat(result.get(0).ageInDays).isNull();
-    }
-
-    // ---------------- characterization: Suspended mapping (BR-SUS-06) ----------------
-
-    @Test
-    void should_map_suspended_details_with_same_fields_as_search() {
-        // GIVEN
-        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000202");
-        SuspendedPayment payment = new SuspendedPayment();
-        payment.id = id;
-        payment.amount = new BigDecimal("450.10");
-        payment.currency = "EUR";
-        payment.debtorIban = "FR7630006000011234567890189";
-        payment.debtorName = "SARL Dupont";
-        payment.creditorIban = "DE02120300000000202051";
-        payment.creditorName = "Jonas Weber";
-        payment.holdReason = "AML_THRESHOLD";
-        payment.complianceCaseRef = "CASE-2026-0043";
-        payment.reviewStatus = "RELEASED";
-        payment.heldAt = Timestamp.valueOf("2026-10-13 10:20:00");
-        payment.releasedAt = Timestamp.valueOf("2026-10-13 15:45:00");
-        when(suspendedRepository.findById(id.toString())).thenReturn(payment);
-        when(suspendedRepository.search(any())).thenReturn(List.of(payment));
-        SuspendedPaymentResponse fromSearch = suspendedService.search(new SuspendedPaymentSearchRequest()).get(0);
-
-        // WHEN
-        SuspendedPaymentResponse fromDetails = suspendedService.getById(id.toString());
-
-        // THEN
-        assertThat(fromDetails).usingRecursiveComparison().isEqualTo(fromSearch);
-        assertThat(fromDetails.heldAt).isEqualTo("2026-10-13T10:20:00");
-        assertThat(fromDetails.releasedAt).isEqualTo("2026-10-13T15:45:00");
     }
 }

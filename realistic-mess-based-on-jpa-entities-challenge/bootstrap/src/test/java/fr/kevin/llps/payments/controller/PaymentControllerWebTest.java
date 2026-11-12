@@ -30,24 +30,25 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import fr.kevin.llps.payments.adapter.in.rest.suspended.RestSuspendedPaymentController;
+import fr.kevin.llps.payments.domain.suspended.port.in.GetSuspendedPaymentDetails;
+import fr.kevin.llps.payments.domain.suspended.port.in.SearchSuspendedPayments;
 import fr.kevin.llps.payments.dto.InboundPaymentResponse;
 import fr.kevin.llps.payments.dto.InstantPaymentResponse;
 import fr.kevin.llps.payments.dto.OutboundPaymentResponse;
 import fr.kevin.llps.payments.dto.RecallResponse;
-import fr.kevin.llps.payments.dto.SuspendedPaymentResponse;
 import fr.kevin.llps.payments.entity.OutboundPayment;
 import fr.kevin.llps.payments.service.InboundPaymentService;
 import fr.kevin.llps.payments.service.InstantPaymentService;
 import fr.kevin.llps.payments.service.OutboundPaymentService;
 import fr.kevin.llps.payments.service.RecallService;
-import fr.kevin.llps.payments.service.SuspendedPaymentService;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 
 @WebMvcTest(controllers = {
         InstantPaymentController.class,
-        SuspendedPaymentController.class,
+        RestSuspendedPaymentController.class,
         InboundPaymentController.class,
         OutboundPaymentController.class,
         RecallController.class
@@ -60,7 +61,9 @@ class PaymentControllerWebTest {
     @MockitoBean
     private InstantPaymentService instantService;
     @MockitoBean
-    private SuspendedPaymentService suspendedService;
+    private SearchSuspendedPayments searchSuspendedPayments;
+    @MockitoBean
+    private GetSuspendedPaymentDetails getSuspendedPaymentDetails;
     @MockitoBean
     private InboundPaymentService inboundService;
     @MockitoBean
@@ -111,30 +114,6 @@ class PaymentControllerWebTest {
                 .andExpect(jsonPath("$.id").value("1"));
         mvc.perform(get("/api/v1/instant-payments/missing"))
                 .andExpect(status().isNotFound());
-    }
-
-    // ---------------- suspended ----------------
-
-    @Test
-    void suspendedSearch_returnsRows() throws Exception {
-        SuspendedPaymentResponse response = new SuspendedPaymentResponse();
-        response.id = "s1";
-        when(suspendedService.search(any())).thenReturn(List.of(response));
-
-        mvc.perform(get("/api/v1/suspended-payments/search").param("reviewStatus", "PENDING"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value("s1"));
-    }
-
-    @Test
-    void suspendedDetails_foundAndMissing() throws Exception {
-        SuspendedPaymentResponse response = new SuspendedPaymentResponse();
-        response.id = "s1";
-        when(suspendedService.getById("s1")).thenReturn(response);
-        when(suspendedService.getById("missing")).thenReturn(null);
-
-        mvc.perform(get("/api/v1/suspended-payments/s1")).andExpect(status().isOk());
-        mvc.perform(get("/api/v1/suspended-payments/missing")).andExpect(status().isNotFound());
     }
 
     // ---------------- inbound ----------------
@@ -260,7 +239,8 @@ class PaymentControllerWebTest {
         mvc.perform(get(path).param("limit", nonIntegerLimit))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.error").value(GenericError));
-        verifyNoInteractions(instantService, suspendedService, inboundService, outboundService, recallService);
+        verifyNoInteractions(instantService, searchSuspendedPayments, getSuspendedPaymentDetails, inboundService,
+                outboundService, recallService);
     }
 
     @ParameterizedTest(name = "[{index}] POST {0} -> 500")
@@ -279,7 +259,8 @@ class PaymentControllerWebTest {
         mvc.perform(post(unsupportedMethodPath))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.error").value(GenericError));
-        verifyNoInteractions(instantService, suspendedService, inboundService, outboundService, recallService);
+        verifyNoInteractions(instantService, searchSuspendedPayments, getSuspendedPaymentDetails, inboundService,
+                outboundService, recallService);
     }
 
     @Test
@@ -296,7 +277,7 @@ class PaymentControllerWebTest {
     @Test
     void should_return_generic_error_body_when_service_fails() throws Exception {
         // GIVEN
-        when(suspendedService.search(any())).thenThrow(new IllegalStateException("boom"));
+        when(searchSuspendedPayments.search(any())).thenThrow(new IllegalStateException("boom"));
 
         // WHEN / THEN
         mvc.perform(get("/api/v1/suspended-payments/search"))

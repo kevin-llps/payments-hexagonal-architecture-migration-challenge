@@ -97,25 +97,24 @@ Undocumented technical constraints: none reported beyond the above.
 
 ```
 fr.kevin.llps.payments.domain.sharedkernel
-fr.kevin.llps.payments.domain.instant      (+ repository ports LoadInstantPayments, SaveInstantPayment)
-fr.kevin.llps.payments.domain.suspended    (+ LoadSuspendedPayments, SaveSuspendedPayment)
-fr.kevin.llps.payments.domain.inbound      (+ LoadInboundPayments, SaveInboundPayment)
-fr.kevin.llps.payments.domain.outbound     (+ LoadOutboundPayments, SaveOutboundPayment)
-fr.kevin.llps.payments.domain.recall       (+ LoadRecalls, SaveRecall)
-
-fr.kevin.llps.payments.domain.<ctx>.usecase          use-case services (application layer)
-fr.kevin.llps.payments.domain.<ctx>.usecase.port.in  input ports, queries, commands, views
+fr.kevin.llps.payments.domain.<ctx>            aggregate (and policies) and use-case services (*Service)
+fr.kevin.llps.payments.domain.<ctx>.command    commands (*Command)
+fr.kevin.llps.payments.domain.<ctx>.query      search queries (*Query) and search criteria (*Criteria)
+fr.kevin.llps.payments.domain.<ctx>.port.in    input-port interfaces only
+fr.kevin.llps.payments.domain.<ctx>.port.out   output (repository) port interfaces only: Load<X>s, Save<X>
 ```
 
-The physical split was decided in Phase 4/5: the Maven `domain` module holds both the domain-model packages and the use-case packages (`domain.<ctx>.usecase[.port.in]`, Phase 5 IT-00 gate, 2026-11-12). The rules below hold; "domain model" means the `domain` packages excluding `..usecase..`.
+<ctx> is one of instant, suspended, inbound, outbound, recall. Example (suspended, template for every context): `domain.suspended` holds `SuspendedPayment`, `SearchSuspendedPaymentsService`, `GetSuspendedPaymentDetailsService`, `RecordSuspendedPaymentService`; `domain.suspended.command` holds `RecordSuspendedPaymentCommand`; `domain.suspended.query` holds `SuspendedPaymentSearchCriteria` and `SuspendedPaymentSearchQuery`; `domain.suspended.port.in` holds `SearchSuspendedPayments`, `GetSuspendedPaymentDetails`, `RecordSuspendedPayment`; `domain.suspended.port.out` holds `LoadSuspendedPayments`, `SaveSuspendedPayment`. Views such as `InboundPaymentView` / `OutboundPaymentWithFee` are use-case outputs and will be placed when their contexts migrate.
+
+The physical split was decided in Phase 4/5: the Maven `domain` module holds the model, the use-case services and both port packages (layout revised at the Phase 5 IT-02 gate, 2026-11-12: no `usecase` package). The rules below hold; "domain model" means every domain class outside the `port` packages that is not a use-case service (`*Service`): aggregates, the `command` and `query` packages and the shared kernel (IT-02 gate, 3rd presentation).
 
 | Rule | Statement |
 |---|---|
 | DR-1 | Domain imports only `java.lang`, `java.util`, `java.math`, `java.time`. No `java.sql`, `jakarta.*`, `org.springframework.*`, `org.hibernate.*`, `com.fasterxml.*`, `org.apache.kafka.*`; no annotations. |
-| DR-2 | A context package (including its `usecase` sub-packages) depends only on itself and `sharedkernel`; no context-to-context import. |
+| DR-2 | A context package (including its `command`, `query`, `port.in` and `port.out` sub-packages) depends only on itself and `sharedkernel`; no context-to-context import. |
 | DR-3 | `sharedkernel` depends on no other domain package. |
 | DR-4 | The domain never depends on adapter or bootstrap code. |
-| DR-6 | The domain model (`domain.sharedkernel`, `domain.<ctx>`) never depends on the use-case packages `domain.<ctx>.usecase[.port.in]`; use cases may depend on the model and the repository ports of their own context. |
+| DR-6 | The domain model (aggregates, `command`, `query`, shared kernel) never depends on use-case services (`*Service`) or on `port.in` / `port.out`; use-case services depend on the model and the ports of their own context; `port.out` depends only on the model (reworded at the Phase 5 IT-02 gate, 2026-11-12). |
 | DR-5 | No static utility classes; static factory methods on value objects are allowed (`PaymentId.parse`, `SearchLimit.capped`). |
 
 ### 6.2 Cross-cutting modelling choices
@@ -894,7 +893,10 @@ Unresolved:
 | 2026-11-12 | Gate 2 Q5 | Legacy IAE / `InvalidDataAccessApiUsageException` handlers | (a) keep unchanged as safety net; `GlobalExceptionHandlerTest` stays green |
 | 2026-11-12 | Gate 2 Q6 | Port design | (a) APPROVED with answers 1-5 applied |
 | 2026-11-12 | Phase 5 IT-01 gate (user-approved) | Shared Kernel implementation notes | F-01..F-04 recorded in §6.3 |
-| 2026-11-12 | Phase 5 IT-00 gate (user-approved change) | Location of input ports and use cases | (b) `fr.kevin.llps.payments.domain.<ctx>.usecase` (services) and `...domain.<ctx>.usecase.port.in` (input ports, queries, commands, views), inside the Maven `domain` module; DR-2 extended, DR-4 reworded, DR-6 added. Port ownership is unchanged (input ports: application layer; repository ports: domain model). |
+| 2026-11-12 | Phase 5 IT-02 gate, 3rd presentation (user-approved) | Ring of `command` / `query` | (b) `command` and `query` belong entirely to the domain model; user: "adapters can use queries and commands". DR-6 reworded. |
+| 2026-11-12 | Phase 5 IT-02 gate, 2nd presentation (user-approved change) | `command` and `query` packages | User: "can you move commands classes in command package and do the same for criteria", then "replace package criteria package by query". Per context: `command` (`*Command`) and `query` (`*Query`, `*Criteria`); `port.in` / `port.out` hold interfaces only; template for every context. |
+| 2026-11-12 | Phase 5 IT-02 gate (user-approved change) | Package layout per context | User: "do not use usecase package. port.out package is missing". Use-case services move to the context package `domain.<ctx>` (`*Service`), input ports to `domain.<ctx>.port.in`, output ports to `domain.<ctx>.port.out`; supersedes the IT-00 `usecase` layout; DR-2 and DR-6 reworded. |
+| 2026-11-12 | Phase 5 IT-00 gate (user-approved change) | Location of input ports and use cases | (superseded at the IT-02 gate) (b) `fr.kevin.llps.payments.domain.<ctx>.usecase` (services) and `...domain.<ctx>.usecase.port.in` (input ports, queries, commands, views), inside the Maven `domain` module; DR-2 extended, DR-4 reworded, DR-6 added. Port ownership is unchanged (input ports: application layer; repository ports: domain model). |
 
 Change summary:
 

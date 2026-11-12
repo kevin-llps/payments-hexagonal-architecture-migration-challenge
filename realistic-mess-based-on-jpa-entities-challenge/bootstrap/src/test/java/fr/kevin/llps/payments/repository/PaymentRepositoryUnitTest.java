@@ -30,7 +30,6 @@ import fr.kevin.llps.payments.dto.InstantPaymentResponse;
 import fr.kevin.llps.payments.dto.InstantPaymentSearchRequest;
 import fr.kevin.llps.payments.dto.OutboundPaymentSearchRequest;
 import fr.kevin.llps.payments.dto.RecallSearchRequest;
-import fr.kevin.llps.payments.dto.SuspendedPaymentSearchRequest;
 import fr.kevin.llps.payments.entity.InboundPayment;
 import fr.kevin.llps.payments.entity.InstantPayment;
 import fr.kevin.llps.payments.entity.OutboundPayment;
@@ -41,7 +40,7 @@ import jakarta.persistence.PersistenceException;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({InstantPaymentRepository.class, SuspendedPaymentRepository.class, InboundPaymentRepository.class,
+@Import({InstantPaymentRepository.class, InboundPaymentRepository.class,
         OutboundPaymentRepository.class, RecallRepository.class})
 @Testcontainers
 class PaymentRepositoryUnitTest {
@@ -58,8 +57,6 @@ class PaymentRepositoryUnitTest {
 
     @Autowired
     private InstantPaymentRepository instantRepository;
-    @Autowired
-    private SuspendedPaymentRepository suspendedRepository;
     @Autowired
     private InboundPaymentRepository inboundRepository;
     @Autowired
@@ -135,45 +132,6 @@ class PaymentRepositoryUnitTest {
         assertThat(found.endToEndId).isEqualTo("E2E-F1");
         assertThat(found.executionDatetime).isEqualTo("2026-10-15T09:15:00");
         assertThat(instantRepository.findById("11111111-1111-1111-1111-111111111111")).isNull();
-    }
-
-    // ---------------- suspended ----------------
-
-    @Test
-    void suspendedSearch_appliesParameterizedFilters() {
-        persist(
-                suspended("00000000-0000-0000-0000-000000000611", "DE89370400440532013000", "AML_THRESHOLD",
-                        "PENDING", Timestamp.valueOf("2026-10-14 08:00:00"), null),
-                suspended("00000000-0000-0000-0000-000000000612", "DE89370400440532013000", "SANCTIONS_SCREENING",
-                        "PENDING", Timestamp.valueOf("2026-10-14 09:00:00"), null),
-                suspended("00000000-0000-0000-0000-000000000613", "DE89370400440532013000", "AML_THRESHOLD",
-                        "RELEASED", Timestamp.valueOf("2026-10-13 08:00:00"), Timestamp.valueOf("2026-10-13 15:00:00")));
-
-        SuspendedPaymentSearchRequest request = new SuspendedPaymentSearchRequest();
-        request.debtorIban = "DE89370400440532013000";
-        request.holdReason = "aml_threshold";
-        request.reviewStatus = "pending";
-        request.heldFrom = "2026-10-01T00:00:00";
-        request.heldTo = "2026-10-31T00:00:00";
-        request.limit = 5;
-
-        List<SuspendedPayment> results = suspendedRepository.search(request);
-
-        assertThat(results).hasSize(1);
-        assertThat(results.get(0).id).isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000611"));
-        assertThat(results.get(0).holdReason).isEqualTo("AML_THRESHOLD");
-        assertThat(results.get(0).heldAt).isEqualTo(Timestamp.valueOf("2026-10-14 08:00:00"));
-    }
-
-    @Test
-    void suspendedFindById_foundAndMissing() {
-        persist(suspended("00000000-0000-0000-0000-000000000614", "DE89370400440532013000", "AML_THRESHOLD",
-                "RELEASED", Timestamp.valueOf("2026-10-14 08:00:00"), Timestamp.valueOf("2026-10-13 15:45:00")));
-
-        SuspendedPayment found = suspendedRepository.findById("00000000-0000-0000-0000-000000000614");
-        assertThat(found.reviewStatus).isEqualTo("RELEASED");
-        assertThat(found.releasedAt).isEqualTo(Timestamp.valueOf("2026-10-13 15:45:00"));
-        assertThat(suspendedRepository.findById("11111111-1111-1111-1111-111111111111")).isNull();
     }
 
     // ---------------- inbound ----------------
@@ -401,86 +359,6 @@ class PaymentRepositoryUnitTest {
         // WHEN / THEN
         assertThatThrownBy(() -> instantRepository.search(request))
                 .satisfies(e -> assertThat(rootCauseOf(e)).isInstanceOf(IllegalArgumentException.class));
-    }
-
-    // ---------------- characterization: Suspended date bounds, order and limit (BR-SUS-01, BR-SUS-04, BR-SUS-05) ----------------
-
-    @ParameterizedTest(name = "[{index}] heldFrom={0} heldTo={1} -> empty")
-    @CsvSource(value = {
-            "2026-10-01, NULL",
-            "NULL, 2026-10-31",
-            "garbage, NULL",
-            "NULL, garbage",
-            "2026-10-01 00:00:00, NULL"
-    }, nullValues = "NULL")
-    void should_return_no_suspended_payment_when_a_held_bound_is_not_in_iso_date_time_format(String heldFrom,
-            String heldTo) {
-        // GIVEN
-        persist(suspended("00000000-0000-0000-0000-000000000651", "DE89370400440532013000", "AML_THRESHOLD",
-                "PENDING", Timestamp.valueOf("2026-10-14 08:00:00"), null));
-        SuspendedPaymentSearchRequest request = new SuspendedPaymentSearchRequest();
-        request.heldFrom = heldFrom;
-        request.heldTo = heldTo;
-
-        // WHEN
-        List<SuspendedPayment> results = suspendedRepository.search(request);
-
-        // THEN
-        assertThat(results).isEmpty();
-    }
-
-    @Test
-    void should_apply_inclusive_held_bounds() {
-        // GIVEN
-        persist(suspended("00000000-0000-0000-0000-000000000652", "DE89370400440532013000", "AML_THRESHOLD",
-                "PENDING", Timestamp.valueOf("2026-10-14 08:00:00"), null));
-        SuspendedPaymentSearchRequest request = new SuspendedPaymentSearchRequest();
-        request.heldFrom = "2026-10-14T08:00:00";
-        request.heldTo = "2026-10-14T08:00:00";
-
-        // WHEN
-        List<SuspendedPayment> results = suspendedRepository.search(request);
-
-        // THEN
-        assertThat(results).extracting(p -> p.id)
-                .containsExactly(UUID.fromString("00000000-0000-0000-0000-000000000652"));
-    }
-
-    @Test
-    void should_order_suspended_payments_by_held_at_descending_and_apply_limit() {
-        // GIVEN
-        persist(
-                suspended("00000000-0000-0000-0000-000000000653", "DE89370400440532013000", "AML_THRESHOLD",
-                        "PENDING", Timestamp.valueOf("2026-10-13 08:00:00"), null),
-                suspended("00000000-0000-0000-0000-000000000654", "DE89370400440532013000", "AML_THRESHOLD",
-                        "PENDING", Timestamp.valueOf("2026-10-15 08:00:00"), null),
-                suspended("00000000-0000-0000-0000-000000000655", "DE89370400440532013000", "AML_THRESHOLD",
-                        "PENDING", Timestamp.valueOf("2026-10-14 08:00:00"), null));
-        SuspendedPaymentSearchRequest request = new SuspendedPaymentSearchRequest();
-        request.limit = 2;
-
-        // WHEN
-        List<SuspendedPayment> results = suspendedRepository.search(request);
-
-        // THEN
-        assertThat(results).extracting(p -> p.id).containsExactly(
-                UUID.fromString("00000000-0000-0000-0000-000000000654"),
-                UUID.fromString("00000000-0000-0000-0000-000000000655"));
-    }
-
-    @Test
-    void should_match_suspended_debtor_iban_exactly_and_case_sensitively() {
-        // GIVEN
-        persist(suspended("00000000-0000-0000-0000-000000000656", "DE89370400440532013000", "AML_THRESHOLD",
-                "PENDING", Timestamp.valueOf("2026-10-14 08:00:00"), null));
-        SuspendedPaymentSearchRequest request = new SuspendedPaymentSearchRequest();
-        request.debtorIban = "de89370400440532013000";
-
-        // WHEN
-        List<SuspendedPayment> results = suspendedRepository.search(request);
-
-        // THEN
-        assertThat(results).isEmpty();
     }
 
     // ---------------- characterization: Inbound order, limit and dates (BR-INB-04, BR-INB-05, BR-INB-06) ----------------

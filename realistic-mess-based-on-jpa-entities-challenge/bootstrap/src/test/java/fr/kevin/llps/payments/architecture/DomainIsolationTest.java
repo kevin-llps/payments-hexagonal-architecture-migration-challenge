@@ -38,12 +38,12 @@ class DomainIsolationTest {
                             .and(resideOutsideOfPackage("..domain.sharedkernel..")))
                     .because("isolated-domain-design.md DR-3: the shared kernel depends on no other domain package");
 
-    // AR-04 (model part)
+    // AR-04 (model part): name- and package-based since the IT-02 gate layout (model and *Service share a package)
     @ArchTest
-    static final ArchRule domainModelShouldNotDependOnUseCases =
-            noClasses().that().resideInAPackage("..domain..").and().resideOutsideOfPackage("..domain.*.usecase..")
-                    .should().dependOnClassesThat().resideInAPackage("..usecase..")
-                    .because("isolated-domain-design.md DR-6 / technical-layer-design.md AR-04: the domain model never depends on use cases");
+    static final ArchRule domainModelShouldNotDependOnUseCasesOrPorts =
+            noClasses().that(DomainLayout.DOMAIN_MODEL)
+                    .should().dependOnClassesThat(DomainLayout.APPLICATION.or(resideInAPackage(DomainLayout.PORTS)))
+                    .because("isolated-domain-design.md DR-6 / technical-layer-design.md AR-04: the domain model never depends on use-case services or ports");
 
     // AR-04 (outer layers part)
     @ArchTest

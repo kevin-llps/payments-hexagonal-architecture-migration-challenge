@@ -40,11 +40,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jayway.jsonpath.JsonPath;
 
+import fr.kevin.llps.payments.adapter.in.kafka.suspended.KafkaSuspendedPaymentListener;
+
 import fr.kevin.llps.payments.kafka.InboundPaymentListener;
 import fr.kevin.llps.payments.kafka.InstantPaymentListener;
 import fr.kevin.llps.payments.kafka.OutboundPaymentMessageConsumer;
 import fr.kevin.llps.payments.kafka.RecallListener;
-import fr.kevin.llps.payments.kafka.SuspendedPaymentListener;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @EmbeddedKafka(partitions = 1, topics = {"pay.instant", "pay.suspended", "pay.inbound", "pay.outbound", "pay.recall"},
@@ -71,7 +72,7 @@ class PaymentApplicationIntegrationTest {
     @Autowired
     private InstantPaymentListener instantListener;
     @Autowired
-    private SuspendedPaymentListener suspendedListener;
+    private KafkaSuspendedPaymentListener suspendedListener;
     @Autowired
     private InboundPaymentListener inboundListener;
     @Autowired

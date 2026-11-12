@@ -1,6 +1,6 @@
 # Hexagonal Migration Plan — realistic-mess-based-on-jpa-entities-challenge
 
-- **Status:** APPROVED (2026-11-12). IT-00 `APPROVED`; IT-01 `APPROVED`; IT-02 scope awaiting approval.
+- **Status:** APPROVED (2026-11-12). IT-00 `APPROVED`; IT-01 `APPROVED`; IT-02 `APPROVED`; IT-03 scope awaiting approval.
 - **Owner:** `incremental-hexagonal-architecture-migration` (Phase 5 of the orchestrated migration).
 - **Baseline:** commit `142a3a2` on branch `hexagonal-architecture-migration-2`. Baseline `mvn test`: **307 tests, 0 failures** (run 2026-11-12 in a detached worktree of `142a3a2`).
 - **Source of truth** for iteration planning, ArchUnit catalogue, temporary exceptions and validation history.
@@ -33,7 +33,7 @@ As specified in `technical-layer-design.md` §3–§4 (revised at the IT-00 gate
 
 | Module | Holds | Packages |
 |---|---|---|
-| `domain` | domain model, shared kernel, repository (output) ports, input ports, use-case services; no dependencies | model: `domain.{sharedkernel,<ctx>}`; use cases: `domain.<ctx>.usecase`, input ports/queries/commands/views: `domain.<ctx>.usecase.port.in` |
+| `domain` | domain model, shared kernel, use-case services, commands, queries, input and output ports; no dependencies | `domain.sharedkernel`; per context `domain.<ctx>` (aggregate + `*Service`), `.command` (`*Command`), `.query` (`*Query`, `*Criteria`), `.port.in` / `.port.out` (interfaces only) |
 | `client-adapters` | driving adapters: REST controllers, REST exception handlers, Kafka listeners | `adapter.in.rest[.<ctx>]`, `adapter.in.kafka.<ctx>` |
 | `infrastructure-adapters` | driven adapters: JPA adapters, mappers, entities, `schema.sql`, `data.sql` | `adapter.out.persistence.<ctx>`, `entity` |
 | `bootstrap` | composition root, `application.yml`, integration and ArchUnit tests | `fr.kevin.llps.payments`, `bootstrap.config` |
@@ -47,7 +47,7 @@ flowchart BT
     BOOT --> DOM
 ```
 
-Separations no longer enforced by Maven are enforced by ArchUnit: domain model ↛ `..usecase..` (AR-04, DR-6), use cases framework-free (domain POM + AR-01 + AR-05), REST ↮ Kafka adapters (AR-10), persistence ↛ `..usecase..` (AR-09), driving adapters only via `..usecase.port.in..` (AR-08).
+Separations no longer enforced by Maven are enforced by ArchUnit: domain model (aggregates, `command`, `query`, shared kernel) ↛ `*Service` / ports (AR-04, AR-06, DR-6), use cases framework-free (domain POM + AR-01 + AR-05), REST ↮ Kafka adapters (AR-10), driven adapters ↛ `*Service` / `port.in` (AR-09), driving adapters ↛ `*Service` / `port.out` (AR-08); every adapter may use commands and queries.
 
 ## 5. Business-Rule Inventory (75 rules, from `ddd-domain-analysis.md`)
 
@@ -169,7 +169,7 @@ Common definition of done for every iteration: TDD (RED → GREEN → refactor);
 |---|---|
 | Bounded Context | Suspended Payments |
 | Business rules | BR-SUS-01..06; suspended slice of BR-API-01..09 and BR-ING-01..09/12 |
-| Target classes / ports | `domain.suspended`: `SuspendedPayment`, `SuspendedPaymentSearchCriteria`, `LoadSuspendedPayments`, `SaveSuspendedPayment`; `domain.suspended.usecase[.port.in]`: `SearchSuspendedPayments`, `GetSuspendedPaymentDetails`, `RecordSuspendedPayment`, query/command records, 3 services |
+| Target classes / ports | `domain.suspended`: `SuspendedPayment`, `SearchSuspendedPaymentsService`, `GetSuspendedPaymentDetailsService`, `RecordSuspendedPaymentService`; `.command`: `RecordSuspendedPaymentCommand`; `.query`: `SuspendedPaymentSearchCriteria`, `SuspendedPaymentSearchQuery`; `.port.in`: `SearchSuspendedPayments`, `GetSuspendedPaymentDetails`, `RecordSuspendedPayment`; `.port.out`: `LoadSuspendedPayments`, `SaveSuspendedPayment` (template for IT-03..IT-06) |
 | Adapters | `RestSuspendedPaymentController` (+ response record, mapper), `RestDomainExceptionHandler` (`@Order(HIGHEST_PRECEDENCE)`, handlers for SK exceptions), `KafkaSuspendedPaymentListener`, `JpaSuspendedPaymentRepositoryAdapter` + `JpaSuspendedPaymentMapper`; `bootstrap.config.ClockConfiguration`, `SuspendedUseCaseConfiguration`; test-only `@SpringBootConfiguration` in `client-adapters` and `infrastructure-adapters` |
 | Legacy deleted | `SuspendedPaymentController`, `SuspendedPaymentService`, `SuspendedPaymentRepository`, `SuspendedPaymentListener`, `SuspendedPayment{SearchRequest,Response}` |
 | Tests | domain unit tests; use-case tests with fixed `Clock`; `@WebMvcTest` with `@MockitoBean` input ports; Kafka listener unit tests mocking `RecordSuspendedPayment`; `@DataJpaTest` + Testcontainers adapter tests; suspended methods of the 4 legacy test classes remapped (MAC-07); IT unchanged |
@@ -254,7 +254,7 @@ Order rationale: structure first; Shared Kernel before any context (every contex
 |---|---|---|---|
 | BR-SHR-01..06, -08..-10 | IT-01 (domain) then each context | `domain.sharedkernel.*Test` | IT (unchanged) |
 | BR-SHR-07 | IT-07 (retired) | `PaymentUtilsTest` until IT-07 | — |
-| BR-SUS-01..06 | IT-02 | `domain.suspended.*Test`, `domain.suspended.usecase.*Test`, `RestSuspendedPaymentControllerTest`, `JpaSuspendedPaymentRepositoryAdapterTest` | IT suspended tests |
+| BR-SUS-01..06 | IT-02 | `domain.suspended.*Test` (criteria and services), `RestSuspendedPaymentControllerTest`, `KafkaSuspendedPaymentListenerTest`, `JpaSuspendedPaymentRepositoryAdapterTest`, `JpaSuspendedPaymentMapperTest` | IT suspended tests |
 | BR-RCL-01..08, BR-ING-11 | IT-03 | `domain.recall.*Test`, use cases, `RestRecallControllerTest`, `KafkaRecallListenerTest`, `JpaRecallRepositoryAdapterTest` | IT recall tests |
 | BR-INS-01..09, BR-ING-10 | IT-04 | `domain.instant.*Test`, use cases, REST/Kafka/JPA adapter tests | IT instant tests |
 | BR-INB-01..08 | IT-05 | `domain.inbound.*Test`, use cases (fixed `Clock`), adapter tests | IT inbound tests |
@@ -275,21 +275,29 @@ Location: `bootstrap/src/test/java/fr/kevin/llps/payments/architecture/`. Comman
 | AR-01 | `..domain..` does not depend on Spring, `jakarta..`, Hibernate, Jackson, Kafka, `java.sql..` | `DomainIsolationTest` | DR-1 | IT-01 | RED (empty) → GREEN (2026-11-12) |
 | AR-01b | `..domain..` only depends on `java.lang..`, `java.util..`, `java.math..`, `java.time..`, `fr.kevin.llps.payments.domain..` | `DomainIsolationTest` | DR-1 (IT-01 gate) | IT-01 | RED (empty) → GREEN |
 | AR-03 | `domain.sharedkernel` depends on no other domain package | `DomainIsolationTest` | DR-3 | IT-01 | RED (empty) → GREEN |
-| AR-04 (model) | domain model (`..domain..` outside `..domain.*.usecase..`) does not depend on `..usecase..` | `DomainIsolationTest` | DR-6 | IT-01 | RED (empty) → GREEN |
+| AR-04 (model) | domain model (aggregates, `command`, `query`, shared kernel) does not depend on `*Service` or `..port..` (predicates in `architecture/DomainLayout`) | `DomainIsolationTest` | DR-6 | IT-01, retargeted at the IT-02 gate | GREEN; mutation model → `port.out` RED (AR-04, AR-06); `*Criteria` → `*Query` now allowed (relaxed at the 3rd presentation) |
 | AR-04 (outer layers) | `..domain..` does not depend on `..adapter..`, `..bootstrap..`, `fr.kevin.llps.payments.entity..` | `DomainIsolationTest` | DR-4 | IT-01 | RED (empty) → GREEN |
 | AR-17 (domain) | public fields in `..domain..` are final | `CodingConventionsTest` | conventions | IT-01 | RED (empty) → GREEN |
-| AR-05, AR-06 | `..domain.*.usecase..` framework-free; onion (applicationServices = `..domain.*.usecase..`) | `HexagonalArchitectureTest` | TL-DR-3, §3 | IT-02 (planned) | — |
-| AR-08..AR-13 | adapter dependencies (AR-10 now the only REST ↮ Kafka separation; AR-09 the only persistence ↛ `..usecase..` separation) | `AdapterDependenciesTest` | TL-DR-1/2/4/5/6/9, §6 | IT-02 (planned) | — |
-| AR-14 | ports are interfaces | `PortsTest` | IDD §11 | IT-02 (planned) | — |
-| AR-16, AR-17 (rest), AR-18 | naming, injection, `System.out`, `@Transactional` placement | `CodingConventionsTest` | conventions, TL-DR-10 | IT-02 (planned) | — |
+| AR-05 | `*Service`, `port.in`, `port.out` do not depend on frameworks, JDBC, adapters or entities | `HexagonalArchitectureTest` | TL-DR-3 | IT-02 | RED (empty) → GREEN |
+| AR-06 | onion with class predicates: domain models = aggregates + `command` + `query` + shared kernel; domain services = `..port.out..`; application services = `*Service` + `..port.in..`; adapters rest / kafka / persistence / composition root (`bootstrap..`); no optional layers | `HexagonalArchitectureTest` | §3 | IT-02 | RED → GREEN (approved; command/query ring set at the 3rd presentation) |
+| AR-08 | `..adapter.in..` does not depend on `*Service` or `..port.out..` | `AdapterDependenciesTest` | TL-DR-1 | IT-02 | RED (empty) → GREEN; mutation REST → `port.out` RED; REST → `*Criteria` now allowed |
+| AR-09 | `..adapter.out..` does not depend on `*Service` or `..port.in..` | `AdapterDependenciesTest` | TL-DR-2 | IT-02 | RED (empty) → GREEN; mutation JPA → `port.in` RED; JPA → `*Command` now allowed |
+| AR-10 | adapter slices `adapter.(*).(*)` do not depend on each other (only REST ↮ Kafka separation left) | `AdapterDependenciesTest` | TL-DR-4 | IT-02 | RED (empty) → GREEN |
+| AR-11 ×2 | `entity..` and `jakarta.persistence.EntityManager` only used by `..adapter.out.persistence..` (temporary legacy scope) | `AdapterDependenciesTest` | TL-DR-5/6 | IT-02 | GREEN before and after (guard) |
+| AR-12 | `..adapter.in.rest..` does not depend on `java.sql..` | `AdapterDependenciesTest` | TL-DR-9 | IT-02 | RED (empty) → GREEN |
+| AR-13 ×2 | `*RepositoryAdapter` in `..adapter.out.persistence..` implements a `Load*` and a `Save*` port of `..port.out..` | `AdapterDependenciesTest` | §6 | IT-02 | RED (empty) → GREEN |
+| AR-14 ×5 | top-level types of `..port.in..` and `..port.out..` are interfaces; `..command..` only `*Command`; `..query..` only `*Query` / `*Criteria`; input-port implementations are `*Service` outside the port packages | `PortsTest` | IDD §11, IT-02 gate | IT-02 | GREEN |
+| AR-16 ×3 | `@RestController`/`@RestControllerAdvice` in `..adapter..` prefixed `Rest`; top-level classes in `..adapter.in.kafka..` prefixed `Kafka`, in `..adapter.out.persistence..` prefixed `Jpa` | `CodingConventionsTest` | conventions | IT-02 | RED (empty) → GREEN |
+| AR-17 ×2 | no `@Autowired` fields and no standard streams in `domain..`, `adapter..`, `bootstrap..` | `CodingConventionsTest` | conventions | IT-02 | GREEN before and after (guard) |
+| AR-18 ×2 | `@Transactional` methods only in `..adapter.in.kafka..` (temporary legacy scope); no class-level `@Transactional` | `CodingConventionsTest` | TL-DR-10 | IT-02 | GREEN before and after (guard) |
 | AR-02, AR-07 | context slices independent | `DomainIsolationTest`, `HexagonalArchitectureTest` | DR-2, TL-DR-7 | IT-03 (planned) | — |
 
 Temporary exceptions (none active today):
 
 | Rule | Exception scope | Added | Removed by |
 |---|---|---|---|
-| AR-11 | legacy `controller`, `service`, `repository`, `kafka` packages may access `entity` / `EntityManager` | IT-02 (planned) | IT-06 |
-| AR-18 | legacy `kafka` package listeners keep `@Transactional` | IT-02 (planned) | IT-06 |
+| AR-11 | legacy `controller`, `service`, `repository`, `kafka` packages may access `entity` / `EntityManager` (package scoping `LEGACY_PACKAGES` in `AdapterDependenciesTest`) | IT-02 (active) | IT-06 |
+| AR-18 | legacy `kafka` package listeners keep `@Transactional` (`LEGACY_KAFKA_PACKAGE` in `CodingConventionsTest`) | IT-02 (active) | IT-06 |
 
 ## 10. Test Strategy
 
@@ -304,15 +312,26 @@ Temporary exceptions (none active today):
 | ID | Context | Status | Tests (full suite) | ArchUnit | Final compilation gate | User validation | Commit |
 |---|---|---|---|---|---|---|---|
 | IT-00 | structure | `APPROVED` (after one `CHANGES_REQUESTED`) | 308 = 307 legacy (per-class counts identical to baseline) + 1 ArchUnit, 0 failures | AR-15 GREEN | `mvn -B clean verify`: exit 0, 308 tests, BUILD SUCCESS (reworked layout) | 1st: changes requested; 2nd: approved 2026-11-12 | `71d9d618455c502b0c354c612a431dc783b44528` |
-| IT-01 | Shared Kernel | `APPROVED` | 439 = 307 legacy (unchanged) + 2 new IT characterization (F-01) + 7 ArchUnit + 123 domain, 0 failures | AR-01, AR-01b, AR-03, AR-04 ×2, AR-15, AR-17 GREEN | `mvn -B clean verify`: exit 0, BUILD SUCCESS | approved 2026-11-12 | see commit in §15 |
-| IT-02 | Suspended | `NOT_STARTED` | | | | | |
+| IT-01 | Shared Kernel | `APPROVED` | 439 = 307 legacy (unchanged) + 2 new IT characterization (F-01) + 7 ArchUnit + 123 domain, 0 failures | AR-01, AR-01b, AR-03, AR-04 ×2, AR-15, AR-17 GREEN | `mvn -B clean verify`: exit 0, BUILD SUCCESS | approved 2026-11-12 | `c538730d59e7de4393aa27e3cccf65c2678251ae` |
+| IT-02 | Suspended | `APPROVED` (gates 1–3: `CHANGES_REQUESTED`, package layout) | 489 = domain 142 + client-adapters 15 + infrastructure-adapters 15 + bootstrap 317, 0 failures; 21 legacy suspended tests remapped (see log) | 29 ArchUnit tests GREEN; temporary scopes AR-11, AR-18 | `mvn -B clean verify`: exit 0, BUILD SUCCESS (after the 3rd-gate ring change) | 1st, 2nd, 3rd: changes requested; 4th: approved 2026-11-12 | see §15 |
 | IT-03 | Recalls | `NOT_STARTED` | | | | | |
 | IT-04 | Instant | `NOT_STARTED` | | | | | |
 | IT-05 | Inbound | `NOT_STARTED` | | | | | |
 | IT-06 | Outbound | `NOT_STARTED` | | | | | |
 | IT-07 | Final cleanup | `NOT_STARTED` | | | | | |
 
-Test remapping log: (empty, filled from IT-02).
+Test remapping log (MAC-07):
+
+| Iteration | Legacy test (class.method / row) | Equivalent (module: class.method) | Notes |
+|---|---|---|---|
+| IT-02 | `PaymentServiceUnitTest.suspendedSearch_mapsAllFields` | domain: `SearchSuspendedPaymentsServiceTest.should_return_the_loaded_payments_unchanged`; client-adapters: `RestSuspendedPaymentControllerTest.should_render_every_search_field_with_the_api_timestamp_format_and_explicit_nulls` | same values (`heldAt` `2026-10-14T08:00:00`, `releasedAt` null); the JSON now asserts every field |
+| IT-02 | `PaymentServiceUnitTest.suspendedGetById_foundAndMissing` | domain: `GetSuspendedPaymentDetailsServiceTest` (found / missing, 2 tests) | missing id is now a well-formed unknown UUID (the service takes a `PaymentId`) |
+| IT-02 | `PaymentServiceUnitTest.should_map_suspended_details_with_same_fields_as_search` | client-adapters: `RestSuspendedPaymentControllerTest.should_render_details_with_the_same_fields_as_search` | same values |
+| IT-02 | `KafkaListenerUnitTest.suspended_onMessage_nullReleasedAt_staysNull`, `suspended_onMessage_malformedJson_swallowed`, `should_map_missing_suspended_fields_to_empty_strings_and_json_nulls_to_null_literal`, `should_parse_suspended_held_at_iso_utc_value_without_time_zone_conversion`, `should_swallow_exception_raised_by_merge`, suspended row of `should_listen_to_its_own_topic_with_its_own_transactional_consumer_group` | client-adapters: `KafkaSuspendedPaymentListenerTest` (6 tests, same payloads) | assertions on the recorded command instead of the merged entity; `Timestamp` expectations expressed as equal `LocalDateTime`s |
+| IT-02 | `PaymentControllerWebTest.suspendedSearch_returnsRows`, `suspendedDetails_foundAndMissing` | client-adapters: `RestSuspendedPaymentControllerTest.should_return_the_found_rows_when_searching`, `should_return_the_payment_details_when_found`, `should_return_404_with_empty_body_when_the_payment_is_missing` | ids `s1` / `missing` replaced by UUIDs (the new controller parses the id; `s1` now gives 400 as in production) |
+| IT-02 | suspended rows of `PaymentControllerWebTest` error-contract tests and `should_return_generic_error_body_when_service_fails` | unchanged in bootstrap `PaymentControllerWebTest`, mocks swapped to `SearchSuspendedPayments` / `GetSuspendedPaymentDetails` (approved Q1) | move with the legacy handler in IT-07 |
+| IT-02 | `PaymentRepositoryUnitTest.suspendedSearch_appliesParameterizedFilters`, `suspendedFindById_foundAndMissing`, `should_return_no_suspended_payment_when_a_held_bound_is_not_in_iso_date_time_format` (5 rows), `should_apply_inclusive_held_bounds`, `should_order_suspended_payments_by_held_at_descending_and_apply_limit`, `should_match_suspended_debtor_iban_exactly_and_case_sensitively` | infrastructure-adapters: `JpaSuspendedPaymentRepositoryAdapterTest` (11 tests, same seeds, filters and expected ids) | find-by-id split into found / missing; plus 1 new upsert test |
+| IT-02 | `PaymentApplicationIntegrationTest` | unchanged assertions; injected `SuspendedPaymentListener` replaced by `KafkaSuspendedPaymentListener` | approved Q2 |
 
 ## 12. Risks and Open Issues
 
@@ -353,6 +372,34 @@ AC-01..AC-21 of the migration agent and MAC-01..MAC-08 of `ddd-test-coverage.md`
 | 2026-11-12 | IT-01 (after gate) | `mvn -B test -Dtest='PaymentApplicationIntegrationTest#should_return_400_with_number_format_message_when_a_date_filter_field_is_not_numeric'` against the legacy code | 2 tests, 0 failures (pins existing behaviour) |
 | 2026-11-12 | IT-01 (after gate) | final compilation gate `mvn -B clean verify` (Docker) | exit 0; domain 123 + bootstrap 316 = 439 tests, 0 failures |
 
+| 2026-11-12 | IT-02 | `mvn -B test -Dtest='HexagonalArchitectureTest,AdapterDependenciesTest,PortsTest,CodingConventionsTest,DomainIsolationTest,CyclesTest'` before migration | 13 new rules RED ("failed to check any classes" / onion), 6 new guard rules GREEN, IT-01 rules GREEN |
+| 2026-11-12 | IT-02 | `mvn -B -pl domain test` with stubs (criteria and services) | 142 tests: 19 assertion failures (all new suspended tests), 0 errors |
+| 2026-11-12 | IT-02 | `mvn -B -pl domain test` after implementation | 142 tests, 0 failures |
+| 2026-11-12 | IT-02 | `mvn -B test -pl infrastructure-adapters` with stubs (after `mvn -pl domain,infrastructure-adapters install -DskipTests`) | 15 tests: 15 assertion failures, 0 errors |
+| 2026-11-12 | IT-02 | `mvn -B test -pl domain,infrastructure-adapters` after implementation | 15 tests, 0 failures (incl. F-03 DST pin) |
+| 2026-11-12 | IT-02 | `mvn -B test -pl domain,client-adapters` with stubs | 15 tests: 12 assertion failures, 0 errors; 3 passing on stubs (malformed JSON swallowed, annotation check, weak details-found test, then strengthened with `$.id` and re-run RED) |
+| 2026-11-12 | IT-02 | `mvn -B test -pl domain,client-adapters` after implementation | 15 tests, 0 failures |
+| 2026-11-12 | IT-02 | final compilation gate `mvn -B clean verify` (Docker), first run | bootstrap FAILURE: AR-06 onion (empty domain-service ring, `bootstrap.config` accessing use cases) |
+| 2026-11-12 | IT-02 | final compilation gate `mvn -B clean verify` (Docker) after declaring the composition-root ring and optional layers | exit 0; domain 142, client-adapters 15, infrastructure-adapters 15, bootstrap 314 = 486 tests, 0 failures |
+
+| 2026-11-12 | IT-02 (gate rework) | moved files to `domain.suspended` / `port.in` / `port.out` (plain `mv`: the files were untracked, so `git mv` was not applicable) and rewrote packages/imports | — |
+| 2026-11-12 | IT-02 (gate rework) | `mvn -B test -Dtest='HexagonalArchitectureTest,AdapterDependenciesTest,PortsTest,CodingConventionsTest,DomainIsolationTest,CyclesTest'` | exit 0; 27 tests, 0 failures; AR-06 GREEN without optional layers |
+| 2026-11-12 | IT-02 (gate rework) | mutation check: a model method returning `port.out.LoadSuspendedPayments`, same command | AR-04 (model) and AR-06 RED as expected; change reverted |
+
+| 2026-11-12 | IT-02 (gate rework) | final compilation gate `mvn -B clean verify` (Docker) | exit 0; domain 142, client-adapters 15, infrastructure-adapters 15, bootstrap 315 = 487 tests, 0 failures (+1: the new AR-14 naming rule) |
+
+| 2026-11-12 | IT-02 (2nd gate rework) | moved `RecordSuspendedPaymentCommand` to `command`, `SuspendedPaymentSearchQuery` and `SuspendedPaymentSearchCriteria` (+ test) to `query` (first created as `criteria`, renamed to `query` per the user's correction; no leftover); imports rewritten | — |
+| 2026-11-12 | IT-02 (2nd gate rework) | ArchUnit run (6 architecture classes) | exit 0; 29 tests, 0 failures |
+| 2026-11-12 | IT-02 (2nd gate rework) | mutation check: REST controller referencing `*Criteria`, `*Criteria` referencing `*Query` | AR-08, AR-04 (model) and AR-06 RED as expected; reverted |
+| 2026-11-12 | IT-02 (2nd gate rework) | final compilation gate `mvn -B clean verify` (Docker) | exit 0; domain 142, client-adapters 15, infrastructure-adapters 15, bootstrap 317 = 489 tests, 0 failures (+2 AR-14 package rules) |
+
+| 2026-11-12 | IT-02 (3rd gate rework) | ArchUnit run (6 architecture classes) | exit 0; 29 tests, 0 failures |
+| 2026-11-12 | IT-02 (3rd gate rework) | mutations `*Criteria` → `*Query`, REST controller → `*Criteria`, JPA adapter → `*Command` | 29 tests GREEN: relaxed as decided |
+| 2026-11-12 | IT-02 (3rd gate rework) | mutation `SuspendedPaymentSearchCriteria` → `port.out.LoadSuspendedPayments` | AR-04 (model) and AR-06 RED: still protected |
+| 2026-11-12 | IT-02 (3rd gate rework) | mutations REST controller → `port.out.LoadSuspendedPayments`, JPA adapter → `port.in.SearchSuspendedPayments` | AR-08 and AR-09 RED: still protected; all mutations reverted |
+
+| 2026-11-12 | IT-02 (3rd gate rework) | final compilation gate `mvn -B clean verify` (Docker) | exit 0; domain 142, client-adapters 15, infrastructure-adapters 15, bootstrap 317 = 489 tests, 0 failures; per-class counts identical to the previous run |
+
 ### IT-01 findings (confirmed at the IT-01 gate, 2026-11-12: F-01 (a), F-02..F-04 (a))
 
 - **F-01 `MalformedDateException` message.** Legacy `Date.valueOf` throws a `NumberFormatException` *with* a message for a non-numeric field (e.g. `2026-1x-05` gives `Error at index 1 in: "1x"`), which the legacy handler renders as the 400 body instead of `Bad request`. `IsoDateBound` therefore carries that message (null for shape/range errors). `technical-layer-design.md` §7 shows `MalformedDateException` → `{"error":"Bad request"}` only; parity requires the REST handler (IT-05/IT-06) to render `message ?? "Bad request"`.
@@ -375,3 +422,12 @@ AC-01..AC-21 of the migration agent and MAC-01..MAC-08 of `ddd-test-coverage.md`
 | 2026-11-12 | IT-00 validation (2nd) | **APPROVED AND COMMIT** |
 | 2026-11-12 | Migration plan | **APPROVED** (with the use-case package answer applied) |
 | 2026-11-12 | IT-01 gate | F-01 (a) keep message + HTTP characterization test; F-02..F-04 (a) notes recorded; IT-01 **APPROVED AND COMMIT** |
+| 2026-11-12 | IT-02 scope gate Q0 (raised by the user) | `Money` stays a final class with `Optional` accessors: documented exception to "record for value objects" (Phase 3 Q1); no change |
+| 2026-11-12 | IT-02 scope gate Q1–Q5 | (a) legacy error-contract rows stay in bootstrap `PaymentControllerWebTest` with the new input-port mocks until IT-07; (a) test remaps approved; (a) only reachable `RestDomainExceptionHandler` handlers; (a) F-03 DST pin in `JpaSuspendedPaymentMapperTest`; (a) IT-02 scope approved, pre-1583 Kafka timestamp risk accepted |
+| 2026-11-12 | IT-02 gate Q1 (AR-06 fix) | **Not approved as is.** User: "do not use usecase package. port.out package is missing". Layout per context: model and `*Service` in `domain.<ctx>`, `port.in`, `port.out`; supersedes the IT-00 `usecase` layout and DR-6 as worded |
+| 2026-11-12 | IT-02 gate Q2 | (a) changed inputs of remapped tests approved |
+| 2026-11-12 | IT-02 gate Q3 | commit not yet; restructure, re-verify and re-present |
+| 2026-11-12 | IT-02 gate (2nd) A | Change requested. User: "can you move commands classes in command package and do the same for criteria"; correction: "replace package criteria package by query". Per context: `command` (`*Command`), `query` (`*Query`, `*Criteria`), `port.in` / `port.out` interfaces only; template for IT-03..IT-06 |
+| 2026-11-12 | IT-02 gate (2nd) Q1–Q4 | (a) model/use-case split by `*Service` naming, input-port implementations must be `*Service`; (a) intra-context package cycle accepted as inherent, `CyclesTest` stays at top-level packages; AR-06 approved (port.out as domain-service ring, no optional layers, composition-root ring); commit not yet |
+| 2026-11-12 | IT-02 gate (3rd) Q1–Q3 | (b) `command` and `query` entirely in the domain-model ring (package-based); user: "adapters can use queries and commands" (AR-08/AR-09 keep forbidding `*Service` and the opposite port package); commit not yet |
+| 2026-11-12 | IT-02 gate (4th) | (a) relaxed protections accepted; IT-02 **APPROVED AND COMMIT** |

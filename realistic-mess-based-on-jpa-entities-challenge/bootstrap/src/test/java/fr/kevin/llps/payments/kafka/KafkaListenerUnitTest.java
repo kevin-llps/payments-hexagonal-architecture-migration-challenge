@@ -30,7 +30,6 @@ import fr.kevin.llps.payments.entity.InboundPayment;
 import fr.kevin.llps.payments.entity.InstantPayment;
 import fr.kevin.llps.payments.entity.OutboundPayment;
 import fr.kevin.llps.payments.entity.Recall;
-import fr.kevin.llps.payments.entity.SuspendedPayment;
 
 import jakarta.persistence.EntityManager;
 
@@ -42,8 +41,6 @@ class KafkaListenerUnitTest {
 
     @InjectMocks
     private InstantPaymentListener instantListener;
-    @InjectMocks
-    private SuspendedPaymentListener suspendedListener;
     @InjectMocks
     private InboundPaymentListener inboundListener;
     @InjectMocks
@@ -73,27 +70,6 @@ class KafkaListenerUnitTest {
     void instant_onMessage_malformedJson_swallowed() {
         assertThatCode(() -> instantListener.onMessage("not json")).doesNotThrowAnyException();
         verify(em, never()).merge(org.mockito.ArgumentMatchers.any(InstantPayment.class));
-    }
-
-    @Test
-    void suspended_onMessage_nullReleasedAt_staysNull() {
-        suspendedListener.onMessage("""
-                {"id":"00000000-0000-0000-0000-000000000902","amount":5000.00,"currency":"EUR",
-                 "debtorIban":"DE89","debtorName":"ACME","creditorIban":"FR76","creditorName":"Dupont",
-                 "holdReason":"SANCTIONS_SCREENING","complianceCaseRef":"CASE-1","reviewStatus":"PENDING",
-                 "heldAt":"2026-10-17 11:00:00","releasedAt":null}
-                """);
-
-        SuspendedPayment payment = captureMerge(SuspendedPayment.class);
-        assertThat(payment.complianceCaseRef).isEqualTo("CASE-1");
-        assertThat(payment.heldAt).isEqualTo(Timestamp.valueOf("2026-10-17 11:00:00"));
-        assertThat(payment.releasedAt).isNull();
-    }
-
-    @Test
-    void suspended_onMessage_malformedJson_swallowed() {
-        assertThatCode(() -> suspendedListener.onMessage("{bad")).doesNotThrowAnyException();
-        verify(em, never()).merge(org.mockito.ArgumentMatchers.any(SuspendedPayment.class));
     }
 
     @Test
@@ -165,7 +141,6 @@ class KafkaListenerUnitTest {
     @ParameterizedTest(name = "[{index}] {0} listens to {1} in group {2}")
     @CsvSource({
             "fr.kevin.llps.payments.kafka.InstantPaymentListener, pay.instant, jpa-instant-group",
-            "fr.kevin.llps.payments.kafka.SuspendedPaymentListener, pay.suspended, jpa-suspended-group",
             "fr.kevin.llps.payments.kafka.InboundPaymentListener, pay.inbound, jpa-inbound-group",
             "fr.kevin.llps.payments.kafka.OutboundPaymentMessageConsumer, pay.outbound, jpa-outbound-group",
             "fr.kevin.llps.payments.kafka.RecallListener, pay.recall, jpa-recall-group"
@@ -265,19 +240,6 @@ class KafkaListenerUnitTest {
         verifyNoMoreInteractions(em);
     }
 
-    @Test
-    void should_swallow_exception_raised_by_merge() {
-        // GIVEN
-        when(em.merge(any(SuspendedPayment.class))).thenThrow(new IllegalStateException("db down"));
-        String payload = """
-                {"id":"00000000-0000-0000-0000-000000000914","amount":1.00,"currency":"EUR"}
-                """;
-
-        // WHEN / THEN
-        assertThatCode(() -> suspendedListener.onMessage(payload)).doesNotThrowAnyException();
-        verify(em).merge(any(SuspendedPayment.class));
-    }
-
     @ParameterizedTest(name = "[{index}] originalPaymentId {0} -> recall dropped")
     @ValueSource(strings = {
             "\"originalPaymentId\":\"not-a-uuid\",",
@@ -320,27 +282,6 @@ class KafkaListenerUnitTest {
         assertThat(payment.creditorName).isEmpty();
         assertThat(payment.amount).isEqualByComparingTo(BigDecimal.ZERO);
         assertThat(payment.executionDatetime).isNull();
-    }
-
-    @Test
-    void should_map_missing_suspended_fields_to_empty_strings_and_json_nulls_to_null_literal() {
-        // GIVEN
-        String payload = """
-                {"id":"00000000-0000-0000-0000-000000000917","holdReason":null,"amount":null}
-                """;
-
-        // WHEN
-        suspendedListener.onMessage(payload);
-
-        // THEN
-        SuspendedPayment payment = captureMerge(SuspendedPayment.class);
-        assertThat(payment.holdReason).isEqualTo("null");
-        assertThat(payment.currency).isEmpty();
-        assertThat(payment.complianceCaseRef).isEmpty();
-        assertThat(payment.reviewStatus).isEmpty();
-        assertThat(payment.amount).isEqualByComparingTo(BigDecimal.ZERO);
-        assertThat(payment.heldAt).isNull();
-        assertThat(payment.releasedAt).isNull();
     }
 
     @Test
@@ -445,22 +386,6 @@ class KafkaListenerUnitTest {
         // THEN
         Recall recall = captureMerge(Recall.class);
         assertThat(recall.initiatedAt).isEqualTo(Timestamp.valueOf(expected));
-    }
-
-    @Test
-    void should_parse_suspended_held_at_iso_utc_value_without_time_zone_conversion() {
-        // GIVEN
-        String payload = """
-                {"id":"00000000-0000-0000-0000-000000000923","heldAt":"2026-10-17T11:00:00Z","releasedAt":"null"}
-                """;
-
-        // WHEN
-        suspendedListener.onMessage(payload);
-
-        // THEN
-        SuspendedPayment payment = captureMerge(SuspendedPayment.class);
-        assertThat(payment.heldAt).isEqualTo(Timestamp.valueOf("2026-10-17 11:00:00"));
-        assertThat(payment.releasedAt).isNull();
     }
 
     @ParameterizedTest(name = "[{index}] requestedExecutionDate {0} -> {1}")
