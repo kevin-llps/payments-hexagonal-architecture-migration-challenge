@@ -1,0 +1,180 @@
+{
+  "skill": "dependency-inversion-principle",
+  "rules": [
+    {
+      "id": "R1",
+      "rule": "The skill is discoverable: its ID matches the directory and its description says when to use it",
+      "check": "static",
+      "assertions": [
+        { "type": "idMatchesDir" },
+        { "type": "frontmatterField", "value": "name" },
+        { "type": "frontmatterField", "value": "description", "matches": "use (it )?(when|before)" }
+      ]
+    },
+    {
+      "id": "R2",
+      "rule": "High-level business rules and low-level mechanisms are identified before any class is created",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Identify dependency boundaries" },
+        { "type": "regex", "value": "Before\\s+creating\\s+classes", "section": "Identify dependency boundaries" },
+        { "type": "regex", "value": "high-level\\s+business\\s+rules\\s+that\\s+implement\\s+the\\s+feature", "section": "Identify dependency boundaries" },
+        { "type": "regex", "value": "database\\s+access,\\s+external\\s+APIs,\\s+messaging,\\s+and\\s+file\\s+operations", "section": "Identify dependency boundaries" },
+        { "type": "regex", "value": "difficult\\s+to\\s+change,\\s+isolate,\\s+or\\s+test", "section": "Identify dependency boundaries" }
+      ]
+    },
+    {
+      "id": "R3",
+      "rule": "Dependencies that need an abstraction are distinguished from simple implementation details that do not",
+      "check": "static",
+      "assertions": [
+        { "type": "regex", "value": "simple\\s+implementation\\s+details\\s+that\\s+do\\s+not\\s+justify\\s+additional\\s+complexity", "section": "Identify dependency boundaries" }
+      ]
+    },
+    {
+      "id": "R4",
+      "rule": "High-level modules depend on abstractions shaped around the capabilities and needs they require",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Define appropriate abstractions" },
+        { "type": "regex", "value": "depend\\s+on\\s+abstractions\\s+representing\\s+the\\s+capabilities\\s+they\\s+require", "section": "Define appropriate abstractions" },
+        { "type": "regex", "value": "meaningful\\s+business\\s+or\\s+application\\s+needs", "section": "Define appropriate abstractions" }
+      ]
+    },
+    {
+      "id": "R5",
+      "rule": "An abstraction is owned by the layer that needs the capability, consistent with the project's architecture",
+      "check": "static",
+      "assertions": [
+        { "type": "regex", "value": "owned\\s+by\\s+the\\s+layer\\s+that\\s+needs\\s+the\\s+capability", "section": "Define appropriate abstractions" },
+        { "type": "regex", "value": "consistent\\s+with\\s+the\\s+project's\\s+architecture", "section": "Define appropriate abstractions" }
+      ]
+    },
+    {
+      "id": "R6",
+      "rule": "High-level contracts do not expose infrastructure-specific types that are not part of the required behavior",
+      "check": "static",
+      "assertions": [
+        { "type": "regex", "value": "infrastructure-specific\\s+types\\s+in\\s+high-level\\s+business\\s+contracts", "section": "Define appropriate abstractions" }
+      ]
+    },
+    {
+      "id": "R7",
+      "rule": "Business logic depends on contracts instead of constructing low-level implementations, and infrastructure implements those contracts",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Design dependency direction" },
+        { "type": "regex", "value": "depends\\s+on\\s+contracts\\s+rather\\s+than\\s+directly\\s+constructing\\s+low-level\\s+implementations", "section": "Design dependency direction" },
+        { "type": "regex", "value": "infrastructure\\s+components\\s+implement\\s+or\\s+satisfy\\s+the\\s+abstractions", "flags": "i", "section": "Design dependency direction" }
+      ]
+    },
+    {
+      "id": "R8",
+      "rule": "Dependencies are wired by constructor injection or the established mechanism, with object creation kept outside business logic",
+      "check": "static",
+      "assertions": [
+        { "type": "regex", "value": "constructor\\s+injection\\s+or\\s+the\\s+project's\\s+established\\s+dependency\\s+injection\\s+mechanism", "flags": "i", "section": "Design dependency direction" },
+        { "type": "regex", "value": "object\\s+creation\\s+and\\s+infrastructure\\s+configuration\\s+outside\\s+business\\s+logic", "flags": "i", "section": "Design dependency direction" }
+      ]
+    },
+    {
+      "id": "R9",
+      "rule": "Service locators, hidden global dependencies, and unnecessary static access to collaborators are avoided",
+      "check": "static",
+      "assertions": [
+        { "type": "regex", "value": "service\\s+locators,\\s+hidden\\s+global\\s+dependencies,\\s+and\\s+unnecessary\\s+static\\s+access", "flags": "i", "section": "Design dependency direction" }
+      ]
+    },
+    {
+      "id": "R10",
+      "rule": "Simplicity is preserved: abstractions only at meaningful boundaries, no interface per class, no excessive indirection",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Preserve simplicity" },
+        { "type": "regex", "value": "meaningful\\s+boundary,\\s+improve\\s+replaceability,\\s+or\\s+isolate\\s+volatile\\s+infrastructure", "section": "Preserve simplicity" },
+        { "type": "regex", "value": "create\\s+interfaces\\s+for\\s+every\\s+class\\s+automatically", "section": "Preserve simplicity" },
+        { "type": "regex", "value": "excessive\\s+indirection", "section": "Preserve simplicity" },
+        { "type": "regex", "value": "existing\\s+architecture\\s+and\\s+established\\s+dependency\\s+management\\s+patterns", "section": "Preserve simplicity" }
+      ]
+    },
+    {
+      "id": "R11",
+      "rule": "The workflow runs Analyze, Map, Design, Validate, Present, Implement in that order, implementing only after validation",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Workflow" },
+        { "type": "regex", "value": "1\\.\\s+\\*\\*Analyze[\\s\\S]*2\\.\\s+\\*\\*Map[\\s\\S]*3\\.\\s+\\*\\*Design[\\s\\S]*4\\.\\s+\\*\\*Validate[\\s\\S]*5\\.\\s+\\*\\*Present[\\s\\S]*6\\.\\s+\\*\\*Implement", "section": "Workflow" },
+        { "type": "regex", "value": "only\\s+after\\s+validating\\s+the\\s+design\\s+against\\s+DIP", "section": "Workflow" }
+      ]
+    },
+    {
+      "id": "R12",
+      "rule": "Constraints forbid wiring before analysis, abstractions without benefit, infrastructure leaks, and unrelated boundary changes, and require project conventions",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Constraints" },
+        { "type": "regex", "value": "before\\s+analyzing\\s+dependency\\s+direction", "section": "Constraints" },
+        { "type": "regex", "value": "abstractions\\s+without\\s+a\\s+concrete\\s+design\\s+benefit", "section": "Constraints" },
+        { "type": "regex", "value": "infrastructure\\s+concerns\\s+to\\s+leak\\s+into\\s+business\\s+logic", "section": "Constraints" },
+        { "type": "regex", "value": "unrelated\\s+architectural\\s+boundaries", "section": "Constraints" },
+        { "type": "regex", "value": "existing\\s+dependency\\s+injection\\s+and\\s+configuration\\s+conventions", "section": "Constraints" }
+      ]
+    },
+    {
+      "id": "R13",
+      "rule": "The five deliverables are presented before any class is created",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Expected deliverables" },
+        { "type": "regex", "value": "Before\\s+creating\\s+classes", "section": "Expected deliverables" },
+        { "type": "regex", "value": "1\\.\\s+The\\s+identified\\s+high-level\\s+and\\s+low-level\\s+components", "section": "Expected deliverables" },
+        { "type": "regex", "value": "2\\.\\s+The\\s+proposed\\s+abstractions\\s+and\\s+the\\s+capabilities\\s+they\\s+expose", "section": "Expected deliverables" },
+        { "type": "regex", "value": "3\\.\\s+The\\s+dependency\\s+relationships\\s+between\\s+components", "section": "Expected deliverables" },
+        { "type": "regex", "value": "4\\.\\s+The\\s+intended\\s+dependency\\s+injection\\s+and\\s+object\\s+construction\\s+strategy", "section": "Expected deliverables" },
+        { "type": "regex", "value": "5\\.\\s+An\\s+explanation\\s+of\\s+how\\s+the\\s+design\\s+reduces\\s+coupling\\s+and\\s+supports\\s+isolated\\s+testing", "section": "Expected deliverables" }
+      ]
+    },
+    {
+      "id": "R14",
+      "rule": "The definition of done is stated as checkable acceptance criteria",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Acceptance criteria" },
+        { "type": "regex", "value": "depends\\s+on\\s+appropriate\\s+abstractions", "section": "Acceptance criteria" },
+        { "type": "regex", "value": "low-level\\s+implementations\\s+satisfy\\s+those\\s+abstractions", "flags": "i", "section": "Acceptance criteria" },
+        { "type": "regex", "value": "wired\\s+through\\s+the\\s+established\\s+architecture", "section": "Acceptance criteria" },
+        { "type": "regex", "value": "unnecessary\\s+coupling\\s+is\\s+avoided", "section": "Acceptance criteria" }
+      ]
+    },
+    {
+      "id": "R15",
+      "rule": "The skill carries a Rules table covering every spec ID and ships a README",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Rules" },
+        { "type": "ruleTableCoverage" },
+        { "type": "pathExists", "value": "README.md" }
+      ]
+    },
+    {
+      "id": "R16",
+      "rule": "Given a business service that constructs infrastructure directly, the agent proposes a capability abstraction owned by the high-level layer, implemented by infrastructure, wired by constructor injection, with no infrastructure types in the contract",
+      "check": "agent-evaluation"
+    },
+    {
+      "id": "R17",
+      "rule": "Given a stable, pure in-process helper, the agent keeps the concrete dependency instead of introducing an interface",
+      "check": "agent-evaluation"
+    },
+    {
+      "id": "R18",
+      "rule": "The first output line announces the skill invocation",
+      "check": "static",
+      "assertions": [
+        { "type": "heading", "value": "Invocation Announcement" },
+        { "type": "contains", "value": "▶ Skill invoked: Dependency Inversion Principle — decide abstractions and dependency direction before creating classes", "section": "Invocation Announcement" },
+        { "type": "contains", "value": "first output", "section": "Invocation Announcement" }
+      ]
+    }
+  ]
+}
