@@ -1,6 +1,7 @@
 package fr.kevin.llps.payments.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
 import java.sql.Date;
@@ -10,6 +11,8 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
@@ -33,6 +36,8 @@ import fr.kevin.llps.payments.entity.InstantPayment;
 import fr.kevin.llps.payments.entity.OutboundPayment;
 import fr.kevin.llps.payments.entity.Recall;
 import fr.kevin.llps.payments.entity.SuspendedPayment;
+
+import jakarta.persistence.PersistenceException;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -298,7 +303,492 @@ class PaymentRepositoryUnitTest {
         assertThat(recallRepository.findById("11111111-1111-1111-1111-111111111111")).isNull();
     }
 
+    // ---------------- characterization: Instant date bounds (BR-INS-06, BR-INS-07, C-04) ----------------
+
+    @ParameterizedTest(name = "[{index}] executionFrom={0} executionTo={1} -> {2} rows")
+    @CsvSource(value = {
+            "garbage, NULL, 2",
+            "NULL, garbage, 2",
+            "2026-10-16, NULL, 1",
+            "NULL, 2026-10-15, 1",
+            "2026-10-15T09:15:00, 2026-10-15T09:15:00, 1"
+    }, nullValues = "NULL")
+    void should_apply_inclusive_instant_execution_bounds_and_ignore_unparsable_ones(String from, String to,
+            int expectedCount) {
+        // GIVEN
+        persist(
+                instant("00000000-0000-0000-0000-000000000641", "E2E-B1", "COMPLETED",
+                        "DE89370400440532013000", "FR7630006000011234567890189", Timestamp.valueOf("2026-10-15 09:15:00"), "EUR"),
+                instant("00000000-0000-0000-0000-000000000642", "E2E-B2", "COMPLETED",
+                        "DE89370400440532013000", "FR7630006000011234567890189", Timestamp.valueOf("2026-10-16 00:00:00"), "EUR"));
+        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
+        request.executionFrom = from;
+        request.executionTo = to;
+
+        // WHEN
+        List<InstantPaymentResponse> results = instantRepository.search(request);
+
+        // THEN
+        assertThat(results).hasSize(expectedCount);
+    }
+
+    @Test
+    void should_match_instant_iban_filter_case_insensitively_as_contains() {
+        // GIVEN
+        persist(instant("00000000-0000-0000-0000-000000000643", "E2E-C1", "COMPLETED",
+                "DE89370400440532013000", "FR7630006000011234567890189", Timestamp.valueOf("2026-10-15 09:15:00"), "EUR"));
+        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
+        request.debtorIban = " 0532013 ";
+
+        // WHEN
+        List<InstantPaymentResponse> results = instantRepository.search(request);
+
+        // THEN
+        assertThat(results).extracting(r -> r.endToEndId).containsExactly("E2E-C1");
+    }
+
+    @Test
+    void should_not_strip_inner_spaces_from_instant_iban_filter() {
+        // GIVEN
+        persist(instant("00000000-0000-0000-0000-000000000644", "E2E-C2", "COMPLETED",
+                "DE89370400440532013000", "FR7630006000011234567890189", Timestamp.valueOf("2026-10-15 09:15:00"), "EUR"));
+        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
+        request.debtorIban = "DE89 3704 0044 0532 0130 00";
+
+        // WHEN
+        List<InstantPaymentResponse> results = instantRepository.search(request);
+
+        // THEN
+        assertThat(results).isEmpty();
+    }
+
+    @Test
+    void should_match_end_to_end_id_exactly_and_case_sensitively() {
+        // GIVEN
+        persist(instant("00000000-0000-0000-0000-000000000645", "E2E-Case", "COMPLETED",
+                "DE89370400440532013000", "FR7630006000011234567890189", Timestamp.valueOf("2026-10-15 09:15:00"), "EUR"));
+        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
+        request.endToEndId = "e2e-case";
+
+        // WHEN
+        List<InstantPaymentResponse> results = instantRepository.search(request);
+
+        // THEN
+        assertThat(results).isEmpty();
+    }
+
+    @Test
+    void should_return_no_instant_payment_when_limit_is_zero() {
+        // GIVEN
+        persist(instant("00000000-0000-0000-0000-000000000646", "E2E-L0", "COMPLETED",
+                "DE89370400440532013000", "FR7630006000011234567890189", Timestamp.valueOf("2026-10-15 09:15:00"), "EUR"));
+        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
+        request.limit = 0;
+
+        // WHEN
+        List<InstantPaymentResponse> results = instantRepository.search(request);
+
+        // THEN
+        assertThat(results).isEmpty();
+    }
+
+    @Test
+    void should_reject_negative_instant_limit_with_illegal_argument_root_cause() {
+        // GIVEN
+        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
+        request.limit = -1;
+
+        // WHEN / THEN
+        assertThatThrownBy(() -> instantRepository.search(request))
+                .satisfies(e -> assertThat(rootCauseOf(e)).isInstanceOf(IllegalArgumentException.class));
+    }
+
+    // ---------------- characterization: Suspended date bounds, order and limit (BR-SUS-01, BR-SUS-04, BR-SUS-05) ----------------
+
+    @ParameterizedTest(name = "[{index}] heldFrom={0} heldTo={1} -> empty")
+    @CsvSource(value = {
+            "2026-10-01, NULL",
+            "NULL, 2026-10-31",
+            "garbage, NULL",
+            "NULL, garbage",
+            "2026-10-01 00:00:00, NULL"
+    }, nullValues = "NULL")
+    void should_return_no_suspended_payment_when_a_held_bound_is_not_in_iso_date_time_format(String heldFrom,
+            String heldTo) {
+        // GIVEN
+        persist(suspended("00000000-0000-0000-0000-000000000651", "DE89370400440532013000", "AML_THRESHOLD",
+                "PENDING", Timestamp.valueOf("2026-10-14 08:00:00"), null));
+        SuspendedPaymentSearchRequest request = new SuspendedPaymentSearchRequest();
+        request.heldFrom = heldFrom;
+        request.heldTo = heldTo;
+
+        // WHEN
+        List<SuspendedPayment> results = suspendedRepository.search(request);
+
+        // THEN
+        assertThat(results).isEmpty();
+    }
+
+    @Test
+    void should_apply_inclusive_held_bounds() {
+        // GIVEN
+        persist(suspended("00000000-0000-0000-0000-000000000652", "DE89370400440532013000", "AML_THRESHOLD",
+                "PENDING", Timestamp.valueOf("2026-10-14 08:00:00"), null));
+        SuspendedPaymentSearchRequest request = new SuspendedPaymentSearchRequest();
+        request.heldFrom = "2026-10-14T08:00:00";
+        request.heldTo = "2026-10-14T08:00:00";
+
+        // WHEN
+        List<SuspendedPayment> results = suspendedRepository.search(request);
+
+        // THEN
+        assertThat(results).extracting(p -> p.id)
+                .containsExactly(UUID.fromString("00000000-0000-0000-0000-000000000652"));
+    }
+
+    @Test
+    void should_order_suspended_payments_by_held_at_descending_and_apply_limit() {
+        // GIVEN
+        persist(
+                suspended("00000000-0000-0000-0000-000000000653", "DE89370400440532013000", "AML_THRESHOLD",
+                        "PENDING", Timestamp.valueOf("2026-10-13 08:00:00"), null),
+                suspended("00000000-0000-0000-0000-000000000654", "DE89370400440532013000", "AML_THRESHOLD",
+                        "PENDING", Timestamp.valueOf("2026-10-15 08:00:00"), null),
+                suspended("00000000-0000-0000-0000-000000000655", "DE89370400440532013000", "AML_THRESHOLD",
+                        "PENDING", Timestamp.valueOf("2026-10-14 08:00:00"), null));
+        SuspendedPaymentSearchRequest request = new SuspendedPaymentSearchRequest();
+        request.limit = 2;
+
+        // WHEN
+        List<SuspendedPayment> results = suspendedRepository.search(request);
+
+        // THEN
+        assertThat(results).extracting(p -> p.id).containsExactly(
+                UUID.fromString("00000000-0000-0000-0000-000000000654"),
+                UUID.fromString("00000000-0000-0000-0000-000000000655"));
+    }
+
+    @Test
+    void should_match_suspended_debtor_iban_exactly_and_case_sensitively() {
+        // GIVEN
+        persist(suspended("00000000-0000-0000-0000-000000000656", "DE89370400440532013000", "AML_THRESHOLD",
+                "PENDING", Timestamp.valueOf("2026-10-14 08:00:00"), null));
+        SuspendedPaymentSearchRequest request = new SuspendedPaymentSearchRequest();
+        request.debtorIban = "de89370400440532013000";
+
+        // WHEN
+        List<SuspendedPayment> results = suspendedRepository.search(request);
+
+        // THEN
+        assertThat(results).isEmpty();
+    }
+
+    // ---------------- characterization: Inbound order, limit and dates (BR-INB-04, BR-INB-05, BR-INB-06) ----------------
+
+    @Test
+    void should_order_inbound_payments_by_value_date_then_created_at_descending() {
+        // GIVEN
+        InboundPayment olderSameDay = inbound("00000000-0000-0000-0000-000000000661", "CTR-A",
+                "DE89370400440532013000", "BNPAFRPP", "SETTLED", "EUR", Date.valueOf("2026-10-15"), null);
+        InboundPayment newerSameDay = inbound("00000000-0000-0000-0000-000000000662", "CTR-B",
+                "DE89370400440532013000", "BNPAFRPP", "SETTLED", "EUR", Date.valueOf("2026-10-15"), null);
+        newerSameDay.createdAt = Timestamp.valueOf("2026-10-15 18:00:00");
+        InboundPayment latestValueDate = inbound("00000000-0000-0000-0000-000000000663", "CTR-C",
+                "DE89370400440532013000", "BNPAFRPP", "SETTLED", "EUR", Date.valueOf("2026-10-16"), null);
+        persist(olderSameDay, newerSameDay, latestValueDate);
+
+        // WHEN
+        List<InboundPaymentResponse> results = inboundRepository.search(new InboundPaymentSearchRequest());
+
+        // THEN
+        assertThat(results).extracting(r -> r.creditTransferRef).containsExactly("CTR-C", "CTR-B", "CTR-A");
+    }
+
+    @ParameterizedTest(name = "[{index}] limit {0} -> {1} rows")
+    @CsvSource(value = {
+            "NULL, 50",
+            "201, 201",
+            "0, 0"
+    }, nullValues = "NULL")
+    void should_default_inbound_limit_to_50_without_capping_at_200(Integer limit, int expectedCount) {
+        // GIVEN
+        for (int i = 0; i < 201; i++) {
+            em.persist(inbound(String.format("00000000-0000-0000-0000-0000000%05d", 10000 + i), "CTR-" + i,
+                    "DE89370400440532013000", "BNPAFRPP", "SETTLED", "EUR", Date.valueOf("2026-10-15"), null));
+        }
+        em.flush();
+        em.clear();
+        InboundPaymentSearchRequest request = new InboundPaymentSearchRequest();
+        request.limit = limit;
+
+        // WHEN
+        List<InboundPaymentResponse> results = inboundRepository.search(request);
+
+        // THEN
+        assertThat(results).hasSize(expectedCount);
+    }
+
+    @ParameterizedTest(name = "[{index}] valueDateFrom={0} valueDateTo={1}")
+    @CsvSource(value = {
+            "2026-13-45, NULL",
+            "NULL, garbage",
+            "2026-10-15T00:00:00, NULL"
+    }, nullValues = "NULL")
+    void should_reject_inbound_value_date_bound_not_in_strict_iso_date_format_with_message_less_error(String from,
+            String to) {
+        // GIVEN
+        InboundPaymentSearchRequest request = new InboundPaymentSearchRequest();
+        request.valueDateFrom = from;
+        request.valueDateTo = to;
+
+        // WHEN / THEN
+        assertThatThrownBy(() -> inboundRepository.search(request))
+                .satisfies(e -> assertThat(rootCauseOf(e)).isExactlyInstanceOf(IllegalArgumentException.class)
+                        .hasMessage(null));
+    }
+
+    @Test
+    void should_apply_inclusive_inbound_value_date_bounds() {
+        // GIVEN
+        persist(inbound("00000000-0000-0000-0000-000000000664", "CTR-D", "DE89370400440532013000", "BNPAFRPP",
+                "SETTLED", "EUR", Date.valueOf("2026-10-15"), null));
+        InboundPaymentSearchRequest request = new InboundPaymentSearchRequest();
+        request.valueDateFrom = "2026-10-15";
+        request.valueDateTo = " 2026-10-15 ";
+
+        // WHEN
+        List<InboundPaymentResponse> results = inboundRepository.search(request);
+
+        // THEN
+        assertThat(results).extracting(r -> r.creditTransferRef).containsExactly("CTR-D");
+    }
+
+    // ---------------- characterization: Outbound filters, order, limit and dates (BR-OUT-02, BR-OUT-04, BR-OUT-05) ----------------
+
+    @Test
+    void should_not_match_lower_case_stored_destination_bic() {
+        // GIVEN
+        persist(outbound("00000000-0000-0000-0000-000000000671", "OUT-LC", "DE89370400440532013000", "abnanl2a",
+                "SHA", "SENT", Date.valueOf("2026-10-16")));
+        OutboundPaymentSearchRequest request = new OutboundPaymentSearchRequest();
+        request.destinationBic = "abna";
+
+        // WHEN
+        List<OutboundPayment> results = outboundRepository.search(request);
+
+        // THEN
+        assertThat(results).isEmpty();
+    }
+
+    @Test
+    void should_order_outbound_payments_by_requested_execution_date_descending_and_apply_limit() {
+        // GIVEN
+        persist(
+                outbound("00000000-0000-0000-0000-000000000672", "OUT-OLD", "DE89370400440532013000", "ABNANL2A",
+                        "SHA", "SENT", Date.valueOf("2026-10-14")),
+                outbound("00000000-0000-0000-0000-000000000673", "OUT-NEW", "DE89370400440532013000", "ABNANL2A",
+                        "SHA", "SENT", Date.valueOf("2026-10-18")),
+                outbound("00000000-0000-0000-0000-000000000674", "OUT-MID", "DE89370400440532013000", "ABNANL2A",
+                        "SHA", "SENT", Date.valueOf("2026-10-16")));
+        OutboundPaymentSearchRequest request = new OutboundPaymentSearchRequest();
+        request.limit = 2;
+
+        // WHEN
+        List<OutboundPayment> results = outboundRepository.search(request);
+
+        // THEN
+        assertThat(results).extracting(p -> p.instructionId).containsExactly("OUT-NEW", "OUT-MID");
+    }
+
+    @ParameterizedTest(name = "[{index}] executionFrom={0} executionTo={1}")
+    @CsvSource(value = {
+            "garbage, NULL",
+            "NULL, 2026-02-30x",
+            "2026-10-16T00:00:00, NULL"
+    }, nullValues = "NULL")
+    void should_reject_outbound_execution_bound_not_in_strict_iso_date_format_with_message_less_error(String from,
+            String to) {
+        // GIVEN
+        OutboundPaymentSearchRequest request = new OutboundPaymentSearchRequest();
+        request.executionFrom = from;
+        request.executionTo = to;
+
+        // WHEN / THEN
+        assertThatThrownBy(() -> outboundRepository.search(request))
+                .satisfies(e -> assertThat(rootCauseOf(e)).isExactlyInstanceOf(IllegalArgumentException.class)
+                        .hasMessage(null));
+    }
+
+    @Test
+    void should_apply_inclusive_outbound_execution_bounds() {
+        // GIVEN
+        persist(outbound("00000000-0000-0000-0000-000000000675", "OUT-EQ", "DE89370400440532013000", "ABNANL2A",
+                "SHA", "SENT", Date.valueOf("2026-10-16")));
+        OutboundPaymentSearchRequest request = new OutboundPaymentSearchRequest();
+        request.executionFrom = "2026-10-16";
+        request.executionTo = "2026-10-16";
+
+        // WHEN
+        List<OutboundPayment> results = outboundRepository.search(request);
+
+        // THEN
+        assertThat(results).extracting(p -> p.instructionId).containsExactly("OUT-EQ");
+    }
+
+    // ---------------- characterization: Recalls (BR-RCL-03, BR-RCL-04, BR-RCL-06) ----------------
+
+    @Test
+    void should_reject_malformed_original_payment_id_filter_with_invalid_uuid_message() {
+        // GIVEN
+        RecallSearchRequest request = new RecallSearchRequest();
+        request.originalPaymentId = "xyz";
+
+        // WHEN / THEN
+        assertThatThrownBy(() -> recallRepository.search(request))
+                .satisfies(e -> assertThat(rootCauseOf(e)).isInstanceOf(IllegalArgumentException.class)
+                        .hasMessage("Invalid UUID string: xyz"));
+    }
+
+    @ParameterizedTest(name = "[{index}] initiatedFrom={0} initiatedTo={1} -> {2} rows")
+    @CsvSource(value = {
+            "NULL, 2026-10-16, 1",
+            "NULL, 2026-10-17, 2",
+            "2026-10-16, NULL, 1",
+            "garbage, NULL, 2",
+            "NULL, garbage, 2",
+            "2026-10-16T12:00:00, 2026-10-16T12:00:00, 1"
+    }, nullValues = "NULL")
+    void should_treat_date_only_recall_bounds_as_start_of_day_and_ignore_unparsable_ones(String from, String to,
+            int expectedCount) {
+        // GIVEN
+        persist(
+                recall("00000000-0000-0000-0000-000000000761", "R-COR", Timestamp.valueOf("2026-10-16 12:00:00"),
+                        Date.valueOf("2026-10-18")),
+                recall("00000000-0000-0000-0000-000000000762", "R-REJ", Timestamp.valueOf("2026-10-14 19:00:00"),
+                        Date.valueOf("2026-10-16")));
+        RecallSearchRequest request = new RecallSearchRequest();
+        request.initiatedFrom = from;
+        request.initiatedTo = to;
+
+        // WHEN
+        List<Recall> results = recallRepository.search(request);
+
+        // THEN
+        assertThat(results).hasSize(expectedCount);
+    }
+
+    @Test
+    void should_order_recalls_by_initiated_at_descending() {
+        // GIVEN
+        persist(
+                recall("00000000-0000-0000-0000-000000000763", "R-REJ", Timestamp.valueOf("2026-10-14 19:00:00"),
+                        Date.valueOf("2026-10-16")),
+                recall("00000000-0000-0000-0000-000000000764", "R-UPD", Timestamp.valueOf("2026-10-16 20:00:00"),
+                        Date.valueOf("2026-10-19")),
+                recall("00000000-0000-0000-0000-000000000765", "R-COR", Timestamp.valueOf("2026-10-16 12:00:00"),
+                        Date.valueOf("2026-10-18")));
+
+        // WHEN
+        List<Recall> results = recallRepository.search(new RecallSearchRequest());
+
+        // THEN
+        assertThat(results).extracting(r -> r.recallType).containsExactly("R-UPD", "R-COR", "R-REJ");
+    }
+
+    // ---------------- characterization: schema constraints (BR-SHR-09, BR-DAT-01) ----------------
+
+    @Test
+    void should_round_amount_to_two_fractional_digits() {
+        // GIVEN
+        InstantPayment payment = instant("00000000-0000-0000-0000-000000000681", "E2E-R1", "COMPLETED",
+                "DE89370400440532013000", "FR7630006000011234567890189", Timestamp.valueOf("2026-10-15 09:15:00"), "EUR");
+        payment.amount = new BigDecimal("10.005");
+        persist(payment);
+
+        // WHEN
+        InstantPaymentResponse found = instantRepository.findById("00000000-0000-0000-0000-000000000681");
+
+        // THEN
+        assertThat(found.amount).isEqualTo(new BigDecimal("10.01"));
+    }
+
+    @Test
+    void should_reject_instant_payment_without_currency() {
+        // GIVEN
+        InstantPayment payment = instant("00000000-0000-0000-0000-000000000682", "E2E-R2", "COMPLETED",
+                "DE89370400440532013000", "FR7630006000011234567890189", Timestamp.valueOf("2026-10-15 09:15:00"), null);
+
+        // WHEN / THEN
+        assertThatThrownBy(() -> persist(payment))
+                .isInstanceOf(PersistenceException.class)
+                .rootCause().hasMessageContaining("not-null");
+    }
+
+    @Test
+    void should_reject_outbound_payment_without_amount() {
+        // GIVEN
+        OutboundPayment payment = outbound("00000000-0000-0000-0000-000000000683", "OUT-NA", "DE89370400440532013000",
+                "ABNANL2A", "SHA", "SENT", Date.valueOf("2026-10-16"));
+        payment.amount = null;
+
+        // WHEN / THEN
+        assertThatThrownBy(() -> persist(payment))
+                .isInstanceOf(PersistenceException.class)
+                .rootCause().hasMessageContaining("not-null");
+    }
+
+    @Test
+    void should_reject_currency_longer_than_three_characters() {
+        // GIVEN
+        SuspendedPayment payment = suspended("00000000-0000-0000-0000-000000000684", "DE89370400440532013000",
+                "AML_THRESHOLD", "PENDING", Timestamp.valueOf("2026-10-14 08:00:00"), null);
+        payment.currency = "EURO";
+
+        // WHEN / THEN
+        assertThatThrownBy(() -> persist(payment))
+                .isInstanceOf(PersistenceException.class)
+                .rootCause().hasMessageContaining("value too long");
+    }
+
+    @Test
+    void should_accept_recall_without_amount_and_currency() {
+        // GIVEN
+        Recall recall = recall("00000000-0000-0000-0000-000000000685", "R-COR", Timestamp.valueOf("2026-10-16 12:00:00"),
+                Date.valueOf("2026-10-18"));
+        recall.amount = null;
+        recall.currency = null;
+        persist(recall);
+
+        // WHEN
+        Recall found = recallRepository.findById("00000000-0000-0000-0000-000000000685");
+
+        // THEN
+        assertThat(found.amount).isNull();
+        assertThat(found.currency).isNull();
+    }
+
+    @Test
+    void should_trim_details_id_before_parsing_it() {
+        // GIVEN
+        persist(inbound("00000000-0000-0000-0000-000000000686", "CTR-TRIM", "DE89370400440532013000", "BNPAFRPP",
+                "SETTLED", "EUR", Date.valueOf("2026-10-15"), null));
+
+        // WHEN
+        InboundPaymentResponse found = inboundRepository.findById("  00000000-0000-0000-0000-000000000686 ");
+
+        // THEN
+        assertThat(found.creditTransferRef).isEqualTo("CTR-TRIM");
+    }
+
     // ---------------- helpers ----------------
+
+    private static Throwable rootCauseOf(Throwable throwable) {
+        Throwable current = throwable;
+        while (current.getCause() != null && current.getCause() != current) {
+            current = current.getCause();
+        }
+        return current;
+    }
 
     private void persist(Object... entities) {
         for (Object entity : entities) {

@@ -3,8 +3,11 @@ package fr.kevin.llps.payments.util;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.math.BigDecimal;
+import java.sql.Timestamp;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 class PaymentUtilsTest {
 
@@ -95,5 +98,79 @@ class PaymentUtilsTest {
     @Test
     void randomId_returnsUuid() {
         assertThat(PaymentUtils.randomId()).isNotNull();
+    }
+
+    // ---------------- characterization: Shared Kernel (BR-SHR-02, BR-SHR-03, BR-SHR-04, BR-SHR-06) ----------------
+
+    @ParameterizedTest(name = "[{index}] limit {0} -> {1}")
+    @CsvSource({
+            "200, 200",
+            "201, 200",
+            "1, 1",
+            "0, 0",
+            "-1, -1"
+    })
+    void should_cap_limit_at_200_and_pass_zero_and_negative_values_through(int requested, int expected) {
+        // GIVEN
+        Integer limit = requested;
+
+        // WHEN
+        int actual = PaymentUtils.limitOrDefault(limit);
+
+        // THEN
+        assertThat(actual).isEqualTo(expected);
+    }
+
+    @ParameterizedTest(name = "[{index}] {0} chars -> valid={1}")
+    @CsvSource({
+            "14, false",
+            "15, true",
+            "34, true"
+    })
+    void should_accept_iban_only_when_length_without_spaces_is_between_15_and_34(int length, boolean expected) {
+        // GIVEN
+        String iban = "D".repeat(length);
+
+        // WHEN
+        boolean actual = PaymentUtils.isValidIban(iban);
+
+        // THEN
+        assertThat(actual).isEqualTo(expected);
+    }
+
+    @Test
+    void should_accept_iban_of_any_characters_since_no_checksum_or_country_check_exists() {
+        // GIVEN
+        String notAnIban = "!!!!!!!!!!!!!!!";
+
+        // WHEN
+        boolean actual = PaymentUtils.isValidIban(notAnIban);
+
+        // THEN
+        assertThat(actual).isTrue();
+    }
+
+    @Test
+    void should_return_null_when_timestamp_is_date_only() {
+        // GIVEN
+        String dateOnly = "2026-10-15";
+
+        // WHEN
+        Timestamp actual = PaymentUtils.parseTimestamp(dateOnly);
+
+        // THEN
+        assertThat(actual).isNull();
+    }
+
+    @Test
+    void should_trim_timestamp_before_parsing() {
+        // GIVEN
+        String padded = "  2026-10-15T09:15:00  ";
+
+        // WHEN
+        Timestamp actual = PaymentUtils.parseTimestamp(padded);
+
+        // THEN
+        assertThat(actual).isEqualTo(Timestamp.valueOf("2026-10-15 09:15:00"));
     }
 }

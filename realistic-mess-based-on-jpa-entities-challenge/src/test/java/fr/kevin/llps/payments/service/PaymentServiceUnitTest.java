@@ -3,6 +3,8 @@ package fr.kevin.llps.payments.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
@@ -13,12 +15,16 @@ import java.util.List;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import fr.kevin.llps.payments.dto.InboundPaymentResponse;
+import fr.kevin.llps.payments.dto.InboundPaymentSearchRequest;
 import fr.kevin.llps.payments.dto.InstantPaymentResponse;
 import fr.kevin.llps.payments.dto.InstantPaymentSearchRequest;
 import fr.kevin.llps.payments.dto.OutboundPaymentResponse;
@@ -254,5 +260,231 @@ class PaymentServiceUnitTest {
 
         assertThat(recallService.getById("00000000-0000-0000-0000-000000000501")).isNotNull();
         assertThat(recallService.getById("nope")).isNull();
+    }
+
+    // ---------------- characterization: Instant IBAN filter validation (BR-INS-01, BR-INS-02, BR-SHR-04) ----------------
+
+    @Test
+    void should_ignore_blank_iban_filters_and_delegate_to_repository() {
+        // GIVEN
+        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
+        request.debtorIban = "   ";
+        request.creditorIban = "";
+        when(instantRepository.search(request)).thenReturn(List.of());
+
+        // WHEN
+        List<InstantPaymentResponse> result = instantService.search(request);
+
+        // THEN
+        assertThat(result).isEmpty();
+        verify(instantRepository).search(request);
+    }
+
+    @Test
+    void should_report_debtor_iban_first_when_both_iban_filters_are_invalid() {
+        // GIVEN
+        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
+        request.debtorIban = "DE1";
+        request.creditorIban = "FR1";
+
+        // WHEN / THEN
+        assertThatThrownBy(() -> instantService.search(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid debtor IBAN");
+        verifyNoInteractions(instantRepository);
+    }
+
+    @Test
+    void should_not_query_repository_when_creditor_iban_is_invalid() {
+        // GIVEN
+        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
+        request.debtorIban = "DE89370400440532013000";
+        request.creditorIban = "FR1";
+
+        // WHEN / THEN
+        assertThatThrownBy(() -> instantService.search(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Invalid creditor IBAN");
+        verifyNoInteractions(instantRepository);
+    }
+
+    @Test
+    void should_accept_iban_filter_containing_spaces_when_length_without_spaces_is_valid() {
+        // GIVEN
+        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
+        request.debtorIban = "DE89 3704 0044 0532 0130 00";
+        when(instantRepository.search(request)).thenReturn(List.of());
+
+        // WHEN
+        List<InstantPaymentResponse> result = instantService.search(request);
+
+        // THEN
+        assertThat(result).isEmpty();
+        verify(instantRepository).search(request);
+    }
+
+    // ---------------- characterization: Recall type filter validation (BR-RCL-01) ----------------
+
+    @ParameterizedTest(name = "[{index}] recallType \"{0}\" accepted")
+    @ValueSource(strings = {"R-REJ", "R-COR", "R-UPD", " r-rej ", "r-cor", "R-upd"})
+    void should_accept_allowed_recall_types_trimmed_and_case_insensitive(String recallType) {
+        // GIVEN
+        RecallSearchRequest request = new RecallSearchRequest();
+        request.recallType = recallType;
+        when(recallRepository.search(request)).thenReturn(List.of());
+
+        // WHEN
+        List<RecallResponse> result = recallService.search(request);
+
+        // THEN
+        assertThat(result).isEmpty();
+        verify(recallRepository).search(request);
+    }
+
+    @Test
+    void should_reject_unknown_recall_type_with_raw_input_in_message() {
+        // GIVEN
+        RecallSearchRequest request = new RecallSearchRequest();
+        request.recallType = " nope ";
+
+        // WHEN / THEN
+        assertThatThrownBy(() -> recallService.search(request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Unknown recall type:  nope ");
+        verifyNoInteractions(recallRepository);
+    }
+
+    @Test
+    void should_ignore_blank_recall_type_filter() {
+        // GIVEN
+        RecallSearchRequest request = new RecallSearchRequest();
+        request.recallType = "  ";
+        when(recallRepository.search(request)).thenReturn(List.of());
+
+        // WHEN
+        List<RecallResponse> result = recallService.search(request);
+
+        // THEN
+        assertThat(result).isEmpty();
+        verify(recallRepository).search(request);
+    }
+
+    // ---------------- characterization: Outbound search fee policy (BR-OUT-06, BR-OUT-08) ----------------
+
+    @ParameterizedTest(name = "[{index}] {1} on {0} -> search fee {2}")
+    @CsvSource(value = {
+            "1000.00, OUR, 10.00",
+            "15600.75, OUR, 156.01",
+            "0.50, OUR, 0.01",
+            "780.00, SHA, 0.30",
+            "95.00, BEN, 0",
+            "95.00, XYZ, 0.30",
+            "95.00, NULL, 0.30",
+            "NULL, OUR, 0",
+            "NULL, NULL, 0"
+    }, nullValues = "NULL")
+    void should_compute_search_fee_with_service_fee_table(String amount, String chargesType, String expectedFee) {
+        // GIVEN
+        OutboundPayment payment = outboundPayment("00000000-0000-0000-0000-000000000415", amount, chargesType);
+        when(outboundRepository.search(any())).thenReturn(List.of(payment));
+
+        // WHEN
+        List<OutboundPaymentResponse> result = outboundService.search(new OutboundPaymentSearchRequest());
+
+        // THEN
+        assertThat(result).singleElement()
+                .satisfies(response -> assertThat(response.estimatedFee).isEqualByComparingTo(expectedFee));
+    }
+
+    @Test
+    void should_keep_search_fee_scale_of_two_for_our_payments() {
+        // GIVEN
+        OutboundPayment payment = outboundPayment("00000000-0000-0000-0000-000000000416", "15600.75", "OUR");
+        when(outboundRepository.search(any())).thenReturn(List.of(payment));
+
+        // WHEN
+        List<OutboundPaymentResponse> result = outboundService.search(new OutboundPaymentSearchRequest());
+
+        // THEN
+        assertThat(result.get(0).estimatedFee).isEqualTo(new BigDecimal("156.01"));
+    }
+
+    // ---------------- characterization: Inbound age in days in details (BR-INB-07, BR-INB-08) ----------------
+
+    @Test
+    void should_return_negative_age_in_days_when_value_date_is_in_the_future() {
+        // GIVEN
+        InboundPaymentResponse response = new InboundPaymentResponse();
+        response.id = "i1";
+        response.valueDate = LocalDate.now().plusDays(5).toString();
+        when(inboundRepository.findById("i1")).thenReturn(response);
+
+        // WHEN
+        InboundPaymentResponse result = inboundService.getById("i1");
+
+        // THEN
+        assertThat(result.ageInDays).isEqualTo(-5L);
+    }
+
+    @Test
+    void should_leave_age_in_days_null_when_value_date_is_null() {
+        // GIVEN
+        InboundPaymentResponse response = new InboundPaymentResponse();
+        response.id = "i1";
+        response.valueDate = null;
+        when(inboundRepository.findById("i1")).thenReturn(response);
+
+        // WHEN
+        InboundPaymentResponse result = inboundService.getById("i1");
+
+        // THEN
+        assertThat(result.ageInDays).isNull();
+    }
+
+    @Test
+    void should_not_compute_age_in_days_in_service_search() {
+        // GIVEN
+        InboundPaymentResponse response = new InboundPaymentResponse();
+        response.id = "i1";
+        response.valueDate = LocalDate.now().minusDays(3).toString();
+        when(inboundRepository.search(any())).thenReturn(List.of(response));
+
+        // WHEN
+        List<InboundPaymentResponse> result = inboundService.search(new InboundPaymentSearchRequest());
+
+        // THEN
+        assertThat(result.get(0).ageInDays).isNull();
+    }
+
+    // ---------------- characterization: Suspended mapping (BR-SUS-06) ----------------
+
+    @Test
+    void should_map_suspended_details_with_same_fields_as_search() {
+        // GIVEN
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000202");
+        SuspendedPayment payment = new SuspendedPayment();
+        payment.id = id;
+        payment.amount = new BigDecimal("450.10");
+        payment.currency = "EUR";
+        payment.debtorIban = "FR7630006000011234567890189";
+        payment.debtorName = "SARL Dupont";
+        payment.creditorIban = "DE02120300000000202051";
+        payment.creditorName = "Jonas Weber";
+        payment.holdReason = "AML_THRESHOLD";
+        payment.complianceCaseRef = "CASE-2026-0043";
+        payment.reviewStatus = "RELEASED";
+        payment.heldAt = Timestamp.valueOf("2026-10-13 10:20:00");
+        payment.releasedAt = Timestamp.valueOf("2026-10-13 15:45:00");
+        when(suspendedRepository.findById(id.toString())).thenReturn(payment);
+        when(suspendedRepository.search(any())).thenReturn(List.of(payment));
+        SuspendedPaymentResponse fromSearch = suspendedService.search(new SuspendedPaymentSearchRequest()).get(0);
+
+        // WHEN
+        SuspendedPaymentResponse fromDetails = suspendedService.getById(id.toString());
+
+        // THEN
+        assertThat(fromDetails).usingRecursiveComparison().isEqualTo(fromSearch);
+        assertThat(fromDetails.heldAt).isEqualTo("2026-10-13T10:20:00");
+        assertThat(fromDetails.releasedAt).isEqualTo("2026-10-13T15:45:00");
     }
 }
