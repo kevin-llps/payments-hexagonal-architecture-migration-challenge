@@ -1,4 +1,4 @@
-package fr.kevin.llps.payments.controller;
+package fr.kevin.llps.payments.adapter.in.rest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -13,9 +13,9 @@ import org.springframework.http.ResponseEntity;
  * Shared REST error contract (BR-API-02, BR-API-03, BR-API-07; risk R-10).
  * Repository argument errors translated by Spring are mapped to 400 (user decision 2026-11-12).
  */
-class GlobalExceptionHandlerTest {
+class RestGlobalExceptionHandlerTest {
 
-    private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
+    private final RestGlobalExceptionHandler handler = new RestGlobalExceptionHandler();
 
     @Test
     void should_map_illegal_argument_to_400_with_its_message_as_error() {

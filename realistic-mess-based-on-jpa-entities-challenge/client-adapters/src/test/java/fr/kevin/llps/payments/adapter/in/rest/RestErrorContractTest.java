@@ -1,4 +1,4 @@
-package fr.kevin.llps.payments.controller;
+package fr.kevin.llps.payments.adapter.in.rest;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -49,7 +49,7 @@ import fr.kevin.llps.payments.domain.suspended.port.in.SearchSuspendedPayments;
         RestOutboundPaymentController.class,
         RestRecallController.class
 })
-class PaymentControllerWebTest {
+class RestErrorContractTest {
 
     @Autowired
     private MockMvc mvc;

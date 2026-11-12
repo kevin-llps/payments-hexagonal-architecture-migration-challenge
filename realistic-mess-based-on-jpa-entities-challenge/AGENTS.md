@@ -11,8 +11,8 @@ Independent Spring Boot 3.5.7 / Java 21 app (entrypoint `fr.kevin.llps.payments.
 Run from this directory (no Maven wrapper, no lint/format/typecheck config):
 
 - Full module suite (needs Docker): `mvn test`
-- Fast, no-Docker subset: `mvn test -Dtest='PaymentControllerWebTest,PaymentUtilsTest'`
-- Single class: `mvn test -Dtest=PaymentControllerWebTest`
+- Fast, no-Docker subset: `mvn test -pl domain,client-adapters -am`
+- Single class: `mvn test -Dtest=RestErrorContractTest`
 - Docker-backed repository slice: `mvn test -Dtest='Jpa*RepositoryAdapterTest,JpaSchemaConstraintsTest'`
 - Integration suite: `mvn test -Dtest=PaymentApplicationIntegrationTest`
 - Run locally: `docker compose up -d && mvn spring-boot:run` (app 8082, Postgres 5435 / `payments_jpa`, Kafka 9094)
@@ -20,7 +20,7 @@ Run from this directory (no Maven wrapper, no lint/format/typecheck config):
 ## Testing gotchas
 
 - The `infrastructure-adapters` persistence tests (`Jpa*RepositoryAdapterTest`, `JpaSchemaConstraintsTest`) are `@DataJpaTest` + `@AutoConfigureTestDatabase(replace = NONE)` + Testcontainers Postgres: they need Docker, unlike the `domain` and `client-adapters` tests and the `Jpa*MapperTest` classes.
-- `PaymentControllerWebTest` no longer mocks `EntityManagerFactory`/`EntityManager` (removed at IT-06: outbound details go through the `GetOutboundPaymentDetails` port); it declares a `Clock` bean in a nested `@TestConfiguration` because `RestOutboundPaymentController` renders details timestamps in the clock's zone.
+- `RestErrorContractTest` (`client-adapters`, moved from the bootstrap `PaymentControllerWebTest` at IT-07) slices all five REST controllers with mocked input ports and no `EntityManager` mocks; it declares a `Clock` bean in a nested `@TestConfiguration` because `RestOutboundPaymentController` renders details timestamps in the clock's zone.
 - `PaymentApplicationIntegrationTest` uses `@EmbeddedKafka` and a Postgres Testcontainer, asserts seeded IDs such as `...0101` / `E2E-INST-0001`, and cleans only ids prefixed `00000000-0000-0000-0000-0000000009`. Keep new Kafka test ids in that range; poll with Awaitility, not sleeps.
 
 ## Persistence / data gotchas
@@ -36,7 +36,7 @@ Run from this directory (no Maven wrapper, no lint/format/typecheck config):
 - Outbound details (`RestOutboundPaymentController.get` → `GetOutboundPaymentDetails`) return a snake_case `Map` (e.g. `instruction_id`) with the `DetailsFeePolicy` fee (OUR 2%, SHA 0.50, else 0); the outbound search (`SearchOutboundPayments`) uses the different `SearchFeePolicy` (OUR 1%, BEN 0, else 0.30). Both behaviors are asserted; don't unify them unless asked.
 - `InboundPaymentController.search` adds `ageInDays` to each row; `InboundPaymentService.getById` also computes it. Output is date-dependent.
 - Kafka listeners (`Kafka*Listener` in `client-adapters`; `KafkaOutboundPaymentListener` replaces the misnamed `OutboundPaymentMessageConsumer`) each declare their own `groupId` (`jpa-*-group`), ignoring `spring.kafka.consumer.group-id`, and swallow all parse/persistence exceptions after logging. `em.merge` in the `Jpa*RepositoryAdapter` is the upsert.
-- `GlobalExceptionHandler` maps `IllegalArgumentException` to 400 and everything else to 500; `OutboundPaymentController.get` catches invalid UUIDs and returns 404.
+- `RestGlobalExceptionHandler` (`client-adapters`) maps `IllegalArgumentException` to 400 and everything else to 500, after `RestDomainExceptionHandler` (highest precedence) has mapped the domain input errors to 400; `RestOutboundPaymentController.get` catches invalid UUIDs and returns 404.
 
 ## Java coding conventions
 

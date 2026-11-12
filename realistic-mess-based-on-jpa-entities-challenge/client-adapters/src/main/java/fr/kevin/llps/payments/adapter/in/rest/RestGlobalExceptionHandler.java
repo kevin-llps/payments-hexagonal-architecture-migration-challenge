@@ -1,4 +1,4 @@
-package fr.kevin.llps.payments.controller;
+package fr.kevin.llps.payments.adapter.in.rest;
 
 import java.util.Map;
 
@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
-public class GlobalExceptionHandler {
+public class RestGlobalExceptionHandler {
 
-    private static final Logger LOG = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+    private static final Logger LOG = LoggerFactory.getLogger(RestGlobalExceptionHandler.class);
 
     private static final String DEFAULT_BAD_REQUEST_MESSAGE = "Bad request";
 

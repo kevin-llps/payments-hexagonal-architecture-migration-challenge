@@ -1,6 +1,6 @@
 # Hexagonal Migration Plan — realistic-mess-based-on-jpa-entities-challenge
 
-- **Status:** APPROVED (2026-11-12). IT-00..IT-06 `APPROVED`; IT-07 scope awaiting approval.
+- **Status:** APPROVED (2026-11-12). IT-00..IT-06 `APPROVED`; IT-07 `APPROVED` (2026-11-12); Phase 5 final verification run.
 - **Owner:** `incremental-hexagonal-architecture-migration` (Phase 5 of the orchestrated migration).
 - **Baseline:** commit `142a3a2` on branch `hexagonal-architecture-migration-2`. Baseline `mvn test`: **307 tests, 0 failures** (run 2026-11-12 in a detached worktree of `142a3a2`).
 - **Source of truth** for iteration planning, ArchUnit catalogue, temporary exceptions and validation history.
@@ -253,13 +253,13 @@ Order rationale: structure first; Shared Kernel before any context (every contex
 | Rules | Iteration | Unit-level tests (target) | Integration-level tests |
 |---|---|---|---|
 | BR-SHR-01..06, -08..-10 | IT-01 (domain) then each context | `domain.sharedkernel.*Test` | IT (unchanged) |
-| BR-SHR-07 | IT-07 (retired) | `PaymentUtilsTest` until IT-07 | — |
+| BR-SHR-07 | IT-07 (retired) | none (`PaymentUtilsTest` deleted at IT-07; limit / IBAN / timestamp rows covered by `SearchLimitTest`, `IbanTest`, `TimestampBoundTest`) | — |
 | BR-SUS-01..06 | IT-02 | `domain.suspended.*Test` (criteria and services), `RestSuspendedPaymentControllerTest`, `KafkaSuspendedPaymentListenerTest`, `JpaSuspendedPaymentRepositoryAdapterTest`, `JpaSuspendedPaymentMapperTest` | IT suspended tests |
 | BR-RCL-01..08, BR-ING-11 | IT-03 | `domain.recall.*Test`, use cases, `RestRecallControllerTest`, `KafkaRecallListenerTest`, `JpaRecallRepositoryAdapterTest` | IT recall tests |
 | BR-INS-01..09, BR-ING-10 | IT-04 | `domain.instant.*Test`, use cases, REST/Kafka/JPA adapter tests | IT instant tests |
 | BR-INB-01..08 | IT-05 | `domain.inbound.*Test`, use cases (fixed `Clock`), adapter tests | IT inbound tests |
 | BR-OUT-01..09 | IT-06 | `SearchFeePolicyTest`, `DetailsFeePolicyTest`, criteria, formatter parity, adapter tests | IT outbound tests (incl. N-02) |
-| BR-API-01..09 | IT-02..IT-07 | `Rest*ControllerTest`, `RestDomainExceptionHandlerTest`, `GlobalExceptionHandlerTest` (→ `RestGlobalExceptionHandlerTest` in IT-07) | IT error-contract tests |
+| BR-API-01..09 | IT-02..IT-07 | `Rest*ControllerTest`, `RestDomainExceptionHandlerTest`, `RestGlobalExceptionHandlerTest`, `RestErrorContractTest` (moved at IT-07) | IT error-contract tests |
 | BR-ING-01..12 | IT-02..IT-06 | `Kafka*ListenerTest`, `Persist*ServiceTest` | IT Kafka ingestion tests (Awaitility, `...09` ids) |
 | BR-DAT-01..03 | IT-00, IT-07 | — | IT seed assertions |
 
@@ -318,8 +318,8 @@ Temporary exceptions (none active since IT-06; both removed, pending commit):
 | IT-03 | Recalls | `APPROVED` (1st gate: `CHANGES_REQUESTED`, Record → Persist naming) | 512 = domain 164 + client-adapters 36 + infrastructure-adapters 30 + bootstrap 282, 0 failures; 36 legacy recall tests remapped (see log) | 30 ArchUnit tests GREEN (AR-02 added); temporary scopes AR-11, AR-18 | `mvn -B clean verify`: exit 0, BUILD SUCCESS | approved 2026-11-12 | Suspended rename `98e278ce1d1283c3e5461e08f3cf9444ff298b4b`; Recalls `020497069285b50cef119ed73a4940a8d631afda` |
 | IT-04 | Instant | `APPROVED` | 536 = domain 185 + client-adapters 63 + infrastructure-adapters 47 + bootstrap 241, 0 failures; 41 legacy instant test executions remapped (see log) | 30 ArchUnit tests GREEN (AR-02 mutation `InstantPayment` → `Recall` RED, reverted); temporary scopes AR-11, AR-18 | `mvn -B clean verify`: exit 0, BUILD SUCCESS | approved 2026-11-12 | `5af8208b2626be8f93f965046358937583b1d9ec` |
 | IT-05 | Inbound | `APPROVED` | 566 = domain 212 + client-adapters 83 + infrastructure-adapters 58 + bootstrap 213, 0 failures; 28 legacy inbound test executions remapped (see log) | 30 ArchUnit tests GREEN (AR-02 mutation `InboundPaymentView` → `InstantPayment` RED, reverted); temporary scopes AR-11, AR-18 | `mvn -B clean verify`: exit 0, BUILD SUCCESS | approved 2026-11-12 | `b1f6b207caf2afb845213b898da4e6e5487318f4` |
-| IT-06 | Outbound | `APPROVED` | 639 = domain 254 + client-adapters 149 + infrastructure-adapters 70 + bootstrap 166, 0 failures; legacy outbound tests remapped (see log); `PaymentServiceUnitTest`, `KafkaListenerUnitTest`, `PaymentRepositoryUnitTest` deleted | 30 ArchUnit tests GREEN; AR-11 / AR-18 legacy scopes removed (RED → GREEN); AR-02 mutation `OutboundPaymentWithFee` → `Recall` RED, reverted; no temporary exception left | `mvn -B clean verify`: exit 0, BUILD SUCCESS; after the AGENTS.md doc edit: fast tier `mvn -B test -Dtest='PaymentControllerWebTest,PaymentUtilsTest'` exit 0, 42 tests | approved 2026-11-12 | (see commit log below) |
-| IT-07 | Final cleanup | `NOT_STARTED` | | | | | |
+| IT-06 | Outbound | `APPROVED` | 639 = domain 254 + client-adapters 149 + infrastructure-adapters 70 + bootstrap 166, 0 failures; legacy outbound tests remapped (see log); `PaymentServiceUnitTest`, `KafkaListenerUnitTest`, `PaymentRepositoryUnitTest` deleted | 30 ArchUnit tests GREEN; AR-11 / AR-18 legacy scopes removed (RED → GREEN); AR-02 mutation `OutboundPaymentWithFee` → `Recall` RED, reverted; no temporary exception left | `mvn -B clean verify`: exit 0, BUILD SUCCESS; after the AGENTS.md doc edit: fast tier `mvn -B test -Dtest='PaymentControllerWebTest,PaymentUtilsTest'` exit 0, 42 tests | approved 2026-11-12 | `906a3e8a9b9b5d8f81c46863ef6862ef668df9f1` |
+| IT-07 | Final cleanup | `APPROVED` | 611 = domain 254 + client-adapters 169 + infrastructure-adapters 70 + bootstrap 118, 0 failures; `PaymentUtilsTest` (28) deleted (approved mapping); `GlobalExceptionHandlerTest` → `RestGlobalExceptionHandlerTest` (6) and `PaymentControllerWebTest` → `RestErrorContractTest` (14) moved unchanged | 30 ArchUnit tests GREEN; AR-19 not added (user: skip); no temporary exception | `mvn -B clean verify`: exit 0, BUILD SUCCESS; `mvn -B spring-boot:run` smoke OK | approved 2026-11-12 | (recorded after commit) |
 
 Test remapping log (MAC-07):
 
@@ -371,6 +371,12 @@ Test remapping log (MAC-07):
 | IT-06 | `PaymentRepositoryUnitTest.should_reject_outbound_execution_bound_not_in_strict_iso_date_format_with_message_less_error` (3 rows) | domain: `OutboundPaymentSearchCriteriaTest` (same rows, `MalformedDateException` without message) | approved |
 | IT-06 | `PaymentRepositoryUnitTest.should_reject_instant_payment_without_currency`, `should_reject_outbound_payment_without_amount`, `should_reject_currency_longer_than_three_characters` | infrastructure-adapters: `JpaSchemaConstraintsTest` (moved unchanged with helpers) | approved Q4 |
 | IT-06 | `PaymentApplicationIntegrationTest` | unchanged assertions (incl. N-02); injected `OutboundPaymentMessageConsumer` replaced by `KafkaOutboundPaymentListener` | |
+| IT-07 | `GlobalExceptionHandlerTest` (6 tests) | client-adapters: `RestGlobalExceptionHandlerTest` (`git mv`, assertions unchanged) | approved naming (AR-16) |
+| IT-07 | `PaymentControllerWebTest` (14 executions: error contract, 500 rows, outbound 500 cases) | client-adapters: `adapter.in.rest.RestErrorContractTest` (`git mv`, unchanged apart from package and class name) | approved Q1 |
+| IT-07 | `PaymentUtilsTest.should_cap_limit_at_200_and_pass_zero_and_negative_values_through`, `limitOrDefault_*` | domain: `SearchLimitTest.should_apply_the_capped_limit_policy` | approved Q2 |
+| IT-07 | `PaymentUtilsTest.should_accept_iban_only_when_length_without_spaces_is_between_15_and_34`, `should_accept_iban_of_any_characters_since_no_checksum_or_country_check_exists`, `isValidIban_*` | domain: `IbanTest.should_check_only_the_length_after_removing_spaces` | approved Q2 |
+| IT-07 | `PaymentUtilsTest.should_return_null_when_timestamp_is_date_only`, `should_trim_timestamp_before_parsing`, `parseTimestamp_*` | domain: `TimestampBoundTest` (lenient API format, blank and unsatisfiable cases) | approved Q2 |
+| IT-07 | `PaymentUtilsTest.formatAmount_*`, `now_*`, `likePattern_*`, `randomId_*` | retired with `PaymentUtils` (BR-SHR-07, D-09) | approved |
 
 ## 12. Risks and Open Issues
 
@@ -486,6 +492,10 @@ AC-01..AC-21 of the migration agent and MAC-01..MAC-08 of `ddd-test-coverage.md`
 | 2026-11-12 | IT-06 | final compilation gate `mvn -B clean verify` (Docker) | exit 0; domain 254, client-adapters 149, infrastructure-adapters 70, bootstrap 166 = 639 tests, 0 failures |
 | 2026-11-12 | IT-06 (gate) | module AGENTS.md lines 22/36/38 updated (docs only); `mvn -B test -Dtest='PaymentControllerWebTest,PaymentUtilsTest'` | exit 0; 42 tests (14 + 28), 0 failures |
 
+| 2026-11-12 | IT-07 | `git mv` handler + 2 tests to client-adapters, `git rm` `PaymentUtils` + test, bootstrap POM trimmed; `mvn -B clean verify` (Docker) | exit 0; domain 254, client-adapters 169, infrastructure-adapters 70, bootstrap 118 = 611 tests, 0 failures; ArchUnit 30 GREEN |
+| 2026-11-12 | IT-07 | `docker compose up -d && mvn -B spring-boot:run` + `curl` | app started on 8082; 5 searches 200; outbound details `...0401` 200 with `created_at` `2026-10-16T06:00:00.000+00:00`; `not-a-uuid` 404 empty; `limit=abc` 500 generic; `valueDateFrom=garbage` 400 `Bad request`; POST search 500 generic; app and stack stopped |
+| 2026-11-12 | Phase 5 final verification | domain dependency tree; domain `main` imports; module POM graph; legacy packages; ArchUnit exceptions; rule traceability | domain has no non-test dependency and no framework / `java.sql` import; graph client-adapters → domain, infrastructure-adapters → domain, bootstrap → all three (no cycle, `CyclesTest` GREEN); no `controller` / `service` / `repository` / `kafka` / `dto` / `util` package left; ArchUnit only in bootstrap, no temporary exception (the shared-kernel `ignoreDependency` in AR-02 is the approved DR-2 definition); 75 rules: 73 traced to surviving or remapped tests, 2 retired (BR-OUT-10, BR-SHR-07) |
+
 ### IT-01 findings (confirmed at the IT-01 gate, 2026-11-12: F-01 (a), F-02..F-04 (a))
 
 - **F-01 `MalformedDateException` message.** Legacy `Date.valueOf` throws a `NumberFormatException` *with* a message for a non-numeric field (e.g. `2026-1x-05` gives `Error at index 1 in: "1x"`), which the legacy handler renders as the 400 body instead of `Bad request`. `IsoDateBound` therefore carries that message (null for shape/range errors). `technical-layer-design.md` §7 shows `MalformedDateException` → `{"error":"Bad request"}` only; parity requires the REST handler (IT-05/IT-06) to render `message ?? "Bad request"`.
@@ -527,3 +537,5 @@ AC-01..AC-21 of the migration agent and MAC-01..MAC-08 of `ddd-test-coverage.md`
 | 2026-11-12 | IT-05 gate | (a) IT-05 **APPROVED AND COMMIT** |
 | 2026-11-12 | IT-06 scope gate Q1–Q6 | Q1 (b) fixed expected strings observed beforehand with a throwaway program, no Jackson comparison in committed tests (supersedes TLD §8.3 parity tests, dated note); Q2 (a) structural test moved to `RestOutboundPaymentControllerTest`; Q3 (a) `EntityManager` mocks removed from `PaymentControllerWebTest` and the module AGENTS.md line updated; Q4 (a) `PaymentServiceUnitTest` / `KafkaListenerUnitTest` / `PaymentRepositoryUnitTest` deleted, schema tests moved unchanged to `JpaSchemaConstraintsTest`, AGENTS.md test-command lines updated; Q5 (a) test remaps approved; Q6 (a) IT-06 scope approved |
 | 2026-11-12 | IT-06 gate Q1–Q2 | Q1 (a) module AGENTS.md lines 22/36/38 updated to the migrated reality (root `../AGENTS.md` left stale, logged follow-up); Q2 (a) IT-06 **APPROVED AND COMMIT** |
+| 2026-11-12 | IT-07 scope gate Q1–Q7 | Q1 (a) `PaymentControllerWebTest` → `RestErrorContractTest` unchanged; Q2 (a) `PaymentUtilsTest` mapping approved, delete; Q3 (a) bootstrap POM trimmed; Q4 (b) AR-19 skipped; Q5 (a) module AGENTS.md lines 14/15/23/39; Q6 (a) root `../AGENTS.md` stays a logged follow-up; Q7 (a) scope approved, then Phase 5 final verification |
+| 2026-11-12 | IT-07 / Phase 5 exit gate Q1–Q2 | Q1 (a) IT-07 **APPROVED AND COMMIT**; Q2 (b) update the root `../AGENTS.md` statements about this module only, committed separately |
