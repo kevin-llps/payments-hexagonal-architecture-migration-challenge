@@ -331,7 +331,7 @@ All services are plain Java `final` classes in `domain.<ctx>.usecase` (input por
 | `UnknownRecallTypeException` | 400 | `{"error":"Unknown recall type: <raw>"}` |
 | `InvalidPaymentIdException` | 400 | `{"error":"<UUID.fromString message>"}` (outbound details never reaches it: the controller catches it → 404 empty) |
 | `NegativeSearchLimitException` | 400 | `{"error":"max-results cannot be negative"}` |
-| `MalformedDateException` | 400 | `{"error":"Bad request"}` |
+| `MalformedDateException` | 400 | `{"error":"<message>"}` when the exception carries a message (non-numeric date field, e.g. `{"error":"Error at index 1 in: \"1x\""}`), otherwise `{"error":"Bad request"}` (note 2026-11-12, IT-01 gate F-01: identical to the legacy IAE rendering; pinned by `PaymentApplicationIntegrationTest.should_return_400_with_number_format_message_when_a_date_filter_field_is_not_numeric`) |
 | `FeeNotComputableException` | no handler | falls to legacy `Exception` handler → 500 generic body, ERROR log |
 
 `GlobalExceptionHandler` stays **unchanged** (D-13) as the safety net for IAE, `InvalidDataAccessApiUsageException` and the generic 500.
@@ -611,6 +611,7 @@ Changes after the gate:
 
 | 2026-11-12 | Phase 5 IT-00 gate: module structure (user-approved change) | Changes requested: "only two adapters modules must exist : client-adapters and infrastructure-adapters. Domain must be named domain only"; clarified "Drop prefixes, keep application"; then corrected: "application must be merged in domain". Result: four modules `domain`, `client-adapters`, `infrastructure-adapters`, `bootstrap`, plain artifactIds, Java packages unchanged. |
 | 2026-11-12 | Phase 5 IT-00 gate: use-case / input-port packages (user-approved change) | (b) `fr.kevin.llps.payments.domain.<ctx>.usecase` for use-case services and `fr.kevin.llps.payments.domain.<ctx>.usecase.port.in` for input ports, queries, commands and views; AR-01..AR-08, DR-2, TL-DR-7 retargeted; the model must not depend on `usecase` packages (ArchUnit). |
+| 2026-11-12 | Phase 5 IT-01 gate F-01 (user-approved) | (a) `MalformedDateException` keeps the number-format message; `RestDomainExceptionHandler` renders it, or `Bad request` when null (§7). |
 | 2026-11-12 | Phase 5 plan gate: `GlobalExceptionHandler` naming (AR-16) | (a) rename to `RestGlobalExceptionHandler` (and its test) when it moves in the final iteration, body unchanged; no ArchUnit exception. |
 
 Changes after the Phase 5 IT-00 gate: use-case packages moved from `application.<ctx>[.port.in]` to `domain.<ctx>.usecase[.port.in]` (§3, §4.1, §4.2, §6.4, TL-DR-1/2/3/7, AR-01..AR-09, AR-14); §3 diagram labels, §4.1 (four modules), §4.2 (graph and ArchUnit takeover table), §4.3, §4.4, §8.3, §9.2 exceptions, §10, §12, TD-01, TD-03, TL-R8.

@@ -1,6 +1,6 @@
 # Hexagonal Migration Plan — realistic-mess-based-on-jpa-entities-challenge
 
-- **Status:** APPROVED (2026-11-12). IT-00 `APPROVED`; IT-01 scope awaiting approval.
+- **Status:** APPROVED (2026-11-12). IT-00 `APPROVED`; IT-01 `APPROVED`; IT-02 scope awaiting approval.
 - **Owner:** `incremental-hexagonal-architecture-migration` (Phase 5 of the orchestrated migration).
 - **Baseline:** commit `142a3a2` on branch `hexagonal-architecture-migration-2`. Baseline `mvn test`: **307 tests, 0 failures** (run 2026-11-12 in a detached worktree of `142a3a2`).
 - **Source of truth** for iteration planning, ArchUnit catalogue, temporary exceptions and validation history.
@@ -155,7 +155,10 @@ Common definition of done for every iteration: TDD (RED → GREEN → refactor);
 | Target classes | `domain.sharedkernel`: `PaymentId`, `Money`, `SearchLimit`, `CodeFilter`, `Iban`, `TimestampBound`, `IsoDateBound`, `ApiDateTimeFormat`, `InvalidPaymentIdException`, `NegativeSearchLimitException`, `MalformedDateException` |
 | Adapters | none |
 | Tests | plain JUnit/AssertJ unit tests in the `domain` module (no Spring, MAC-08), replicating the `PaymentUtilsTest` cases for limit, IBAN and timestamp parsing plus grammar characterization tests (`Timestamp.valueOf`, `Date.valueOf`, lenient `SimpleDateFormat` grammars, D-10). `PaymentUtils` and its tests untouched. |
-| ArchUnit (test-first) | AR-01, AR-03, AR-04 (`DomainIsolationTest`); AR-17 domain part (no public non-final fields in `..domain..`) |
+| ArchUnit (test-first) | AR-01, AR-01b (allowlist, approved), AR-03, AR-04 (`DomainIsolationTest`); AR-17 domain part (no public non-final fields in `..domain..`) |
+| Approved scope decisions | fixed expected-value tests only, values taken from observed legacy behaviour (no JDK oracle in tests); AR-01b added |
+| Status | `APPROVED` (2026-11-12; per-class RED/GREEN deviation from the `tdd` skill accepted) |
+| Notes (2026-11-12) | F-01 message kept (HTTP characterization test added to `PaymentApplicationIntegrationTest`); F-02 `IsoDateBound` record; F-03 DST resolution delegated to the JPA adapter; F-04 exotic inputs unpinned (see §14 findings) |
 | Risks | DR-R2 grammar narrowing (pinned by characterization tests); DR-R4 UUID message |
 | Deliverables | domain classes + tests; no legacy deletion |
 | Completion | domain tests green without Docker; full suite green |
@@ -269,8 +272,12 @@ Location: `bootstrap/src/test/java/fr/kevin/llps/payments/architecture/`. Comman
 | ID | Rule | Class | Source | Introduced | Current result |
 |---|---|---|---|---|---|
 | AR-15 | no cycles between `fr.kevin.llps.payments.(*)..` slices | `CyclesTest` | TLD §4.2/§9.2 | IT-00 | GREEN (2026-11-12) |
-| AR-01, AR-03, AR-04 | domain isolation (AR-04 also forbids domain model → `..usecase..` inside the `domain` module) | `DomainIsolationTest` | DR-1, DR-3, DR-4 | IT-01 (planned) | — |
-| AR-17 (domain) | no public non-final fields in `..domain..` | `CodingConventionsTest` | conventions | IT-01 (planned) | — |
+| AR-01 | `..domain..` does not depend on Spring, `jakarta..`, Hibernate, Jackson, Kafka, `java.sql..` | `DomainIsolationTest` | DR-1 | IT-01 | RED (empty) → GREEN (2026-11-12) |
+| AR-01b | `..domain..` only depends on `java.lang..`, `java.util..`, `java.math..`, `java.time..`, `fr.kevin.llps.payments.domain..` | `DomainIsolationTest` | DR-1 (IT-01 gate) | IT-01 | RED (empty) → GREEN |
+| AR-03 | `domain.sharedkernel` depends on no other domain package | `DomainIsolationTest` | DR-3 | IT-01 | RED (empty) → GREEN |
+| AR-04 (model) | domain model (`..domain..` outside `..domain.*.usecase..`) does not depend on `..usecase..` | `DomainIsolationTest` | DR-6 | IT-01 | RED (empty) → GREEN |
+| AR-04 (outer layers) | `..domain..` does not depend on `..adapter..`, `..bootstrap..`, `fr.kevin.llps.payments.entity..` | `DomainIsolationTest` | DR-4 | IT-01 | RED (empty) → GREEN |
+| AR-17 (domain) | public fields in `..domain..` are final | `CodingConventionsTest` | conventions | IT-01 | RED (empty) → GREEN |
 | AR-05, AR-06 | `..domain.*.usecase..` framework-free; onion (applicationServices = `..domain.*.usecase..`) | `HexagonalArchitectureTest` | TL-DR-3, §3 | IT-02 (planned) | — |
 | AR-08..AR-13 | adapter dependencies (AR-10 now the only REST ↮ Kafka separation; AR-09 the only persistence ↛ `..usecase..` separation) | `AdapterDependenciesTest` | TL-DR-1/2/4/5/6/9, §6 | IT-02 (planned) | — |
 | AR-14 | ports are interfaces | `PortsTest` | IDD §11 | IT-02 (planned) | — |
@@ -296,8 +303,8 @@ Temporary exceptions (none active today):
 
 | ID | Context | Status | Tests (full suite) | ArchUnit | Final compilation gate | User validation | Commit |
 |---|---|---|---|---|---|---|---|
-| IT-00 | structure | `APPROVED` (after one `CHANGES_REQUESTED`) | 308 = 307 legacy (per-class counts identical to baseline) + 1 ArchUnit, 0 failures | AR-15 GREEN | `mvn -B clean verify`: exit 0, 308 tests, BUILD SUCCESS (reworked layout) | 1st: changes requested; 2nd: approved 2026-11-12 | see §15 / commit below |
-| IT-01 | Shared Kernel | `NOT_STARTED` | | | | | |
+| IT-00 | structure | `APPROVED` (after one `CHANGES_REQUESTED`) | 308 = 307 legacy (per-class counts identical to baseline) + 1 ArchUnit, 0 failures | AR-15 GREEN | `mvn -B clean verify`: exit 0, 308 tests, BUILD SUCCESS (reworked layout) | 1st: changes requested; 2nd: approved 2026-11-12 | `71d9d618455c502b0c354c612a431dc783b44528` |
+| IT-01 | Shared Kernel | `APPROVED` | 439 = 307 legacy (unchanged) + 2 new IT characterization (F-01) + 7 ArchUnit + 123 domain, 0 failures | AR-01, AR-01b, AR-03, AR-04 ×2, AR-15, AR-17 GREEN | `mvn -B clean verify`: exit 0, BUILD SUCCESS | approved 2026-11-12 | see commit in §15 |
 | IT-02 | Suspended | `NOT_STARTED` | | | | | |
 | IT-03 | Recalls | `NOT_STARTED` | | | | | |
 | IT-04 | Instant | `NOT_STARTED` | | | | | |
@@ -336,6 +343,23 @@ AC-01..AC-21 of the migration agent and MAC-01..MAC-08 of `ddd-test-coverage.md`
 | 2026-11-12 | IT-00 rework | `docker compose up -d && mvn -B spring-boot:run` + `curl` | app started on 8082; instant search 200; outbound details `...0401` `created_at` `2026-10-16T06:00:00.000+00:00`, `estimatedFee` 0.50; app and stack stopped afterwards |
 | 2026-11-12 | IT-00 rework | repo root `mvn -B -q validate` | exit 0 |
 
+| 2026-11-12 | IT-01 | throwaway observation program (scratchpad, Java 21, zone Europe/Paris, locale fr_FR) printing legacy `Timestamp.valueOf`, lenient `SimpleDateFormat`, `java.sql.Date.valueOf` and `UUID.fromString` results | expected values of the domain tests taken from its output; not committed |
+| 2026-11-12 | IT-01 | `mvn -B test -Dtest='DomainIsolationTest,CodingConventionsTest'` before implementation | 6 rules RED: "failed to check any classes" (empty `..domain..`) |
+| 2026-11-12 | IT-01 | `mvn -B -pl domain test` with signature stubs | 123 tests: 117 assertion failures (RED), 0 errors; 6 already passing on stub defaults (constants test; 5 `hasValidLength` = false cases) |
+| 2026-11-12 | IT-01 | `mvn -B -pl domain test` after implementation | 123 tests, 0 failures (GREEN) |
+| 2026-11-12 | IT-01 | `mvn -B test -Dtest='DomainIsolationTest,CodingConventionsTest,CyclesTest'` | 7 tests, 0 failures (GREEN) |
+| 2026-11-12 | IT-01 | final compilation gate `mvn -B clean verify` (Docker) | exit 0; domain 123 + bootstrap 314 (307 legacy per-class identical to baseline + 7 ArchUnit) = 437 tests, 0 failures |
+
+| 2026-11-12 | IT-01 (after gate) | `mvn -B test -Dtest='PaymentApplicationIntegrationTest#should_return_400_with_number_format_message_when_a_date_filter_field_is_not_numeric'` against the legacy code | 2 tests, 0 failures (pins existing behaviour) |
+| 2026-11-12 | IT-01 (after gate) | final compilation gate `mvn -B clean verify` (Docker) | exit 0; domain 123 + bootstrap 316 = 439 tests, 0 failures |
+
+### IT-01 findings (confirmed at the IT-01 gate, 2026-11-12: F-01 (a), F-02..F-04 (a))
+
+- **F-01 `MalformedDateException` message.** Legacy `Date.valueOf` throws a `NumberFormatException` *with* a message for a non-numeric field (e.g. `2026-1x-05` gives `Error at index 1 in: "1x"`), which the legacy handler renders as the 400 body instead of `Bad request`. `IsoDateBound` therefore carries that message (null for shape/range errors). `technical-layer-design.md` §7 shows `MalformedDateException` → `{"error":"Bad request"}` only; parity requires the REST handler (IT-05/IT-06) to render `message ?? "Bad request"`.
+- **F-02 `IsoDateBound` shape.** Implemented as a record `IsoDateBound(LocalDate value)` with `parse(String)` returning `Optional<IsoDateBound>` (instead of `Optional<LocalDate>` in the IDD diagram), so the class is a value object rather than a static utility (DR-5).
+- **F-03 DST.** Domain bounds are wall-clock `LocalDateTime` values: a DST-gap input (`2026-03-29 02:30`) stays `02:30`, whereas the legacy `Timestamp` showed `03:30` in Europe/Paris. The bound parameter stays identical because the persistence adapter converts with `Timestamp.valueOf(LocalDateTime)`, which applies the same lenient resolution; to be pinned by the JPA adapter tests (IT-02+).
+- **F-04 Unpinned exotic inputs.** Not reproduced or not pinned: years before 1583 (legacy Julian calendar vs proleptic Gregorian; e.g. `1500-02-29`); `+` sign in an exponent; numbers overflowing `long` or exponents leading to years beyond ±999,999,999 (legacy produces some date, domain throws `DateTimeException`); locale-specific minus signs (observed locale fr_FR uses `-`).
+
 ## 15. Validation History
 
 | Date | Gate | Answer (relayed by the orchestrator) |
@@ -350,3 +374,4 @@ AC-01..AC-21 of the migration agent and MAC-01..MAC-08 of `ddd-test-coverage.md`
 | 2026-11-12 | IT-00 gate (2nd) Q1 use-case packages | (b) `domain.<ctx>.usecase` (services) and `domain.<ctx>.usecase.port.in` (input ports, queries, commands, views); AR-01..AR-08, DR-2, TL-DR-7 retargeted |
 | 2026-11-12 | IT-00 validation (2nd) | **APPROVED AND COMMIT** |
 | 2026-11-12 | Migration plan | **APPROVED** (with the use-case package answer applied) |
+| 2026-11-12 | IT-01 gate | F-01 (a) keep message + HTTP characterization test; F-02..F-04 (a) notes recorded; IT-01 **APPROVED AND COMMIT** |

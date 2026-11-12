@@ -136,7 +136,7 @@ The physical split was decided in Phase 4/5: the Maven `domain` module holds bot
 | `CodeFilter` | SK | Value object | `from(String raw)`: blank/null → empty, else trim + upper-case. | BR-SHR-08 | |
 | `Iban` | SK | Value object | `of(raw)`, `hasValidLength()`: non-null, 15..34 after removing `' '`. Non-enforcing. | BR-SHR-04 | |
 | `TimestampBound` | SK | Value object | `absent()`; `lenient(raw, dateOnlyTime)`: trim, `T`→space, 10 chars + time, `Timestamp.valueOf` grammar, unparsable → absent; `strictApiFormat(raw)`: BR-SHR-06 lenient-`SimpleDateFormat` grammar, unparsable → unsatisfiable. `value()`, `isUnsatisfiable()`. | BR-SHR-06, BR-INS-06/07, BR-SUS-03/04, BR-RCL-04 | Exact grammars (Gate 1 Q7) |
-| `IsoDateBound` | SK | Value object | `parse(raw)`: blank → empty; `Date.valueOf` grammar after trim; malformed → `MalformedDateException` (no message). | BR-INB-04, BR-OUT-04 | |
+| `IsoDateBound` | SK | Value object | `parse(raw)`: blank → empty; `Date.valueOf` grammar after trim; malformed → `MalformedDateException` (no message for a shape/range error; the number-format message for a non-numeric field, note 2026-11-12). | BR-INB-04, BR-OUT-04 | |
 | `ApiDateTimeFormat` | SK | Constants | `TIMESTAMP_PATTERN = yyyy-MM-dd'T'HH:mm:ss`, `DATE_PATTERN = yyyy-MM-dd`; used by REST adapters for rendering. | BR-SHR-05 | |
 | `InvalidPaymentIdException`, `NegativeSearchLimitException`, `MalformedDateException` | SK | Domain exceptions | See §11.3 for mapping. | | |
 | `InstantPayment` | INS | Aggregate root | 13 attributes; `DEFAULT_SCHEME = "SCT INST"` (applied by the Kafka adapter). | BR-INS-09, BR-ING-10 | |
@@ -155,6 +155,12 @@ The physical split was decided in Phase 4/5: the Maven `domain` module holds bot
 | `OriginalPaymentReference` | RCL | Value object | `paymentId()` `Optional<PaymentId>`, `paymentType()` `Optional<String>`; no existence or type check. | BR-RCL-07 | Separate Ways |
 | `RecallSearchCriteria` | RCL | Value object + factory | recallType checked first (`UnknownRecallTypeException("Unknown recall type: " + raw)`), then originalPaymentId (`PaymentId.parse(trimmed)`), codes via `CodeFilter`, both initiated bounds lenient 00:00:00, limit `fixedDefault()` (request limit ignored, never rejected). | BR-RCL-01..06 | |
 | `InvalidIbanFilterException`, `UnknownRecallTypeException`, `FeeNotComputableException` | INS / RCL / OUT | Domain exceptions | See §11.3. | | |
+
+**Implementation notes (2026-11-12, Phase 5 IT-01 gate, user-approved):**
+- **F-01:** `MalformedDateException` carries the `NumberFormatException` message for a non-numeric date field (e.g. `Error at index 1 in: "1x"`) and `null` for a shape/range error; the REST adapter renders the message, or `Bad request` when null, exactly like the legacy handler.
+- **F-02:** `IsoDateBound` is a record `IsoDateBound(LocalDate value)` whose `parse(String)` returns `Optional<IsoDateBound>` (value object rather than static utility, DR-5).
+- **F-03:** `TimestampBound` values are wall-clock `LocalDateTime`s; resolving a DST gap or overlap is left to the persistence adapter (`Timestamp.valueOf(LocalDateTime)`, same lenient resolution as the legacy `Timestamp` construction), to be pinned by JPA adapter tests.
+- **F-04:** exotic inputs accepted as unpinned divergences: years before 1583 (Julian vs proleptic Gregorian), `+` in an exponent, numeric overflow or exponents producing years beyond ±999,999,999, locale-specific minus signs.
 
 Classes from the analysis's proposal **not** retained (they were proposals, not approved decisions): per-field value objects `EndToEndId`, `Uetr`, `Scheme`, status types, `HoldPeriod`, `Bic` (no behaviour, replaced by `String`); `IbanFilterValidation` and `RecallTypeFilterValidation` (folded into criteria factories); `AgeInDaysCalculator` (replaced by an aggregate method).
 
@@ -671,7 +677,7 @@ Not a port: **time**. Use cases receive the JDK `java.time.Clock` by constructor
 | `UnknownRecallTypeException` | `RecallSearchCriteria` | 400 `{"error":"Unknown recall type: <raw>"}` | BR-RCL-01 |
 | `InvalidPaymentIdException` | `PaymentId.parse` | 400 `{"error":"<UUID.fromString message>"}` (instant, suspended, inbound, recall details; recall `originalPaymentId` filter). **Outbound details:** the REST adapter catches it and returns 404, empty body. | BR-API-05, BR-RCL-03, C-02 |
 | `NegativeSearchLimitException` | `SearchLimit` | 400 `{"error":"max-results cannot be negative"}` | BR-SHR-03 |
-| `MalformedDateException` | `IsoDateBound` | 400 `{"error":"Bad request"}` | BR-API-07, BR-INB-04, BR-OUT-04 |
+| `MalformedDateException` | `IsoDateBound` | 400 `{"error":"Bad request"}`, or `{"error":"<message>"}` when it carries the number-format message (note 2026-11-12) | BR-API-07, BR-INB-04, BR-OUT-04 |
 | `FeeNotComputableException` | `DetailsFeePolicy` | no dedicated handler: generic 500 `{"error":"Something went wrong, contact support with the trace id"}`, logged at ERROR | BR-OUT-07, BR-API-03 |
 
 Kept unchanged (Gate 2 Q5): `GlobalExceptionHandler` handlers for `IllegalArgumentException` (400, message or `Bad request`), `InvalidDataAccessApiUsageException` caused by `IllegalArgumentException` (400) and `Exception` (500). They remain a safety net and `GlobalExceptionHandlerTest` stays green. Also unchanged: non-integer `limit` → 500 (BR-API-08), non-GET → 500 (N-01), unknown id → 404 empty (BR-API-04).
@@ -887,6 +893,7 @@ Unresolved:
 | 2026-11-12 | Gate 2 Q4 | Repository port ownership | (a) owned by the domain, in each context's package |
 | 2026-11-12 | Gate 2 Q5 | Legacy IAE / `InvalidDataAccessApiUsageException` handlers | (a) keep unchanged as safety net; `GlobalExceptionHandlerTest` stays green |
 | 2026-11-12 | Gate 2 Q6 | Port design | (a) APPROVED with answers 1-5 applied |
+| 2026-11-12 | Phase 5 IT-01 gate (user-approved) | Shared Kernel implementation notes | F-01..F-04 recorded in §6.3 |
 | 2026-11-12 | Phase 5 IT-00 gate (user-approved change) | Location of input ports and use cases | (b) `fr.kevin.llps.payments.domain.<ctx>.usecase` (services) and `...domain.<ctx>.usecase.port.in` (input ports, queries, commands, views), inside the Maven `domain` module; DR-2 extended, DR-4 reworded, DR-6 added. Port ownership is unchanged (input ports: application layer; repository ports: domain model). |
 
 Change summary:

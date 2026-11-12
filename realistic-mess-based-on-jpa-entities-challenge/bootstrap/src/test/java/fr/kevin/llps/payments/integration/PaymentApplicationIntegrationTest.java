@@ -410,6 +410,24 @@ class PaymentApplicationIntegrationTest {
         assertThat(response.getBody()).isEqualTo("{\"error\":\"Bad request\"}");
     }
 
+    @ParameterizedTest(name = "{0}: {1} gives 400 with the number-format message")
+    @CsvSource(delimiter = '|', value = {
+            "inbound non-digit in the month | /api/v1/inbound-payments/search?valueDateFrom=2026-1x-05 | {\"error\":\"Error at index 1 in: \\\"1x\\\"\"}",
+            "outbound non-digit in the year | /api/v1/outbound-payments/search?executionTo=20x6-10-16  | {\"error\":\"Error at index 2 in: \\\"20x6\\\"\"}"
+    })
+    void should_return_400_with_number_format_message_when_a_date_filter_field_is_not_numeric(
+            String testCase, String url, String expectedBody) {
+        // GIVEN
+        String nonNumericFilterUrl = url;
+
+        // WHEN
+        ResponseEntity<String> response = rest.getForEntity(nonNumericFilterUrl, String.class);
+
+        // THEN
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isEqualTo(expectedBody);
+    }
+
     @Test
     void should_return_400_with_invalid_uuid_message_when_recall_original_payment_id_is_not_a_uuid() {
         // GIVEN

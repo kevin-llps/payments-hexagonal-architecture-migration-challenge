@@ -1,0 +1,55 @@
+package fr.kevin.llps.payments.architecture;
+
+import com.tngtech.archunit.core.importer.ImportOption;
+import com.tngtech.archunit.junit.AnalyzeClasses;
+import com.tngtech.archunit.junit.ArchTest;
+import com.tngtech.archunit.lang.ArchRule;
+
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideOutsideOfPackage;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+
+@AnalyzeClasses(packages = "fr.kevin.llps.payments", importOptions = ImportOption.DoNotIncludeTests.class)
+class DomainIsolationTest {
+
+    // AR-01
+    @ArchTest
+    static final ArchRule domainShouldNotDependOnFrameworksOrJdbc =
+            noClasses().that().resideInAPackage("..domain..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "org.springframework..", "jakarta..", "org.hibernate..", "com.fasterxml..",
+                            "org.apache.kafka..", "java.sql..")
+                    .because("isolated-domain-design.md DR-1 / technical-layer-design.md AR-01: the domain has no framework or JDBC dependency");
+
+    // AR-01b
+    @ArchTest
+    static final ArchRule domainShouldOnlyDependOnCoreJdkAndDomain =
+            classes().that().resideInAPackage("..domain..")
+                    .should().onlyDependOnClassesThat().resideInAnyPackage(
+                            "java.lang..", "java.util..", "java.math..", "java.time..", "fr.kevin.llps.payments.domain..")
+                    .because("isolated-domain-design.md DR-1: the domain imports only java.lang, java.util, java.math and java.time");
+
+    // AR-03
+    @ArchTest
+    static final ArchRule sharedKernelShouldNotDependOnOtherDomainPackages =
+            noClasses().that().resideInAPackage("..domain.sharedkernel..")
+                    .should().dependOnClassesThat(resideInAPackage("..domain..")
+                            .and(resideOutsideOfPackage("..domain.sharedkernel..")))
+                    .because("isolated-domain-design.md DR-3: the shared kernel depends on no other domain package");
+
+    // AR-04 (model part)
+    @ArchTest
+    static final ArchRule domainModelShouldNotDependOnUseCases =
+            noClasses().that().resideInAPackage("..domain..").and().resideOutsideOfPackage("..domain.*.usecase..")
+                    .should().dependOnClassesThat().resideInAPackage("..usecase..")
+                    .because("isolated-domain-design.md DR-6 / technical-layer-design.md AR-04: the domain model never depends on use cases");
+
+    // AR-04 (outer layers part)
+    @ArchTest
+    static final ArchRule domainShouldNotDependOnAdaptersBootstrapOrEntities =
+            noClasses().that().resideInAPackage("..domain..")
+                    .should().dependOnClassesThat().resideInAnyPackage(
+                            "..adapter..", "..bootstrap..", "fr.kevin.llps.payments.entity..")
+                    .because("isolated-domain-design.md DR-4 / technical-layer-design.md AR-04: the domain never depends on adapters, bootstrap or JPA entities");
+}
