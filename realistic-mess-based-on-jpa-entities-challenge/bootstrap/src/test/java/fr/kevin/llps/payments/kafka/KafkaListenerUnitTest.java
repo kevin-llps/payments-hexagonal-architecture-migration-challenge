@@ -26,7 +26,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.transaction.annotation.Transactional;
 
-import fr.kevin.llps.payments.entity.InboundPayment;
 import fr.kevin.llps.payments.entity.OutboundPayment;
 
 import jakarta.persistence.EntityManager;
@@ -38,29 +37,7 @@ class KafkaListenerUnitTest {
     private EntityManager em;
 
     @InjectMocks
-    private InboundPaymentListener inboundListener;
-    @InjectMocks
     private OutboundPaymentMessageConsumer outboundConsumer;
-
-    @Test
-    void inbound_onMessage_nullSettlementDate_staysNull() {
-        inboundListener.onMessage("""
-                {"id":"00000000-0000-0000-0000-000000000903","creditTransferRef":"CTR-1","amount":10.00,
-                 "currency":"EUR","creditorIban":"DE89","creditorName":"ACME","originBic":"BNPAFRPP",
-                 "valueDate":"2026-10-17","settlementDate":null,"status":"RECEIVED"}
-                """);
-
-        InboundPayment payment = captureMerge(InboundPayment.class);
-        assertThat(payment.creditTransferRef).isEqualTo("CTR-1");
-        assertThat(payment.valueDate).isEqualTo(Date.valueOf("2026-10-17"));
-        assertThat(payment.settlementDate).isNull();
-    }
-
-    @Test
-    void inbound_onMessage_malformedJson_swallowed() {
-        assertThatCode(() -> inboundListener.onMessage("{not valid")).doesNotThrowAnyException();
-        verify(em, never()).merge(org.mockito.ArgumentMatchers.any(InboundPayment.class));
-    }
 
     @Test
     void outbound_onMessage_persistsRow() {
@@ -87,7 +64,6 @@ class KafkaListenerUnitTest {
 
     @ParameterizedTest(name = "[{index}] {0} listens to {1} in group {2}")
     @CsvSource({
-            "fr.kevin.llps.payments.kafka.InboundPaymentListener, pay.inbound, jpa-inbound-group",
             "fr.kevin.llps.payments.kafka.OutboundPaymentMessageConsumer, pay.outbound, jpa-outbound-group"
     })
     void should_listen_to_its_own_topic_with_its_own_transactional_consumer_group(String listenerClass, String topic,
@@ -128,20 +104,6 @@ class KafkaListenerUnitTest {
     // ---------------- characterization: skipped messages (BR-ING-05, BR-ING-11) ----------------
 
     @Test
-    void should_skip_inbound_event_with_invalid_id() {
-        // GIVEN
-        String payload = """
-                {"id":"not-a-uuid","creditTransferRef":"CTR-X","amount":1.00,"currency":"EUR"}
-                """;
-
-        // WHEN
-        inboundListener.onMessage(payload);
-
-        // THEN
-        verifyNoMoreInteractions(em);
-    }
-
-    @Test
     void should_skip_outbound_event_with_unparsable_requested_execution_date() {
         // GIVEN
         String payload = """
@@ -157,27 +119,6 @@ class KafkaListenerUnitTest {
     }
 
     // ---------------- characterization: missing and null fields (BR-ING-07) ----------------
-
-    @Test
-    void should_map_missing_inbound_fields_to_empty_strings_and_json_nulls_to_null_literal() {
-        // GIVEN
-        String payload = """
-                {"id":"00000000-0000-0000-0000-000000000918","originBic":null}
-                """;
-
-        // WHEN
-        inboundListener.onMessage(payload);
-
-        // THEN
-        InboundPayment payment = captureMerge(InboundPayment.class);
-        assertThat(payment.originBic).isEqualTo("null");
-        assertThat(payment.creditTransferRef).isEmpty();
-        assertThat(payment.currency).isEmpty();
-        assertThat(payment.status).isEmpty();
-        assertThat(payment.amount).isEqualByComparingTo(BigDecimal.ZERO);
-        assertThat(payment.valueDate).isNull();
-        assertThat(payment.settlementDate).isNull();
-    }
 
     @Test
     void should_map_missing_outbound_fields_to_empty_strings_and_json_nulls_to_null_literal() {
@@ -218,23 +159,6 @@ class KafkaListenerUnitTest {
         // THEN
         OutboundPayment payment = captureMerge(OutboundPayment.class);
         assertThat(payment.requestedExecutionDate).isEqualTo(expected == null ? null : Date.valueOf(expected));
-    }
-
-    @Test
-    void should_parse_inbound_and_recall_style_dates_from_their_first_ten_characters() {
-        // GIVEN
-        String payload = """
-                {"id":"00000000-0000-0000-0000-000000000925","valueDate":"2026-10-17T08:00:00",
-                 "settlementDate":"2026-10-18T00:00:00Z"}
-                """;
-
-        // WHEN
-        inboundListener.onMessage(payload);
-
-        // THEN
-        InboundPayment payment = captureMerge(InboundPayment.class);
-        assertThat(payment.valueDate).isEqualTo(Date.valueOf("2026-10-17"));
-        assertThat(payment.settlementDate).isEqualTo(Date.valueOf("2026-10-18"));
     }
 
     // ---------------- characterization: no business validation on ingestion (BR-ING-12, BR-SHR-10, BR-RCL-07) ----------------

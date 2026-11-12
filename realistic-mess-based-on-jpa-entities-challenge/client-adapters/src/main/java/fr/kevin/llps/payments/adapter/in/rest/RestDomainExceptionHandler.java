@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import fr.kevin.llps.payments.domain.instant.InvalidIbanFilterException;
 import fr.kevin.llps.payments.domain.recall.UnknownRecallTypeException;
 import fr.kevin.llps.payments.domain.sharedkernel.InvalidPaymentIdException;
+import fr.kevin.llps.payments.domain.sharedkernel.MalformedDateException;
 import fr.kevin.llps.payments.domain.sharedkernel.NegativeSearchLimitException;
 
 /**
@@ -22,6 +23,7 @@ import fr.kevin.llps.payments.domain.sharedkernel.NegativeSearchLimitException;
 public class RestDomainExceptionHandler {
 
     private static final String ERROR_KEY = "error";
+    private static final String DEFAULT_BAD_REQUEST_MESSAGE = "Bad request";
 
     @ExceptionHandler(InvalidPaymentIdException.class)
     public ResponseEntity<Map<String, Object>> handleInvalidPaymentId(InvalidPaymentIdException exception) {
@@ -36,6 +38,13 @@ public class RestDomainExceptionHandler {
     @ExceptionHandler(UnknownRecallTypeException.class)
     public ResponseEntity<Map<String, Object>> handleUnknownRecallType(UnknownRecallTypeException exception) {
         return badRequest(exception.getMessage());
+    }
+
+    @ExceptionHandler(MalformedDateException.class)
+    public ResponseEntity<Map<String, Object>> handleMalformedDate(MalformedDateException exception) {
+        // F-01: a non-numeric field keeps its number-format message, a shape or range error has none.
+        String message = exception.getMessage();
+        return badRequest(message == null ? DEFAULT_BAD_REQUEST_MESSAGE : message);
     }
 
     @ExceptionHandler(NegativeSearchLimitException.class)

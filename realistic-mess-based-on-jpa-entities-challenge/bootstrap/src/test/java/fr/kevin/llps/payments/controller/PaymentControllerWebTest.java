@@ -16,7 +16,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -30,7 +29,10 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import fr.kevin.llps.payments.adapter.in.rest.inbound.RestInboundPaymentController;
 import fr.kevin.llps.payments.adapter.in.rest.instant.RestInstantPaymentController;
+import fr.kevin.llps.payments.domain.inbound.port.in.GetInboundPaymentDetails;
+import fr.kevin.llps.payments.domain.inbound.port.in.SearchInboundPayments;
 import fr.kevin.llps.payments.adapter.in.rest.recall.RestRecallController;
 import fr.kevin.llps.payments.domain.instant.port.in.GetInstantPaymentDetails;
 import fr.kevin.llps.payments.domain.instant.port.in.SearchInstantPayments;
@@ -39,10 +41,8 @@ import fr.kevin.llps.payments.domain.recall.port.in.GetRecallDetails;
 import fr.kevin.llps.payments.domain.recall.port.in.SearchRecalls;
 import fr.kevin.llps.payments.domain.suspended.port.in.GetSuspendedPaymentDetails;
 import fr.kevin.llps.payments.domain.suspended.port.in.SearchSuspendedPayments;
-import fr.kevin.llps.payments.dto.InboundPaymentResponse;
 import fr.kevin.llps.payments.dto.OutboundPaymentResponse;
 import fr.kevin.llps.payments.entity.OutboundPayment;
-import fr.kevin.llps.payments.service.InboundPaymentService;
 import fr.kevin.llps.payments.service.OutboundPaymentService;
 
 import jakarta.persistence.EntityManager;
@@ -51,7 +51,7 @@ import jakarta.persistence.EntityManagerFactory;
 @WebMvcTest(controllers = {
         RestInstantPaymentController.class,
         RestSuspendedPaymentController.class,
-        InboundPaymentController.class,
+        RestInboundPaymentController.class,
         OutboundPaymentController.class,
         RestRecallController.class
 })
@@ -69,7 +69,9 @@ class PaymentControllerWebTest {
     @MockitoBean
     private GetSuspendedPaymentDetails getSuspendedPaymentDetails;
     @MockitoBean
-    private InboundPaymentService inboundService;
+    private SearchInboundPayments searchInboundPayments;
+    @MockitoBean
+    private GetInboundPaymentDetails getInboundPaymentDetails;
     @MockitoBean
     private OutboundPaymentService outboundService;
     @MockitoBean
@@ -95,31 +97,6 @@ class PaymentControllerWebTest {
         mvc.perform(get("/api/v1/instant-payments/search"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.error").exists());
-    }
-
-    // ---------------- inbound ----------------
-
-    @Test
-    void inboundSearch_computesAgeInDays() throws Exception {
-        InboundPaymentResponse response = new InboundPaymentResponse();
-        response.id = "i1";
-        response.valueDate = LocalDate.now().minusDays(2).toString();
-        when(inboundService.search(any())).thenReturn(List.of(response));
-
-        mvc.perform(get("/api/v1/inbound-payments/search"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].ageInDays").value(2));
-    }
-
-    @Test
-    void inboundDetails_foundAndMissing() throws Exception {
-        InboundPaymentResponse response = new InboundPaymentResponse();
-        response.id = "i1";
-        when(inboundService.getById("i1")).thenReturn(response);
-        when(inboundService.getById("missing")).thenReturn(null);
-
-        mvc.perform(get("/api/v1/inbound-payments/i1")).andExpect(status().isOk());
-        mvc.perform(get("/api/v1/inbound-payments/missing")).andExpect(status().isNotFound());
     }
 
     // ---------------- outbound ----------------
@@ -187,8 +164,9 @@ class PaymentControllerWebTest {
         mvc.perform(get(path).param("limit", nonIntegerLimit))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.error").value(GenericError));
-        verifyNoInteractions(searchInstantPayments, getInstantPaymentDetails, searchSuspendedPayments, getSuspendedPaymentDetails, inboundService,
-                outboundService, searchRecalls, getRecallDetails);
+        verifyNoInteractions(searchInstantPayments, getInstantPaymentDetails, searchSuspendedPayments,
+                getSuspendedPaymentDetails, searchInboundPayments, getInboundPaymentDetails, outboundService, searchRecalls,
+                getRecallDetails);
     }
 
     @ParameterizedTest(name = "[{index}] POST {0} -> 500")
@@ -207,8 +185,9 @@ class PaymentControllerWebTest {
         mvc.perform(post(unsupportedMethodPath))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.error").value(GenericError));
-        verifyNoInteractions(searchInstantPayments, getInstantPaymentDetails, searchSuspendedPayments, getSuspendedPaymentDetails, inboundService,
-                outboundService, searchRecalls, getRecallDetails);
+        verifyNoInteractions(searchInstantPayments, getInstantPaymentDetails, searchSuspendedPayments,
+                getSuspendedPaymentDetails, searchInboundPayments, getInboundPaymentDetails, outboundService, searchRecalls,
+                getRecallDetails);
     }
 
     @Test
@@ -317,47 +296,4 @@ class PaymentControllerWebTest {
     }
 
     // ---------------- characterization: Inbound age in days (BR-INB-07, BR-INB-08) ----------------
-
-    @Test
-    void should_return_negative_age_in_days_in_search_when_value_date_is_in_the_future() throws Exception {
-        // GIVEN
-        InboundPaymentResponse response = new InboundPaymentResponse();
-        response.id = "i1";
-        response.valueDate = LocalDate.now().plusDays(4).toString();
-        when(inboundService.search(any())).thenReturn(List.of(response));
-
-        // WHEN / THEN
-        mvc.perform(get("/api/v1/inbound-payments/search"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].ageInDays").value(-4));
-    }
-
-    @Test
-    void should_return_null_age_in_days_in_search_when_value_date_is_null() throws Exception {
-        // GIVEN
-        InboundPaymentResponse response = new InboundPaymentResponse();
-        response.id = "i1";
-        response.valueDate = null;
-        when(inboundService.search(any())).thenReturn(List.of(response));
-
-        // WHEN / THEN
-        mvc.perform(get("/api/v1/inbound-payments/search"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].ageInDays").value(nullValue()));
-    }
-
-    @Test
-    void should_return_details_age_in_days_as_computed_by_service_without_recomputing_it() throws Exception {
-        // GIVEN
-        InboundPaymentResponse response = new InboundPaymentResponse();
-        response.id = "i1";
-        response.valueDate = LocalDate.now().minusDays(2).toString();
-        response.ageInDays = 99L;
-        when(inboundService.getById("i1")).thenReturn(response);
-
-        // WHEN / THEN
-        mvc.perform(get("/api/v1/inbound-payments/i1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.ageInDays").value(99));
-    }
 }

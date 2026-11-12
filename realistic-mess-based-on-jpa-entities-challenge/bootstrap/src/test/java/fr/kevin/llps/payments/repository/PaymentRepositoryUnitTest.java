@@ -24,10 +24,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import fr.kevin.llps.payments.dto.InboundPaymentResponse;
-import fr.kevin.llps.payments.dto.InboundPaymentSearchRequest;
 import fr.kevin.llps.payments.dto.OutboundPaymentSearchRequest;
-import fr.kevin.llps.payments.entity.InboundPayment;
 import fr.kevin.llps.payments.entity.InstantPayment;
 import fr.kevin.llps.payments.entity.OutboundPayment;
 import fr.kevin.llps.payments.entity.SuspendedPayment;
@@ -36,8 +33,7 @@ import jakarta.persistence.PersistenceException;
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({InboundPaymentRepository.class,
-        OutboundPaymentRepository.class})
+@Import(OutboundPaymentRepository.class)
 @Testcontainers
 class PaymentRepositoryUnitTest {
 
@@ -52,8 +48,6 @@ class PaymentRepositoryUnitTest {
     }
 
     @Autowired
-    private InboundPaymentRepository inboundRepository;
-    @Autowired
     private OutboundPaymentRepository outboundRepository;
     @Autowired
     private TestEntityManager em;
@@ -67,46 +61,6 @@ class PaymentRepositoryUnitTest {
         em.getEntityManager().createNativeQuery("DELETE FROM recalls").executeUpdate();
         em.flush();
         em.clear();
-    }
-
-    // ---------------- inbound ----------------
-
-    @Test
-    void inboundSearch_appliesFiltersAndDefaultLimit() {
-        persist(
-                inbound("00000000-0000-0000-0000-000000000621", "CTR-1", "DE89370400440532013000", "BNPAFRPP",
-                        "SETTLED", "EUR", Date.valueOf("2026-10-15"), Date.valueOf("2026-10-15")),
-                inbound("00000000-0000-0000-0000-000000000622", "CTR-2", "DE89370400440532013000", "ABNANL2A",
-                        "RECEIVED", "EUR", Date.valueOf("2026-10-16"), null),
-                inbound("00000000-0000-0000-0000-000000000623", "CTR-3", "DE89370400440532013000", "BNPAFRPP",
-                        "SETTLED", "EUR", Date.valueOf("2026-09-01"), Date.valueOf("2026-09-01")));
-
-        InboundPaymentSearchRequest request = new InboundPaymentSearchRequest();
-        request.creditorIban = "DE89370400440532013000";
-        request.originBic = "bnpa";
-        request.status = "settled";
-        request.currency = "eur";
-        request.valueDateFrom = "2026-10-01";
-        request.valueDateTo = "2026-10-31";
-
-        List<InboundPaymentResponse> results = inboundRepository.search(request);
-
-        assertThat(results).hasSize(1);
-        assertThat(results.get(0).creditTransferRef).isEqualTo("CTR-1");
-        assertThat(results.get(0).valueDate).isEqualTo("2026-10-15");
-        assertThat(results.get(0).settlementDate).isEqualTo("2026-10-15");
-    }
-
-    @Test
-    void inboundFindById_foundAndMissing() {
-        persist(inbound("00000000-0000-0000-0000-000000000624", "CTR-4", "DE89370400440532013000", "BNPAFRPP",
-                "RECEIVED", "EUR", Date.valueOf("2026-10-17"), null));
-
-        InboundPaymentResponse found = inboundRepository.findById("00000000-0000-0000-0000-000000000624");
-        assertThat(found.creditTransferRef).isEqualTo("CTR-4");
-        assertThat(found.valueDate).isEqualTo("2026-10-17");
-        assertThat(found.settlementDate).isNull();
-        assertThat(inboundRepository.findById("11111111-1111-1111-1111-111111111111")).isNull();
     }
 
     // ---------------- outbound ----------------
@@ -145,86 +99,6 @@ class PaymentRepositoryUnitTest {
         OutboundPayment found = outboundRepository.findById("00000000-0000-0000-0000-000000000634");
         assertThat(found.instructionId).isEqualTo("OUT-4");
         assertThat(outboundRepository.findById("11111111-1111-1111-1111-111111111111")).isNull();
-    }
-
-    // ---------------- characterization: Inbound order, limit and dates (BR-INB-04, BR-INB-05, BR-INB-06) ----------------
-
-    @Test
-    void should_order_inbound_payments_by_value_date_then_created_at_descending() {
-        // GIVEN
-        InboundPayment olderSameDay = inbound("00000000-0000-0000-0000-000000000661", "CTR-A",
-                "DE89370400440532013000", "BNPAFRPP", "SETTLED", "EUR", Date.valueOf("2026-10-15"), null);
-        InboundPayment newerSameDay = inbound("00000000-0000-0000-0000-000000000662", "CTR-B",
-                "DE89370400440532013000", "BNPAFRPP", "SETTLED", "EUR", Date.valueOf("2026-10-15"), null);
-        newerSameDay.createdAt = Timestamp.valueOf("2026-10-15 18:00:00");
-        InboundPayment latestValueDate = inbound("00000000-0000-0000-0000-000000000663", "CTR-C",
-                "DE89370400440532013000", "BNPAFRPP", "SETTLED", "EUR", Date.valueOf("2026-10-16"), null);
-        persist(olderSameDay, newerSameDay, latestValueDate);
-
-        // WHEN
-        List<InboundPaymentResponse> results = inboundRepository.search(new InboundPaymentSearchRequest());
-
-        // THEN
-        assertThat(results).extracting(r -> r.creditTransferRef).containsExactly("CTR-C", "CTR-B", "CTR-A");
-    }
-
-    @ParameterizedTest(name = "[{index}] limit {0} -> {1} rows")
-    @CsvSource(value = {
-            "NULL, 50",
-            "201, 201",
-            "0, 0"
-    }, nullValues = "NULL")
-    void should_default_inbound_limit_to_50_without_capping_at_200(Integer limit, int expectedCount) {
-        // GIVEN
-        for (int i = 0; i < 201; i++) {
-            em.persist(inbound(String.format("00000000-0000-0000-0000-0000000%05d", 10000 + i), "CTR-" + i,
-                    "DE89370400440532013000", "BNPAFRPP", "SETTLED", "EUR", Date.valueOf("2026-10-15"), null));
-        }
-        em.flush();
-        em.clear();
-        InboundPaymentSearchRequest request = new InboundPaymentSearchRequest();
-        request.limit = limit;
-
-        // WHEN
-        List<InboundPaymentResponse> results = inboundRepository.search(request);
-
-        // THEN
-        assertThat(results).hasSize(expectedCount);
-    }
-
-    @ParameterizedTest(name = "[{index}] valueDateFrom={0} valueDateTo={1}")
-    @CsvSource(value = {
-            "2026-13-45, NULL",
-            "NULL, garbage",
-            "2026-10-15T00:00:00, NULL"
-    }, nullValues = "NULL")
-    void should_reject_inbound_value_date_bound_not_in_strict_iso_date_format_with_message_less_error(String from,
-            String to) {
-        // GIVEN
-        InboundPaymentSearchRequest request = new InboundPaymentSearchRequest();
-        request.valueDateFrom = from;
-        request.valueDateTo = to;
-
-        // WHEN / THEN
-        assertThatThrownBy(() -> inboundRepository.search(request))
-                .satisfies(e -> assertThat(rootCauseOf(e)).isExactlyInstanceOf(IllegalArgumentException.class)
-                        .hasMessage(null));
-    }
-
-    @Test
-    void should_apply_inclusive_inbound_value_date_bounds() {
-        // GIVEN
-        persist(inbound("00000000-0000-0000-0000-000000000664", "CTR-D", "DE89370400440532013000", "BNPAFRPP",
-                "SETTLED", "EUR", Date.valueOf("2026-10-15"), null));
-        InboundPaymentSearchRequest request = new InboundPaymentSearchRequest();
-        request.valueDateFrom = "2026-10-15";
-        request.valueDateTo = " 2026-10-15 ";
-
-        // WHEN
-        List<InboundPaymentResponse> results = inboundRepository.search(request);
-
-        // THEN
-        assertThat(results).extracting(r -> r.creditTransferRef).containsExactly("CTR-D");
     }
 
     // ---------------- characterization: Outbound filters, order, limit and dates (BR-OUT-02, BR-OUT-04, BR-OUT-05) ----------------
@@ -339,19 +213,6 @@ class PaymentRepositoryUnitTest {
                 .rootCause().hasMessageContaining("value too long");
     }
 
-    @Test
-    void should_trim_details_id_before_parsing_it() {
-        // GIVEN
-        persist(inbound("00000000-0000-0000-0000-000000000686", "CTR-TRIM", "DE89370400440532013000", "BNPAFRPP",
-                "SETTLED", "EUR", Date.valueOf("2026-10-15"), null));
-
-        // WHEN
-        InboundPaymentResponse found = inboundRepository.findById("  00000000-0000-0000-0000-000000000686 ");
-
-        // THEN
-        assertThat(found.creditTransferRef).isEqualTo("CTR-TRIM");
-    }
-
     // ---------------- helpers ----------------
 
     private static Throwable rootCauseOf(Throwable throwable) {
@@ -407,24 +268,6 @@ class PaymentRepositoryUnitTest {
         payment.releasedAt = releasedAt;
         payment.createdAt = heldAt;
         payment.updatedAt = heldAt;
-        return payment;
-    }
-
-    private InboundPayment inbound(String id, String creditTransferRef, String creditorIban, String originBic,
-            String status, String currency, Date valueDate, Date settlementDate) {
-        InboundPayment payment = new InboundPayment();
-        payment.id = UUID.fromString(id);
-        payment.creditTransferRef = creditTransferRef;
-        payment.amount = new BigDecimal("3400.00");
-        payment.currency = currency;
-        payment.creditorIban = creditorIban;
-        payment.creditorName = "ACME";
-        payment.originBic = originBic;
-        payment.valueDate = valueDate;
-        payment.settlementDate = settlementDate;
-        payment.status = status;
-        payment.createdAt = Timestamp.valueOf(valueDate.toString() + " 07:45:00");
-        payment.updatedAt = payment.createdAt;
         return payment;
     }
 

@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.Timestamp;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -23,52 +22,19 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import fr.kevin.llps.payments.dto.InboundPaymentResponse;
-import fr.kevin.llps.payments.dto.InboundPaymentSearchRequest;
 import fr.kevin.llps.payments.dto.OutboundPaymentResponse;
 import fr.kevin.llps.payments.dto.OutboundPaymentSearchRequest;
 import fr.kevin.llps.payments.entity.OutboundPayment;
-import fr.kevin.llps.payments.repository.InboundPaymentRepository;
 import fr.kevin.llps.payments.repository.OutboundPaymentRepository;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentServiceUnitTest {
 
     @Mock
-    private InboundPaymentRepository inboundRepository;
-    @Mock
     private OutboundPaymentRepository outboundRepository;
 
     @InjectMocks
-    private InboundPaymentService inboundService;
-    @InjectMocks
     private OutboundPaymentService outboundService;
-
-    // ---------------- inbound ----------------
-
-    @Test
-    void inboundSearch_delegatesToRepository() {
-        when(inboundRepository.search(any())).thenReturn(List.of(new InboundPaymentResponse()));
-        assertThat(inboundService.search(null)).hasSize(1);
-    }
-
-    @Test
-    void inboundGetById_computesAgeInDays() {
-        InboundPaymentResponse response = new InboundPaymentResponse();
-        response.id = "i1";
-        response.valueDate = LocalDate.now().minusDays(3).toString();
-        when(inboundRepository.findById("i1")).thenReturn(response);
-
-        InboundPaymentResponse result = inboundService.getById("i1");
-
-        assertThat(result.ageInDays).isEqualTo(3L);
-    }
-
-    @Test
-    void inboundGetById_missing_returnsNull() {
-        when(inboundRepository.findById("nope")).thenReturn(null);
-        assertThat(inboundService.getById("nope")).isNull();
-    }
 
     // ---------------- outbound ----------------
 
@@ -146,52 +112,5 @@ class PaymentServiceUnitTest {
 
         // THEN
         assertThat(result.get(0).estimatedFee).isEqualTo(new BigDecimal("156.01"));
-    }
-
-    // ---------------- characterization: Inbound age in days in details (BR-INB-07, BR-INB-08) ----------------
-
-    @Test
-    void should_return_negative_age_in_days_when_value_date_is_in_the_future() {
-        // GIVEN
-        InboundPaymentResponse response = new InboundPaymentResponse();
-        response.id = "i1";
-        response.valueDate = LocalDate.now().plusDays(5).toString();
-        when(inboundRepository.findById("i1")).thenReturn(response);
-
-        // WHEN
-        InboundPaymentResponse result = inboundService.getById("i1");
-
-        // THEN
-        assertThat(result.ageInDays).isEqualTo(-5L);
-    }
-
-    @Test
-    void should_leave_age_in_days_null_when_value_date_is_null() {
-        // GIVEN
-        InboundPaymentResponse response = new InboundPaymentResponse();
-        response.id = "i1";
-        response.valueDate = null;
-        when(inboundRepository.findById("i1")).thenReturn(response);
-
-        // WHEN
-        InboundPaymentResponse result = inboundService.getById("i1");
-
-        // THEN
-        assertThat(result.ageInDays).isNull();
-    }
-
-    @Test
-    void should_not_compute_age_in_days_in_service_search() {
-        // GIVEN
-        InboundPaymentResponse response = new InboundPaymentResponse();
-        response.id = "i1";
-        response.valueDate = LocalDate.now().minusDays(3).toString();
-        when(inboundRepository.search(any())).thenReturn(List.of(response));
-
-        // WHEN
-        List<InboundPaymentResponse> result = inboundService.search(new InboundPaymentSearchRequest());
-
-        // THEN
-        assertThat(result.get(0).ageInDays).isNull();
     }
 }
