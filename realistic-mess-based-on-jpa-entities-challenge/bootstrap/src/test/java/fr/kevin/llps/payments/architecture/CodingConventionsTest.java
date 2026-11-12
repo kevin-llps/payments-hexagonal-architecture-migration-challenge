@@ -18,9 +18,6 @@ class CodingConventionsTest {
     private static final String[] NEW_PACKAGES = {
             "fr.kevin.llps.payments.domain..", "fr.kevin.llps.payments.adapter..", "fr.kevin.llps.payments.bootstrap.."};
 
-    // Temporary (IT-02): the legacy Kafka listeners keep @Transactional until IT-06 deletes them.
-    private static final String LEGACY_KAFKA_PACKAGE = "fr.kevin.llps.payments.kafka..";
-
     // AR-17 (domain part)
     @ArchTest
     static final ArchRule domainPublicFieldsShouldBeFinal =
@@ -70,7 +67,7 @@ class CodingConventionsTest {
     // AR-18 (methods)
     @ArchTest
     static final ArchRule transactionalMethodsShouldOnlyBeKafkaListeners =
-            noMethods().that().areDeclaredInClassesThat().resideOutsideOfPackages("..adapter.in.kafka..", LEGACY_KAFKA_PACKAGE)
+            noMethods().that().areDeclaredInClassesThat().resideOutsideOfPackage("..adapter.in.kafka..")
                     .should().beAnnotatedWith("org.springframework.transaction.annotation.Transactional")
                     .orShould().beAnnotatedWith("jakarta.transaction.Transactional")
                     .because("technical-layer-design.md TL-DR-10 / AR-18: transactions only start in the Kafka listeners");

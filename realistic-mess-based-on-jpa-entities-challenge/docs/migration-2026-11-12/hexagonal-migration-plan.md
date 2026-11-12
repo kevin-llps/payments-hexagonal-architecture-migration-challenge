@@ -1,6 +1,6 @@
 # Hexagonal Migration Plan — realistic-mess-based-on-jpa-entities-challenge
 
-- **Status:** APPROVED (2026-11-12). IT-00..IT-05 `APPROVED`; IT-06 scope awaiting approval.
+- **Status:** APPROVED (2026-11-12). IT-00..IT-06 `APPROVED`; IT-07 scope awaiting approval.
 - **Owner:** `incremental-hexagonal-architecture-migration` (Phase 5 of the orchestrated migration).
 - **Baseline:** commit `142a3a2` on branch `hexagonal-architecture-migration-2`. Baseline `mvn test`: **307 tests, 0 failures** (run 2026-11-12 in a detached worktree of `142a3a2`).
 - **Source of truth** for iteration planning, ArchUnit catalogue, temporary exceptions and validation history.
@@ -219,7 +219,7 @@ Common definition of done for every iteration: TDD (RED → GREEN → refactor);
 | Target classes / ports | `domain.outbound`: `OutboundPayment`, `ChargesType`, `SearchFeePolicy`, `DetailsFeePolicy`, `FeeNotComputableException`, `OutboundPaymentSearchCriteria`, `LoadOutboundPayments`, `SaveOutboundPayment`; `OutboundPaymentWithFee`; application ports and services |
 | Adapters | `RestOutboundPaymentController`, `RestOutboundPaymentDetailsFormatter` (explicit UTC formatter, zone from `Clock`), **`KafkaOutboundPaymentListener`** (approved rename), `JpaOutboundPaymentRepositoryAdapter` / mapper, configuration |
 | Legacy deleted | `OutboundPaymentController`, `OutboundPaymentService`, `OutboundPaymentRepository`, `OutboundPaymentMessageConsumer`, `OutboundPayment{SearchRequest,Response}` |
-| Tests | Jackson parity tests for the details formatter written **before** the switch (TLD §8.3: zones × values incl. DST gap/overlap, sub-ms truncation, `java.sql.Date`); web slice for the 13-key map; both fee tables (C-01) unchanged; N-02 IT unchanged. Removing the `PaymentControllerWebTest` `EntityManager` mocks requires approval at that gate. |
+| Tests | Details formatter pinned with **fixed expected strings** observed beforehand by a throwaway program (IT-06 scope gate Q1 (b), supersedes the TLD §8.3 Jackson parity tests): zones × values incl. DST gap/overlap, sub-ms truncation, dates; web slice for the 13-key map; both fee tables (C-01) unchanged; N-02 IT unchanged. `PaymentControllerWebTest` `EntityManager` mocks removed (Q3 (a)); emptied legacy test classes deleted, schema tests moved to `JpaSchemaConstraintsTest` (Q4 (a)). |
 | ArchUnit | AR-11 and AR-18 temporary exceptions **removed** (no legacy `repository`/`kafka`/`service` left) |
 | Risks | TL-R2 timestamp drift; DR-R5 BigDecimal scales; C-01/C-02 preserved |
 
@@ -283,22 +283,22 @@ Location: `bootstrap/src/test/java/fr/kevin/llps/payments/architecture/`. Comman
 | AR-08 | `..adapter.in..` does not depend on `*Service` or `..port.out..` | `AdapterDependenciesTest` | TL-DR-1 | IT-02 | RED (empty) → GREEN; mutation REST → `port.out` RED; REST → `*Criteria` now allowed |
 | AR-09 | `..adapter.out..` does not depend on `*Service` or `..port.in..` | `AdapterDependenciesTest` | TL-DR-2 | IT-02 | RED (empty) → GREEN; mutation JPA → `port.in` RED; JPA → `*Command` now allowed |
 | AR-10 | adapter slices `adapter.(*).(*)` do not depend on each other (only REST ↮ Kafka separation left) | `AdapterDependenciesTest` | TL-DR-4 | IT-02 | RED (empty) → GREEN |
-| AR-11 ×2 | `entity..` and `jakarta.persistence.EntityManager` only used by `..adapter.out.persistence..` (temporary legacy scope) | `AdapterDependenciesTest` | TL-DR-5/6 | IT-02 | GREEN before and after (guard) |
+| AR-11 ×2 | `entity..` and `jakarta.persistence.EntityManager` only used by `..adapter.out.persistence..` (legacy scope removed at IT-06) | `AdapterDependenciesTest` | TL-DR-5/6 | IT-02 | GREEN with the legacy scope; IT-06: scope removed → RED (50 + 7 violations, legacy outbound classes) → GREEN after deletion |
 | AR-12 | `..adapter.in.rest..` does not depend on `java.sql..` | `AdapterDependenciesTest` | TL-DR-9 | IT-02 | RED (empty) → GREEN |
 | AR-13 ×2 | `*RepositoryAdapter` in `..adapter.out.persistence..` implements a `Load*` and a `Save*` port of `..port.out..` | `AdapterDependenciesTest` | §6 | IT-02 | RED (empty) → GREEN |
 | AR-14 ×5 | top-level types of `..port.in..` and `..port.out..` are interfaces; `..command..` only `*Command`; `..query..` only `*Query` / `*Criteria`; input-port implementations are `*Service` outside the port packages | `PortsTest` | IDD §11, IT-02 gate | IT-02 | GREEN |
 | AR-16 ×3 | `@RestController`/`@RestControllerAdvice` in `..adapter..` prefixed `Rest`; top-level classes in `..adapter.in.kafka..` prefixed `Kafka`, in `..adapter.out.persistence..` prefixed `Jpa` | `CodingConventionsTest` | conventions | IT-02 | RED (empty) → GREEN |
 | AR-17 ×2 | no `@Autowired` fields and no standard streams in `domain..`, `adapter..`, `bootstrap..` | `CodingConventionsTest` | conventions | IT-02 | GREEN before and after (guard) |
-| AR-18 ×2 | `@Transactional` methods only in `..adapter.in.kafka..` (temporary legacy scope); no class-level `@Transactional` | `CodingConventionsTest` | TL-DR-10 | IT-02 | GREEN before and after (guard) |
+| AR-18 ×2 | `@Transactional` methods only in `..adapter.in.kafka..` (legacy scope removed at IT-06); no class-level `@Transactional` | `CodingConventionsTest` | TL-DR-10 | IT-02 | GREEN with the legacy scope; IT-06: scope removed → RED (1 violation, `OutboundPaymentMessageConsumer`) → GREEN after deletion |
 | AR-02 | `domain.(*)..` context slices do not depend on each other; dependencies on `domain.sharedkernel..` ignored by definition (DR-2) | `DomainIsolationTest` | DR-2 | IT-03 | GREEN before migration (guard; one context only); after: GREEN, mutation `Recall` → `SuspendedPayment` RED, reverted |
 | AR-07 | a context's use cases only use their own context and the shared kernel | covered by AR-02 | TL-DR-7 | IT-03 | covered |
 
-Temporary exceptions (none active today):
+Temporary exceptions (none active since IT-06; both removed, pending commit):
 
 | Rule | Exception scope | Added | Removed by |
 |---|---|---|---|
-| AR-11 | legacy `controller`, `service`, `repository`, `kafka` packages may access `entity` / `EntityManager` (package scoping `LEGACY_PACKAGES` in `AdapterDependenciesTest`) | IT-02 (active) | IT-06 |
-| AR-18 | legacy `kafka` package listeners keep `@Transactional` (`LEGACY_KAFKA_PACKAGE` in `CodingConventionsTest`) | IT-02 (active) | IT-06 |
+| AR-11 | legacy `controller`, `service`, `repository`, `kafka` packages may access `entity` / `EntityManager` (package scoping `LEGACY_PACKAGES` in `AdapterDependenciesTest`) | IT-02 | removed at IT-06 |
+| AR-18 | legacy `kafka` package listeners keep `@Transactional` (`LEGACY_KAFKA_PACKAGE` in `CodingConventionsTest`) | IT-02 | removed at IT-06 |
 
 ## 10. Test Strategy
 
@@ -317,8 +317,8 @@ Temporary exceptions (none active today):
 | IT-02 | Suspended | `APPROVED` (gates 1–3: `CHANGES_REQUESTED`, package layout) | 489 = domain 142 + client-adapters 15 + infrastructure-adapters 15 + bootstrap 317, 0 failures; 21 legacy suspended tests remapped (see log) | 29 ArchUnit tests GREEN; temporary scopes AR-11, AR-18 | `mvn -B clean verify`: exit 0, BUILD SUCCESS (after the 3rd-gate ring change) | 1st, 2nd, 3rd: changes requested; 4th: approved 2026-11-12 | `47ad475d4f4009c100f2eb6d92fa5c5b472693e9` |
 | IT-03 | Recalls | `APPROVED` (1st gate: `CHANGES_REQUESTED`, Record → Persist naming) | 512 = domain 164 + client-adapters 36 + infrastructure-adapters 30 + bootstrap 282, 0 failures; 36 legacy recall tests remapped (see log) | 30 ArchUnit tests GREEN (AR-02 added); temporary scopes AR-11, AR-18 | `mvn -B clean verify`: exit 0, BUILD SUCCESS | approved 2026-11-12 | Suspended rename `98e278ce1d1283c3e5461e08f3cf9444ff298b4b`; Recalls `020497069285b50cef119ed73a4940a8d631afda` |
 | IT-04 | Instant | `APPROVED` | 536 = domain 185 + client-adapters 63 + infrastructure-adapters 47 + bootstrap 241, 0 failures; 41 legacy instant test executions remapped (see log) | 30 ArchUnit tests GREEN (AR-02 mutation `InstantPayment` → `Recall` RED, reverted); temporary scopes AR-11, AR-18 | `mvn -B clean verify`: exit 0, BUILD SUCCESS | approved 2026-11-12 | `5af8208b2626be8f93f965046358937583b1d9ec` |
-| IT-05 | Inbound | `APPROVED` | 566 = domain 212 + client-adapters 83 + infrastructure-adapters 58 + bootstrap 213, 0 failures; 28 legacy inbound test executions remapped (see log) | 30 ArchUnit tests GREEN (AR-02 mutation `InboundPaymentView` → `InstantPayment` RED, reverted); temporary scopes AR-11, AR-18 | `mvn -B clean verify`: exit 0, BUILD SUCCESS | approved 2026-11-12 | see §15 |
-| IT-06 | Outbound | `NOT_STARTED` | | | | | |
+| IT-05 | Inbound | `APPROVED` | 566 = domain 212 + client-adapters 83 + infrastructure-adapters 58 + bootstrap 213, 0 failures; 28 legacy inbound test executions remapped (see log) | 30 ArchUnit tests GREEN (AR-02 mutation `InboundPaymentView` → `InstantPayment` RED, reverted); temporary scopes AR-11, AR-18 | `mvn -B clean verify`: exit 0, BUILD SUCCESS | approved 2026-11-12 | `b1f6b207caf2afb845213b898da4e6e5487318f4` |
+| IT-06 | Outbound | `APPROVED` | 639 = domain 254 + client-adapters 149 + infrastructure-adapters 70 + bootstrap 166, 0 failures; legacy outbound tests remapped (see log); `PaymentServiceUnitTest`, `KafkaListenerUnitTest`, `PaymentRepositoryUnitTest` deleted | 30 ArchUnit tests GREEN; AR-11 / AR-18 legacy scopes removed (RED → GREEN); AR-02 mutation `OutboundPaymentWithFee` → `Recall` RED, reverted; no temporary exception left | `mvn -B clean verify`: exit 0, BUILD SUCCESS; after the AGENTS.md doc edit: fast tier `mvn -B test -Dtest='PaymentControllerWebTest,PaymentUtilsTest'` exit 0, 42 tests | approved 2026-11-12 | (see commit log below) |
 | IT-07 | Final cleanup | `NOT_STARTED` | | | | | |
 
 Test remapping log (MAC-07):
@@ -360,6 +360,17 @@ Test remapping log (MAC-07):
 | IT-05 | `PaymentRepositoryUnitTest.should_reject_inbound_value_date_bound_not_in_strict_iso_date_format_with_message_less_error` (3 rows) | domain: `InboundPaymentSearchCriteriaTest` (same rows, `MalformedDateException` without message) | approved |
 | IT-05 | `PaymentRepositoryUnitTest.should_trim_details_id_before_parsing_it` | client-adapters: `RestInboundPaymentControllerTest.should_trim_the_path_id_before_parsing_it` (same padded id) | approved |
 | IT-05 | `PaymentApplicationIntegrationTest` | unchanged assertions (incl. the two date-dependent ageInDays tests); injected `InboundPaymentListener` replaced by `KafkaInboundPaymentListener` | |
+| IT-06 | `PaymentServiceUnitTest.should_compute_search_fee_with_service_fee_table` (9 rows), `should_keep_search_fee_scale_of_two_for_our_payments`, `outboundSearch_computesFeePerChargesType` | domain: `SearchFeePolicyTest` (same 9 rows + the SHA / BEN / no-amount rows of `outboundSearch_computesFeePerChargesType`, scale test); `SearchOutboundPaymentsServiceTest.should_apply_the_search_fee_to_every_loaded_payment_in_order` (same 4 payments) | approved |
+| IT-06 | `PaymentServiceUnitTest.outboundGetById_foundAndMissing` | retired (BR-OUT-10, approved) | |
+| IT-06 | `PaymentControllerWebTest.should_compute_details_fee_with_controller_fee_table` (7 rows), `should_return_fixed_details_fee_when_sha_payment_has_no_amount` | domain: `DetailsFeePolicyTest` (same rows, SHA without amount 0.50, OUR without amount → `FeeNotComputableException`); rendering in `RestOutboundPaymentControllerTest.should_keep_null_values_in_the_details_map` | approved |
+| IT-06 | `PaymentControllerWebTest.outboundSearch_returnsRows`, `outboundDetails_computesFeeFromController`, `outboundDetails_missing_returns404`, `should_return_404_without_querying_when_outbound_details_id_is_not_a_uuid`, `should_build_outbound_details_from_entity_manager_and_never_call_the_service` | client-adapters: `RestOutboundPaymentControllerTest` (search rows, fee 20.00, 404 empty body, `not-a-uuid` 404 without port call, structural test: details use case only, search port never called) | id `o1` replaced by a UUID; approved Q2 |
+| IT-06 | `PaymentControllerWebTest.outboundDetails_dbFailure_returns500`, `should_return_500_when_details_fee_is_computed_for_our_payment_without_amount`, outbound rows of the 500 tests | unchanged in bootstrap, mocks swapped to `SearchOutboundPayments` / `GetOutboundPaymentDetails` (port throws `RuntimeException` / `FeeNotComputableException`); `EntityManager` mocks removed (Q3) | move in IT-07 |
+| IT-06 | `KafkaListenerUnitTest` outbound tests (`outbound_onMessage_persistsRow`, `outbound_onMessage_malformedJson_swallowed`, unparsable date, missing/null fields, first-ten-characters 4 rows, unknown charges type) and the outbound topic/group row | client-adapters: `KafkaOutboundPaymentListenerTest` (same payloads) | plus 1 new swallow-on-persist-failure test |
+| IT-06 | `KafkaListenerUnitTest.should_set_created_at_and_updated_at_to_consumer_time_on_every_message` | domain: `PersistOutboundPaymentServiceTest.should_set_created_at_and_updated_at_to_consumer_time_on_every_message` (fixed clock); client-adapters: `KafkaOutboundPaymentListenerTest.should_ignore_the_created_at_field_of_the_event` (same payload) | approved |
+| IT-06 | `PaymentRepositoryUnitTest.outboundSearch_appliesParameterizedClauses`, `outboundFindById_foundAndMissing`, `should_not_match_lower_case_stored_destination_bic`, `should_order_outbound_payments_by_requested_execution_date_descending_and_apply_limit`, `should_apply_inclusive_outbound_execution_bounds` | infrastructure-adapters: `JpaOutboundPaymentRepositoryAdapterTest` (same seeds; find-by-id split; plus 1 upsert test) | |
+| IT-06 | `PaymentRepositoryUnitTest.should_reject_outbound_execution_bound_not_in_strict_iso_date_format_with_message_less_error` (3 rows) | domain: `OutboundPaymentSearchCriteriaTest` (same rows, `MalformedDateException` without message) | approved |
+| IT-06 | `PaymentRepositoryUnitTest.should_reject_instant_payment_without_currency`, `should_reject_outbound_payment_without_amount`, `should_reject_currency_longer_than_three_characters` | infrastructure-adapters: `JpaSchemaConstraintsTest` (moved unchanged with helpers) | approved Q4 |
+| IT-06 | `PaymentApplicationIntegrationTest` | unchanged assertions (incl. N-02); injected `OutboundPaymentMessageConsumer` replaced by `KafkaOutboundPaymentListener` | |
 
 ## 12. Risks and Open Issues
 
@@ -462,6 +473,19 @@ AC-01..AC-21 of the migration agent and MAC-01..MAC-08 of `ddd-test-coverage.md`
 | 2026-11-12 | IT-05 | final compilation gate `mvn -B clean verify` (Docker) | exit 0; domain 212, client-adapters 83, infrastructure-adapters 58, bootstrap 213 = 566 tests, 0 failures |
 | 2026-11-12 | IT-05 | AR-02 mutation (`InboundPaymentView` returning `InstantPayment`) | AR-02 RED (1 of 30); reverted, 30 GREEN |
 
+| 2026-11-12 | IT-06 | AR-11 / AR-18 legacy scopes removed, `mvn -B test -Dtest='<6 architecture classes>'` before migration | exit 1; 30 tests, 3 failures: `entitiesShouldOnlyBeUsedByThePersistenceAdapter` (50), `entityManagerShouldOnlyBeUsedByThePersistenceAdapter` (7), `transactionalMethodsShouldOnlyBeKafkaListeners` (1), all from the legacy outbound classes |
+| 2026-11-12 | IT-06 | throwaway observation program (scratchpad, not committed): Jackson rendering of `Timestamp` / `Date` under 4 default zones | 36 timestamp + 4 date strings recorded as fixed expectations |
+| 2026-11-12 | IT-06 | `mvn -B -pl domain test` with stubs | 254 tests: 42 assertion failures (all new outbound tests), 0 errors |
+| 2026-11-12 | IT-06 | `mvn -B -pl domain test` after implementation | 254 tests, 0 failures |
+| 2026-11-12 | IT-06 | `mvn -B test -pl domain,infrastructure-adapters -Dtest='JpaOutbound*'` with stubs | 9 tests: 9 assertion failures, 0 errors |
+| 2026-11-12 | IT-06 | `mvn -B test -pl domain,infrastructure-adapters` after implementation (+ moved `JpaSchemaConstraintsTest`, 3 GREEN) | 67 + 3 tests, 0 failures |
+| 2026-11-12 | IT-06 | `mvn -B test -pl domain,client-adapters -Dtest='*Outbound*'` with stubs | 66 tests: 62 assertion failures, 0 errors; 4 passing on the stubs (null formatter values, annotation check, malformed JSON, unparsable date) |
+| 2026-11-12 | IT-06 | `mvn -B test -pl domain,client-adapters` after implementation | 149 tests, 0 failures |
+| 2026-11-12 | IT-06 | legacy outbound classes deleted; architecture classes + `PaymentControllerWebTest` | 30 ArchUnit GREEN (AR-11 / AR-18 GREEN), 14 web tests GREEN |
+| 2026-11-12 | IT-06 | AR-02 mutation (`OutboundPaymentWithFee` returning `Recall`) | AR-02 RED (1 of 30); reverted, 30 GREEN |
+| 2026-11-12 | IT-06 | final compilation gate `mvn -B clean verify` (Docker) | exit 0; domain 254, client-adapters 149, infrastructure-adapters 70, bootstrap 166 = 639 tests, 0 failures |
+| 2026-11-12 | IT-06 (gate) | module AGENTS.md lines 22/36/38 updated (docs only); `mvn -B test -Dtest='PaymentControllerWebTest,PaymentUtilsTest'` | exit 0; 42 tests (14 + 28), 0 failures |
+
 ### IT-01 findings (confirmed at the IT-01 gate, 2026-11-12: F-01 (a), F-02..F-04 (a))
 
 - **F-01 `MalformedDateException` message.** Legacy `Date.valueOf` throws a `NumberFormatException` *with* a message for a non-numeric field (e.g. `2026-1x-05` gives `Error at index 1 in: "1x"`), which the legacy handler renders as the 400 body instead of `Bad request`. `IsoDateBound` therefore carries that message (null for shape/range errors). `technical-layer-design.md` §7 shows `MalformedDateException` → `{"error":"Bad request"}` only; parity requires the REST handler (IT-05/IT-06) to render `message ?? "Bad request"`.
@@ -501,3 +525,5 @@ AC-01..AC-21 of the migration agent and MAC-01..MAC-08 of `ddd-test-coverage.md`
 | 2026-11-12 | IT-04 gate Q1–Q2 | (a) changed IBAN inputs in the two remapped repository tests approved; (a) IT-04 **APPROVED AND COMMIT** |
 | 2026-11-12 | IT-05 scope gate Q1–Q3 | (a) `InboundPaymentView` in `domain/inbound/` (same rule for `OutboundPaymentWithFee` in `domain/outbound/`); (a) test remaps approved; (a) IT-05 scope approved incl. one clock read per search request and the `MalformedDateException` handler (message, or `Bad request` when null) |
 | 2026-11-12 | IT-05 gate | (a) IT-05 **APPROVED AND COMMIT** |
+| 2026-11-12 | IT-06 scope gate Q1–Q6 | Q1 (b) fixed expected strings observed beforehand with a throwaway program, no Jackson comparison in committed tests (supersedes TLD §8.3 parity tests, dated note); Q2 (a) structural test moved to `RestOutboundPaymentControllerTest`; Q3 (a) `EntityManager` mocks removed from `PaymentControllerWebTest` and the module AGENTS.md line updated; Q4 (a) `PaymentServiceUnitTest` / `KafkaListenerUnitTest` / `PaymentRepositoryUnitTest` deleted, schema tests moved unchanged to `JpaSchemaConstraintsTest`, AGENTS.md test-command lines updated; Q5 (a) test remaps approved; Q6 (a) IT-06 scope approved |
+| 2026-11-12 | IT-06 gate Q1–Q2 | Q1 (a) module AGENTS.md lines 22/36/38 updated to the migrated reality (root `../AGENTS.md` left stale, logged follow-up); Q2 (a) IT-06 **APPROVED AND COMMIT** |

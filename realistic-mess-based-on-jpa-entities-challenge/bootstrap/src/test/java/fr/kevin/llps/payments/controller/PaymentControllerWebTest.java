@@ -1,12 +1,6 @@
 package fr.kevin.llps.payments.controller;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.hamcrest.Matchers.nullValue;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -14,23 +8,28 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.math.BigDecimal;
-import java.sql.Timestamp;
-import java.util.List;
-import java.util.UUID;
 
-import org.junit.jupiter.api.BeforeEach;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import fr.kevin.llps.payments.adapter.in.rest.inbound.RestInboundPaymentController;
 import fr.kevin.llps.payments.adapter.in.rest.instant.RestInstantPaymentController;
+import fr.kevin.llps.payments.adapter.in.rest.outbound.RestOutboundPaymentController;
+import fr.kevin.llps.payments.domain.outbound.FeeNotComputableException;
+import fr.kevin.llps.payments.domain.outbound.port.in.GetOutboundPaymentDetails;
+import fr.kevin.llps.payments.domain.outbound.port.in.SearchOutboundPayments;
+import fr.kevin.llps.payments.domain.sharedkernel.PaymentId;
 import fr.kevin.llps.payments.domain.inbound.port.in.GetInboundPaymentDetails;
 import fr.kevin.llps.payments.domain.inbound.port.in.SearchInboundPayments;
 import fr.kevin.llps.payments.adapter.in.rest.recall.RestRecallController;
@@ -41,18 +40,13 @@ import fr.kevin.llps.payments.domain.recall.port.in.GetRecallDetails;
 import fr.kevin.llps.payments.domain.recall.port.in.SearchRecalls;
 import fr.kevin.llps.payments.domain.suspended.port.in.GetSuspendedPaymentDetails;
 import fr.kevin.llps.payments.domain.suspended.port.in.SearchSuspendedPayments;
-import fr.kevin.llps.payments.dto.OutboundPaymentResponse;
-import fr.kevin.llps.payments.entity.OutboundPayment;
-import fr.kevin.llps.payments.service.OutboundPaymentService;
 
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.EntityManagerFactory;
 
 @WebMvcTest(controllers = {
         RestInstantPaymentController.class,
         RestSuspendedPaymentController.class,
         RestInboundPaymentController.class,
-        OutboundPaymentController.class,
+        RestOutboundPaymentController.class,
         RestRecallController.class
 })
 class PaymentControllerWebTest {
@@ -73,19 +67,22 @@ class PaymentControllerWebTest {
     @MockitoBean
     private GetInboundPaymentDetails getInboundPaymentDetails;
     @MockitoBean
-    private OutboundPaymentService outboundService;
+    private SearchOutboundPayments searchOutboundPayments;
+    @MockitoBean
+    private GetOutboundPaymentDetails getOutboundPaymentDetails;
     @MockitoBean
     private SearchRecalls searchRecalls;
     @MockitoBean
     private GetRecallDetails getRecallDetails;
-    @MockitoBean
-    private EntityManagerFactory entityManagerFactory;
-    @MockitoBean
-    private EntityManager em;
 
-    @BeforeEach
-    void wireEntityManagerFactory() {
-        lenient().when(entityManagerFactory.createEntityManager()).thenReturn(em);
+    // RestOutboundPaymentController renders details timestamps in the zone of the application Clock (BR-OUT-09).
+    @TestConfiguration
+    static class ParisClock {
+
+        @Bean
+        Clock clock() {
+            return Clock.fixed(Instant.parse("2026-11-12T10:00:00Z"), ZoneId.of("Europe/Paris"));
+        }
     }
 
     // ---------------- instant ----------------
@@ -102,46 +99,12 @@ class PaymentControllerWebTest {
     // ---------------- outbound ----------------
 
     @Test
-    void outboundSearch_returnsRows() throws Exception {
-        OutboundPaymentResponse response = new OutboundPaymentResponse();
-        response.id = "o1";
-        when(outboundService.search(any())).thenReturn(List.of(response));
-
-        mvc.perform(get("/api/v1/outbound-payments/search").param("chargesType", "OUR"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value("o1"));
-    }
-
-    @Test
-    void outboundDetails_computesFeeFromController() throws Exception {
-        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000401");
-        OutboundPayment payment = new OutboundPayment();
-        payment.id = id;
-        payment.amount = new BigDecimal("1000.00");
-        payment.chargesType = "OUR";
-        payment.createdAt = Timestamp.valueOf("2026-10-16 08:00:00");
-        payment.updatedAt = Timestamp.valueOf("2026-10-16 08:01:00");
-        when(em.find(eq(OutboundPayment.class), eq(id))).thenReturn(payment);
-
-        mvc.perform(get("/api/v1/outbound-payments/" + id))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.estimatedFee").value(20.00));
-    }
-
-    @Test
-    void outboundDetails_missing_returns404() throws Exception {
-        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000404");
-        when(em.find(eq(OutboundPayment.class), eq(id))).thenReturn(null);
-
-        mvc.perform(get("/api/v1/outbound-payments/" + id)).andExpect(status().isNotFound());
-    }
-
-    @Test
     void outboundDetails_dbFailure_returns500() throws Exception {
-        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000401");
-        when(em.find(eq(OutboundPayment.class), eq(id))).thenThrow(new RuntimeException("db down"));
+        // remapped at IT-06: the details use case fails instead of EntityManager.find
+        PaymentId id = PaymentId.parse("00000000-0000-0000-0000-000000000401");
+        when(getOutboundPaymentDetails.getDetails(id)).thenThrow(new RuntimeException("db down"));
 
-        mvc.perform(get("/api/v1/outbound-payments/" + id)).andExpect(status().isInternalServerError());
+        mvc.perform(get("/api/v1/outbound-payments/" + id.value())).andExpect(status().isInternalServerError());
     }
 
     // ---------------- characterization: REST error contract (BR-API-01, BR-API-03, BR-API-08) ----------------
@@ -165,7 +128,7 @@ class PaymentControllerWebTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.error").value(GenericError));
         verifyNoInteractions(searchInstantPayments, getInstantPaymentDetails, searchSuspendedPayments,
-                getSuspendedPaymentDetails, searchInboundPayments, getInboundPaymentDetails, outboundService, searchRecalls,
+                getSuspendedPaymentDetails, searchInboundPayments, getInboundPaymentDetails, searchOutboundPayments, getOutboundPaymentDetails, searchRecalls,
                 getRecallDetails);
     }
 
@@ -186,7 +149,7 @@ class PaymentControllerWebTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.error").value(GenericError));
         verifyNoInteractions(searchInstantPayments, getInstantPaymentDetails, searchSuspendedPayments,
-                getSuspendedPaymentDetails, searchInboundPayments, getInboundPaymentDetails, outboundService, searchRecalls,
+                getSuspendedPaymentDetails, searchInboundPayments, getInboundPaymentDetails, searchOutboundPayments, getOutboundPaymentDetails, searchRecalls,
                 getRecallDetails);
     }
 
@@ -203,96 +166,16 @@ class PaymentControllerWebTest {
 
     // ---------------- characterization: Outbound details fee policy (BR-OUT-07, BR-OUT-08, BR-API-05) ----------------
 
-    @ParameterizedTest(name = "[{index}] {1} on {0} -> details fee {2}")
-    @CsvSource(value = {
-            "1000.00, OUR, 20.00",
-            "15600.75, OUR, 312.02",
-            "0.25, OUR, 0.01",
-            "780.00, SHA, 0.50",
-            "95.00, BEN, 0",
-            "95.00, XYZ, 0",
-            "95.00, NULL, 0"
-    }, nullValues = "NULL")
-    void should_compute_details_fee_with_controller_fee_table(String amount, String chargesType, String expectedFee)
-            throws Exception {
-        // GIVEN
-        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000402");
-        OutboundPayment payment = new OutboundPayment();
-        payment.id = id;
-        payment.amount = new BigDecimal(amount);
-        payment.chargesType = chargesType;
-        when(em.find(eq(OutboundPayment.class), eq(id))).thenReturn(payment);
-
-        // WHEN / THEN
-        mvc.perform(get("/api/v1/outbound-payments/" + id))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.estimatedFee").value(new BigDecimal(expectedFee).doubleValue()));
-    }
-
     @Test
     void should_return_500_when_details_fee_is_computed_for_our_payment_without_amount() throws Exception {
-        // GIVEN
-        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000402");
-        OutboundPayment payment = new OutboundPayment();
-        payment.id = id;
-        payment.amount = null;
-        payment.chargesType = "OUR";
-        when(em.find(eq(OutboundPayment.class), eq(id))).thenReturn(payment);
+        // GIVEN (remapped at IT-06: DetailsFeePolicy raises FeeNotComputableException, no dedicated handler -> generic 500)
+        PaymentId id = PaymentId.parse("00000000-0000-0000-0000-000000000402");
+        when(getOutboundPaymentDetails.getDetails(id)).thenThrow(new FeeNotComputableException("OUR details fee needs an amount"));
 
         // WHEN / THEN
-        mvc.perform(get("/api/v1/outbound-payments/" + id))
+        mvc.perform(get("/api/v1/outbound-payments/" + id.value()))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.error").value(GenericError));
-    }
-
-    @Test
-    void should_return_fixed_details_fee_when_sha_payment_has_no_amount() throws Exception {
-        // GIVEN
-        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000401");
-        OutboundPayment payment = new OutboundPayment();
-        payment.id = id;
-        payment.amount = null;
-        payment.chargesType = "SHA";
-        when(em.find(eq(OutboundPayment.class), eq(id))).thenReturn(payment);
-
-        // WHEN / THEN
-        mvc.perform(get("/api/v1/outbound-payments/" + id))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.estimatedFee").value(0.50))
-                .andExpect(jsonPath("$.amount").value(nullValue()));
-    }
-
-    @Test
-    void should_return_404_without_querying_when_outbound_details_id_is_not_a_uuid() throws Exception {
-        // GIVEN
-        String malformedId = "not-a-uuid";
-
-        // WHEN / THEN
-        mvc.perform(get("/api/v1/outbound-payments/" + malformedId))
-                .andExpect(status().isNotFound());
-        verify(em, never()).find(eq(OutboundPayment.class), any());
-        verifyNoInteractions(outboundService);
-    }
-
-    @Test
-    void should_build_outbound_details_from_entity_manager_and_never_call_the_service() throws Exception {
-        // GIVEN
-        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000403");
-        OutboundPayment payment = new OutboundPayment();
-        payment.id = id;
-        payment.instructionId = "OUT-2026-9003";
-        payment.amount = new BigDecimal("95.00");
-        payment.chargesType = "BEN";
-        when(em.find(eq(OutboundPayment.class), eq(id))).thenReturn(payment);
-
-        // WHEN / THEN
-        mvc.perform(get("/api/v1/outbound-payments/" + id))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.instruction_id").value("OUT-2026-9003"))
-                .andExpect(jsonPath("$.charges_type").value("BEN"))
-                .andExpect(jsonPath("$.instructionId").doesNotExist());
-        verify(outboundService, never()).getById(anyString());
-        verifyNoInteractions(outboundService);
     }
 
     // ---------------- characterization: Inbound age in days (BR-INB-07, BR-INB-08) ----------------

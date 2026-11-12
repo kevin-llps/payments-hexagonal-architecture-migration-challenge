@@ -1,41 +1,38 @@
-package fr.kevin.llps.payments.repository;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+package fr.kevin.llps.payments.adapter.out.persistence;
 
 import java.math.BigDecimal;
 import java.sql.Date;
 import java.sql.Timestamp;
-import java.util.List;
 import java.util.UUID;
+
+import jakarta.persistence.PersistenceException;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
-import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import fr.kevin.llps.payments.dto.OutboundPaymentSearchRequest;
 import fr.kevin.llps.payments.entity.InstantPayment;
 import fr.kevin.llps.payments.entity.OutboundPayment;
 import fr.kevin.llps.payments.entity.SuspendedPayment;
 
-import jakarta.persistence.PersistenceException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@DataJpaTest
+/**
+ * Schema constraints of the unchanged {@code schema.sql} (BR-SHR-09, BR-DAT-01), moved unchanged from the legacy
+ * {@code PaymentRepositoryUnitTest} at the IT-06 gate.
+ */
+@DataJpaTest(properties = {"spring.jpa.hibernate.ddl-auto=none", "spring.sql.init.mode=always"})
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import(OutboundPaymentRepository.class)
 @Testcontainers
-class PaymentRepositoryUnitTest {
+class JpaSchemaConstraintsTest {
 
     @Container
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
@@ -47,8 +44,6 @@ class PaymentRepositoryUnitTest {
         registry.add("spring.datasource.password", POSTGRES::getPassword);
     }
 
-    @Autowired
-    private OutboundPaymentRepository outboundRepository;
     @Autowired
     private TestEntityManager em;
 
@@ -62,118 +57,6 @@ class PaymentRepositoryUnitTest {
         em.flush();
         em.clear();
     }
-
-    // ---------------- outbound ----------------
-
-    @Test
-    void outboundSearch_appliesParameterizedClauses() {
-        persist(
-                outbound("00000000-0000-0000-0000-000000000631", "OUT-1", "DE89370400440532013000", "ABNANL2A",
-                        "SHA", "SENT", Date.valueOf("2026-10-16")),
-                outbound("00000000-0000-0000-0000-000000000632", "OUT-2", "DE89370400440532013000", "BNPAFRPP",
-                        "SHA", "SENT", Date.valueOf("2026-10-16")),
-                outbound("00000000-0000-0000-0000-000000000633", "OUT-3", "DE89370400440532013000", "ABNANL2A",
-                        "OUR", "SENT", Date.valueOf("2026-10-16")));
-
-        OutboundPaymentSearchRequest request = new OutboundPaymentSearchRequest();
-        request.debtorIban = "DE89370400440532013000";
-        request.destinationBic = "abna";
-        request.chargesType = "sha";
-        request.status = "sent";
-        request.executionFrom = "2026-10-01";
-        request.executionTo = "2026-10-31";
-        request.limit = 20;
-
-        List<OutboundPayment> results = outboundRepository.search(request);
-
-        assertThat(results).hasSize(1);
-        assertThat(results.get(0).instructionId).isEqualTo("OUT-1");
-        assertThat(results.get(0).requestedExecutionDate).isEqualTo(Date.valueOf("2026-10-16"));
-    }
-
-    @Test
-    void outboundFindById_foundAndMissing() {
-        persist(outbound("00000000-0000-0000-0000-000000000634", "OUT-4", "DE89370400440532013000", "ABNANL2A",
-                "SHA", "SENT", Date.valueOf("2026-10-18")));
-
-        OutboundPayment found = outboundRepository.findById("00000000-0000-0000-0000-000000000634");
-        assertThat(found.instructionId).isEqualTo("OUT-4");
-        assertThat(outboundRepository.findById("11111111-1111-1111-1111-111111111111")).isNull();
-    }
-
-    // ---------------- characterization: Outbound filters, order, limit and dates (BR-OUT-02, BR-OUT-04, BR-OUT-05) ----------------
-
-    @Test
-    void should_not_match_lower_case_stored_destination_bic() {
-        // GIVEN
-        persist(outbound("00000000-0000-0000-0000-000000000671", "OUT-LC", "DE89370400440532013000", "abnanl2a",
-                "SHA", "SENT", Date.valueOf("2026-10-16")));
-        OutboundPaymentSearchRequest request = new OutboundPaymentSearchRequest();
-        request.destinationBic = "abna";
-
-        // WHEN
-        List<OutboundPayment> results = outboundRepository.search(request);
-
-        // THEN
-        assertThat(results).isEmpty();
-    }
-
-    @Test
-    void should_order_outbound_payments_by_requested_execution_date_descending_and_apply_limit() {
-        // GIVEN
-        persist(
-                outbound("00000000-0000-0000-0000-000000000672", "OUT-OLD", "DE89370400440532013000", "ABNANL2A",
-                        "SHA", "SENT", Date.valueOf("2026-10-14")),
-                outbound("00000000-0000-0000-0000-000000000673", "OUT-NEW", "DE89370400440532013000", "ABNANL2A",
-                        "SHA", "SENT", Date.valueOf("2026-10-18")),
-                outbound("00000000-0000-0000-0000-000000000674", "OUT-MID", "DE89370400440532013000", "ABNANL2A",
-                        "SHA", "SENT", Date.valueOf("2026-10-16")));
-        OutboundPaymentSearchRequest request = new OutboundPaymentSearchRequest();
-        request.limit = 2;
-
-        // WHEN
-        List<OutboundPayment> results = outboundRepository.search(request);
-
-        // THEN
-        assertThat(results).extracting(p -> p.instructionId).containsExactly("OUT-NEW", "OUT-MID");
-    }
-
-    @ParameterizedTest(name = "[{index}] executionFrom={0} executionTo={1}")
-    @CsvSource(value = {
-            "garbage, NULL",
-            "NULL, 2026-02-30x",
-            "2026-10-16T00:00:00, NULL"
-    }, nullValues = "NULL")
-    void should_reject_outbound_execution_bound_not_in_strict_iso_date_format_with_message_less_error(String from,
-            String to) {
-        // GIVEN
-        OutboundPaymentSearchRequest request = new OutboundPaymentSearchRequest();
-        request.executionFrom = from;
-        request.executionTo = to;
-
-        // WHEN / THEN
-        assertThatThrownBy(() -> outboundRepository.search(request))
-                .satisfies(e -> assertThat(rootCauseOf(e)).isExactlyInstanceOf(IllegalArgumentException.class)
-                        .hasMessage(null));
-    }
-
-    @Test
-    void should_apply_inclusive_outbound_execution_bounds() {
-        // GIVEN
-        persist(outbound("00000000-0000-0000-0000-000000000675", "OUT-EQ", "DE89370400440532013000", "ABNANL2A",
-                "SHA", "SENT", Date.valueOf("2026-10-16")));
-        OutboundPaymentSearchRequest request = new OutboundPaymentSearchRequest();
-        request.executionFrom = "2026-10-16";
-        request.executionTo = "2026-10-16";
-
-        // WHEN
-        List<OutboundPayment> results = outboundRepository.search(request);
-
-        // THEN
-        assertThat(results).extracting(p -> p.instructionId).containsExactly("OUT-EQ");
-    }
-
-    // ---------------- characterization: schema constraints (BR-SHR-09, BR-DAT-01) ----------------
 
     @Test
     void should_reject_instant_payment_without_currency() {
@@ -214,14 +97,6 @@ class PaymentRepositoryUnitTest {
     }
 
     // ---------------- helpers ----------------
-
-    private static Throwable rootCauseOf(Throwable throwable) {
-        Throwable current = throwable;
-        while (current.getCause() != null && current.getCause() != current) {
-            current = current.getCause();
-        }
-        return current;
-    }
 
     private void persist(Object... entities) {
         for (Object entity : entities) {
@@ -288,5 +163,4 @@ class PaymentRepositoryUnitTest {
         payment.updatedAt = payment.createdAt;
         return payment;
     }
-
 }

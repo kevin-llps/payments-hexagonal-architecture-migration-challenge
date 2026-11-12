@@ -414,6 +414,8 @@ Entities, `schema.sql`, `data.sql` and `ddl-auto: none` are unchanged. Only `ada
 3. **Web slice test:** `GET /api/v1/outbound-payments/{id}` via `@WebMvcTest` with a mocked `GetOutboundPaymentDetails`. It asserts the 13 keys, the null values, the exact date strings and the fee.
 4. **Integration test:** the existing N-02 assertion stays green and unchanged.
 
+> **Note (2026-11-12, Phase 5 IT-06 gate, user-approved): items 1 and 2 are superseded.** User answer: "(b) FIXED expected strings observed beforehand with a throwaway program (scratchpad, not committed); no Jackson comparison in committed tests." The expected strings were observed once by a throwaway program (not committed) that rendered `java.sql.Timestamp.valueOf(ldt)` and `java.sql.Date.valueOf(ld)` with a Spring `Jackson2ObjectMapperBuilder` mapper (`WRITE_DATES_AS_TIMESTAMPS` disabled) under each default `TimeZone`, restored afterwards. `RestOutboundPaymentDetailsFormatterTest` asserts those fixed values with no Jackson and no `java.sql`: 36 timestamp rows (zones `UTC`, `Europe/Paris`, `America/New_York`, `Asia/Kolkata` × winter, summer, zero millis, non-zero millis, sub-millisecond truncation, Paris DST gap 2026-03-29T02:30 / overlap 2026-10-25T02:30, New York DST gap 2026-03-08T02:30 / overlap 2026-11-01T01:30), 4 date rows and a null case. The formatter takes its zone as a constructor argument, so the committed test never changes the JVM default zone. Items 3 and 4 are unchanged (`RestOutboundPaymentControllerTest`, N-02 in `PaymentApplicationIntegrationTest`).
+
 ## 9. Dependency Direction Rules and ArchUnit Constraints
 
 ### 9.1 Rules
@@ -565,7 +567,7 @@ sequenceDiagram
 | TD-02 | Legacy code moves into `bootstrap` unchanged, deleted per context (Q2) | keeps the app runnable and the 307 tests green at every step |
 | TD-03 | `schema.sql`/`data.sql` in `infrastructure-adapters` resources (Q3) | DDL is a persistence concern; `@DataJpaTest` in the module can use them |
 | TD-04 | `KafkaOutboundPaymentListener` (Q4) | naming convention; the intentional misnaming smell is retired at migration time with user approval |
-| TD-05 | Explicit UTC formatter for outbound details, no `java.sql` in REST (Q5) | REST adapter free of legacy types; byte-identical output enforced by Jackson parity tests (§8.3) |
+| TD-05 | Explicit UTC formatter for outbound details, no `java.sql` in REST (Q5) | REST adapter free of legacy types; byte-identical output enforced by fixed observed strings (§8.3, amended at the IT-06 gate; originally Jackson parity tests) |
 | TD-06 | Application services carry no Spring annotations; wired in bootstrap | conventions ("wiring lives in bootstrap"); keeps the application framework-free |
 | TD-07 | Transactions only on Kafka listener methods; reads non-transactional | identical to today; BR-ING-06 preserved (DR-R3) |
 | TD-08 | Persistence adapters keep `@Repository` | exception translation unchanged (no behaviour drift) |
@@ -581,7 +583,7 @@ sequenceDiagram
 | ID | Risk | Mitigation |
 |---|---|---|
 | TL-R1 | Advice ordering: without `HIGHEST_PRECEDENCE`, the legacy `Exception.class` handler would turn domain exceptions into 500 | `@Order(Ordered.HIGHEST_PRECEDENCE)`; per-endpoint 400 tests (MAC-04) |
-| TL-R2 | Outbound details timestamp drift: zone conversion, DST overlap resolution, millisecond truncation, `+00:00` vs `Z`, years outside 4 digits | explicit formatter per §8.3 (`withLaterOffsetAtOverlap`, UTC, `.SSS`, literal `+00:00`); parameterized Jackson parity test incl. DST gap/overlap and several zones; N-02 IT unchanged. Years outside 0000–9999 are not present in data and not pinned. |
+| TL-R2 | Outbound details timestamp drift: zone conversion, DST overlap resolution, millisecond truncation, `+00:00` vs `Z`, years outside 4 digits | explicit formatter per §8.3 (`withLaterOffsetAtOverlap`, UTC, `.SSS`, literal `+00:00`); parameterized test with fixed strings observed from Jackson beforehand (IT-06 gate, replaces the Jackson parity test) incl. DST gap/overlap and several zones; N-02 IT unchanged. Years outside 0000–9999 are not present in data and not pinned. |
 | TL-R3 | Iteration 0 (multi-module move) is large | pure move with no content change; full `mvn test` (307) green before any migration; `git mv` to keep history |
 | TL-R4 | Spring test slices in non-bootstrap modules need a `@SpringBootConfiguration` | test-only configuration class per module; documented in Phase 5 |
 | TL-R5 | Entity/aggregate simple-name collisions | FQN entity references in mappers/adapters; JPQL entity names unchanged |
@@ -609,6 +611,7 @@ Changes after the gate:
 - TL-R2 was reworded and TL-R6/TL-R7 added.
 - TD-01..TD-14 now record the answers.
 
+| 2026-11-12 | Phase 5 IT-06 scope gate: outbound details pinning (user-approved change) | (b) "FIXED expected strings observed beforehand with a throwaway program (scratchpad, not committed); no Jackson comparison in committed tests." Same case families (UTC, Europe/Paris winter/summer, America/New_York, Asia/Kolkata, zero/non-zero ms, sub-ms truncation, DST gap/overlap). Supersedes §8.3 pinning items 1-2 (dated note in §8.3), TD-05 and TL-R2 wording. |
 | 2026-11-12 | Phase 5 IT-00 gate: module structure (user-approved change) | Changes requested: "only two adapters modules must exist : client-adapters and infrastructure-adapters. Domain must be named domain only"; clarified "Drop prefixes, keep application"; then corrected: "application must be merged in domain". Result: four modules `domain`, `client-adapters`, `infrastructure-adapters`, `bootstrap`, plain artifactIds, Java packages unchanged. |
 | 2026-11-12 | Phase 5 IT-03 gate (user-approved change) | User: "replace record by persist in RecordRecall and RecordSuspendedPayment". Input port `Record<X>` renamed `Persist<X>` (service `Persist<X>Service`, command `Persist<X>Command`, method `persist(...)`) in the port inventory, flows and matrices; template for IT-04..IT-06; `Save<X>` unchanged. |
 | 2026-11-12 | Phase 5 IT-02 gate, 3rd presentation (user-approved) | (b) `command` and `query` belong entirely to the domain-model ring (package-based); user: "adapters can use queries and commands". AR-08 keeps forbidding `*Service` and `port.out` to driving adapters, AR-09 keeps forbidding `*Service` and `port.in` to driven adapters; the `*Query` / `*Criteria` restrictions are removed. AR-14 package-content rules kept. |

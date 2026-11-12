@@ -42,10 +42,9 @@ import com.jayway.jsonpath.JsonPath;
 
 import fr.kevin.llps.payments.adapter.in.kafka.inbound.KafkaInboundPaymentListener;
 import fr.kevin.llps.payments.adapter.in.kafka.instant.KafkaInstantPaymentListener;
+import fr.kevin.llps.payments.adapter.in.kafka.outbound.KafkaOutboundPaymentListener;
 import fr.kevin.llps.payments.adapter.in.kafka.recall.KafkaRecallListener;
 import fr.kevin.llps.payments.adapter.in.kafka.suspended.KafkaSuspendedPaymentListener;
-
-import fr.kevin.llps.payments.kafka.OutboundPaymentMessageConsumer;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @EmbeddedKafka(partitions = 1, topics = {"pay.instant", "pay.suspended", "pay.inbound", "pay.outbound", "pay.recall"},
@@ -76,7 +75,7 @@ class PaymentApplicationIntegrationTest {
     @Autowired
     private KafkaInboundPaymentListener inboundListener;
     @Autowired
-    private OutboundPaymentMessageConsumer outboundConsumer;
+    private KafkaOutboundPaymentListener outboundConsumer;
     @Autowired
     private KafkaRecallListener recallListener;
 

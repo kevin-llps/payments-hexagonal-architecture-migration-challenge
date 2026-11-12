@@ -14,11 +14,6 @@ import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.sli
 @AnalyzeClasses(packages = "fr.kevin.llps.payments", importOptions = ImportOption.DoNotIncludeTests.class)
 class AdapterDependenciesTest {
 
-    // Temporary (IT-02): the legacy packages still use JPA entities and the EntityManager; IT-06 removes this scope.
-    private static final String[] LEGACY_PACKAGES = {
-            "fr.kevin.llps.payments.controller..", "fr.kevin.llps.payments.service..",
-            "fr.kevin.llps.payments.repository..", "fr.kevin.llps.payments.kafka.."};
-
     // AR-08
     @ArchTest
     static final ArchRule drivingAdaptersShouldUseUseCasesOnlyThroughInputPorts =
@@ -44,7 +39,6 @@ class AdapterDependenciesTest {
     @ArchTest
     static final ArchRule entitiesShouldOnlyBeUsedByThePersistenceAdapter =
             noClasses().that().resideOutsideOfPackages("..adapter.out.persistence..", "fr.kevin.llps.payments.entity..")
-                    .and().resideOutsideOfPackages(LEGACY_PACKAGES)
                     .should().dependOnClassesThat().resideInAPackage("fr.kevin.llps.payments.entity..")
                     .because("technical-layer-design.md TL-DR-5 / AR-11: JPA entities stay behind the persistence adapter");
 
@@ -52,7 +46,6 @@ class AdapterDependenciesTest {
     @ArchTest
     static final ArchRule entityManagerShouldOnlyBeUsedByThePersistenceAdapter =
             noClasses().that().resideOutsideOfPackage("..adapter.out.persistence..")
-                    .and().resideOutsideOfPackages(LEGACY_PACKAGES)
                     .should().dependOnClassesThat().haveFullyQualifiedName("jakarta.persistence.EntityManager")
                     .because("technical-layer-design.md TL-DR-6 / AR-11: the EntityManager is only used by the persistence adapter");
 

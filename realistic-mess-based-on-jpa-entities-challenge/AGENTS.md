@@ -11,16 +11,16 @@ Independent Spring Boot 3.5.7 / Java 21 app (entrypoint `fr.kevin.llps.payments.
 Run from this directory (no Maven wrapper, no lint/format/typecheck config):
 
 - Full module suite (needs Docker): `mvn test`
-- Fast, no-Docker subset: `mvn test -Dtest='PaymentServiceUnitTest,KafkaListenerUnitTest,PaymentControllerWebTest,PaymentUtilsTest'`
-- Single class: `mvn test -Dtest=PaymentServiceUnitTest`
-- Docker-backed repository slice: `mvn test -Dtest=PaymentRepositoryUnitTest`
+- Fast, no-Docker subset: `mvn test -Dtest='PaymentControllerWebTest,PaymentUtilsTest'`
+- Single class: `mvn test -Dtest=PaymentControllerWebTest`
+- Docker-backed repository slice: `mvn test -Dtest='Jpa*RepositoryAdapterTest,JpaSchemaConstraintsTest'`
 - Integration suite: `mvn test -Dtest=PaymentApplicationIntegrationTest`
 - Run locally: `docker compose up -d && mvn spring-boot:run` (app 8082, Postgres 5435 / `payments_jpa`, Kafka 9094)
 
 ## Testing gotchas
 
-- `PaymentRepositoryUnitTest` is **not** a pure unit test: `@DataJpaTest` + `@AutoConfigureTestDatabase(replace = NONE)` + Testcontainers Postgres. It needs Docker, unlike the other `*UnitTest`/`*WebTest` classes.
-- `PaymentControllerWebTest` must keep its `@MockitoBean EntityManagerFactory`/`EntityManager` and the `lenient()` factory wiring; `OutboundPaymentController` injects `@PersistenceContext`, so removing them breaks the slice context.
+- The `infrastructure-adapters` persistence tests (`Jpa*RepositoryAdapterTest`, `JpaSchemaConstraintsTest`) are `@DataJpaTest` + `@AutoConfigureTestDatabase(replace = NONE)` + Testcontainers Postgres: they need Docker, unlike the `domain` and `client-adapters` tests and the `Jpa*MapperTest` classes.
+- `PaymentControllerWebTest` no longer mocks `EntityManagerFactory`/`EntityManager` (removed at IT-06: outbound details go through the `GetOutboundPaymentDetails` port); it declares a `Clock` bean in a nested `@TestConfiguration` because `RestOutboundPaymentController` renders details timestamps in the clock's zone.
 - `PaymentApplicationIntegrationTest` uses `@EmbeddedKafka` and a Postgres Testcontainer, asserts seeded IDs such as `...0101` / `E2E-INST-0001`, and cleans only ids prefixed `00000000-0000-0000-0000-0000000009`. Keep new Kafka test ids in that range; poll with Awaitility, not sleeps.
 
 ## Persistence / data gotchas
@@ -33,9 +33,9 @@ Run from this directory (no Maven wrapper, no lint/format/typecheck config):
 ## Layering / behavior quirks (intentional)
 
 - Repositories build JPQL strings and bind named parameters; there are no Spring Data JPA interfaces. Keep that style unless the task is the migration itself.
-- `OutboundPaymentController.get` bypasses the service: it uses `EntityManager.find`, returns a snake_case `Map` (e.g. `instruction_id`) and its own fee table (OUR 2%, SHA 0.50, else 0). `OutboundPaymentService` uses different fees (OUR 1%, BEN 0, else 0.30). Both behaviors are asserted; don't unify them unless asked.
+- Outbound details (`RestOutboundPaymentController.get` → `GetOutboundPaymentDetails`) return a snake_case `Map` (e.g. `instruction_id`) with the `DetailsFeePolicy` fee (OUR 2%, SHA 0.50, else 0); the outbound search (`SearchOutboundPayments`) uses the different `SearchFeePolicy` (OUR 1%, BEN 0, else 0.30). Both behaviors are asserted; don't unify them unless asked.
 - `InboundPaymentController.search` adds `ageInDays` to each row; `InboundPaymentService.getById` also computes it. Output is date-dependent.
-- Kafka listeners (`*Listener` plus the misnamed `OutboundPaymentMessageConsumer`) each declare their own `groupId` (`jpa-*-group`), ignoring `spring.kafka.consumer.group-id`, and swallow all parse/persistence exceptions after logging. `em.merge` is the upsert.
+- Kafka listeners (`Kafka*Listener` in `client-adapters`; `KafkaOutboundPaymentListener` replaces the misnamed `OutboundPaymentMessageConsumer`) each declare their own `groupId` (`jpa-*-group`), ignoring `spring.kafka.consumer.group-id`, and swallow all parse/persistence exceptions after logging. `em.merge` in the `Jpa*RepositoryAdapter` is the upsert.
 - `GlobalExceptionHandler` maps `IllegalArgumentException` to 400 and everything else to 500; `OutboundPaymentController.get` catches invalid UUIDs and returns 404.
 
 ## Java coding conventions
