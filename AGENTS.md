@@ -4,7 +4,7 @@
 
 Three **independent** Spring Boot 3.5.7 / Java 21 apps that are the *deliberate* starting point of a hexagonal-architecture migration exercise. Same domain and Kafka topics, three flavors of legacy debt (see `README.md` for the port/infra matrix, API surface, and full smell inventory per module).
 
-The two `realistic-*` modules are near-identical copies; `maximum-spaghetti-challenge` has its own single-god-service structure. All use the same `fr.kevin.llps.payments` package, but they **share no code and have no inter-module dependencies**. Apply common changes (or deliberately skip them) in each module; do not extract shared modules or add cross-module imports unless asked. Each module has its own `AGENTS.md` with module-specific traps — read the one for the module you are editing.
+The two `realistic-*` modules started as near-identical copies; `realistic-mess-based-on-jpa-entities-challenge` has since been migrated to hexagonal architecture (Maven sub-modules `domain`, `client-adapters`, `infrastructure-adapters`, `bootstrap`; see its `docs/migration-2026-11-12/`), while `realistic-mess-challenge` keeps the legacy layout. `maximum-spaghetti-challenge` has its own single-god-service structure. All use the same `fr.kevin.llps.payments` package, but they **share no code and have no inter-module dependencies**. Apply common changes (or deliberately skip them) in each module; do not extract shared modules or add cross-module imports unless asked. Each module has its own `AGENTS.md` with module-specific traps — read the one for the module you are editing.
 
 ## The one rule
 
@@ -15,11 +15,11 @@ The code smells are **intentional**. Do not "clean up", fix, deduplicate, or ref
 No lint, formatter, typecheck, codegen, or CI config exists — don't go looking. There is no Maven wrapper; use the installed `mvn`.
 
 - All modules: `mvn test` from the repo root (root `pom.xml` is a pure aggregator). This includes the Docker-dependent integration suites.
-- One module: `cd <module> && mvn test` — modules parent `spring-boot-starter-parent` directly, so `-pl`/`-am` from the root adds nothing.
-- One test class: `mvn test -Dtest=PaymentServiceUnitTest` (run from inside the module); use `-Dtest=PaymentApplicationIntegrationTest` for the integration suite.
+- One module: `cd <module> && mvn test` — modules parent `spring-boot-starter-parent` directly, so `-pl`/`-am` from the root adds nothing. The JPA module is itself a multi-module build (its parent POM parents `spring-boot-starter-parent`); inside it, `-pl`/`-am` select its sub-modules (e.g. `mvn test -pl domain,client-adapters -am`).
+- One test class: `mvn test -Dtest=PaymentServiceUnitTest` (run from inside the module; in the JPA module, which has no `PaymentServiceUnitTest`, e.g. `-Dtest=RestErrorContractTest`); use `-Dtest=PaymentApplicationIntegrationTest` for the integration suite.
 - Test tiers:
-  - Fast unit/web tests (`PaymentServiceUnitTest`, `KafkaListenerUnitTest`, `PaymentControllerWebTest`, `PaymentUtilsTest`): Mockito or `@WebMvcTest` slices with `@MockitoBean` services — run with **no Docker, no DB, no Kafka**. Use `@MockitoBean` (Spring Boot 3.4+), not the deprecated `@MockBean`.
-  - Caveat: the JPA module's `PaymentRepositoryUnitTest` is actually `@DataJpaTest` + Testcontainers (`@AutoConfigureTestDatabase(replace = NONE)`) and **requires Docker**, despite the `*UnitTest` name.
+  - Fast unit/web tests (`PaymentServiceUnitTest`, `KafkaListenerUnitTest`, `PaymentControllerWebTest`, `PaymentUtilsTest`): Mockito or `@WebMvcTest` slices with `@MockitoBean` services — run with **no Docker, no DB, no Kafka**. Use `@MockitoBean` (Spring Boot 3.4+), not the deprecated `@MockBean`. In the JPA module these classes no longer exist: the fast tier is every test of its `domain` and `client-adapters` sub-modules (`mvn test -pl domain,client-adapters -am`), with `@MockitoBean` input ports.
+  - Caveat: the JPA module's persistence tests in `infrastructure-adapters` (`Jpa*RepositoryAdapterTest`, `JpaSchemaConstraintsTest`) are `@DataJpaTest` + Testcontainers (`@AutoConfigureTestDatabase(replace = NONE)`) and **require Docker**.
   - `integration/PaymentApplicationIntegrationTest`: `@SpringBootTest` + `@EmbeddedKafka` + Testcontainers Postgres (`postgres:16-alpine`) — **requires Docker**. This is the expensive suite; use the fast tier for iteration and run Docker-backed tests before declaring done.
 
 ## Testing conventions (easy to break)
@@ -30,8 +30,8 @@ No lint, formatter, typecheck, codegen, or CI config exists — don't go looking
 
 ## Architecture facts that aren't obvious
 
-- `realistic-mess-challenge` and `maximum-spaghetti-challenge` use `spring-jdbc` (`JdbcTemplate`); `realistic-mess-based-on-jpa-entities-challenge` uses `spring-boot-starter-data-jpa` but repositories are **hand-written `EntityManager` classes with string-built JPQL** — there are no Spring Data JPA interfaces anywhere. Keep it that way unless the migration task says otherwise.
-- In the JPA module `spring.jpa.hibernate.ddl-auto: none`: `schema.sql` is the only DDL source. Entity changes require matching `schema.sql` (and usually `data.sql`) updates.
-- Kafka payloads are flat JSON keyed by an `id` (UUID) used as upsert key; topics (`pay.instant`, `pay.suspended`, `pay.inbound`, `pay.outbound`, `pay.recall`) auto-create on first message. `OutboundPaymentMessageConsumer` is the outbound topic listener despite the misleading name (intentional smell).
+- `realistic-mess-challenge` and `maximum-spaghetti-challenge` use `spring-jdbc` (`JdbcTemplate`); `realistic-mess-based-on-jpa-entities-challenge` uses `spring-boot-starter-data-jpa` but its persistence adapters (`Jpa*RepositoryAdapter` in `infrastructure-adapters`, implementing the domain's `Load*`/`Save*` output ports) are **hand-written `EntityManager` classes with string-built JPQL** — there are no Spring Data JPA interfaces anywhere. Keep it that way unless the migration task says otherwise.
+- In the JPA module `spring.jpa.hibernate.ddl-auto: none`: `schema.sql` is the only DDL source. Entity changes require matching `schema.sql` (and usually `data.sql`) updates. There, `schema.sql` / `data.sql` live in `infrastructure-adapters/src/main/resources` and the entities in `infrastructure-adapters` (`fr.kevin.llps.payments.entity`), outside the domain.
+- Kafka payloads are flat JSON keyed by an `id` (UUID) used as upsert key; topics (`pay.instant`, `pay.suspended`, `pay.inbound`, `pay.outbound`, `pay.recall`) auto-create on first message. `OutboundPaymentMessageConsumer` is the outbound topic listener despite the misleading name (intentional smell); in the JPA module it was renamed `KafkaOutboundPaymentListener` during the migration (approved), with the same topic and group.
 - Each app runs its own Postgres + Kafka via its own `docker-compose.yml` with distinct host ports (see README), so all three can run side by side. Running the app locally requires `docker compose up -d` in that module first; tests do not use the compose stack.
 - `target/` dirs are gitignored but present locally; ignore them.
