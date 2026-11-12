@@ -259,7 +259,7 @@ Order rationale: structure first; Shared Kernel before any context (every contex
 | BR-INS-01..09, BR-ING-10 | IT-04 | `domain.instant.*Test`, use cases, REST/Kafka/JPA adapter tests | IT instant tests |
 | BR-INB-01..08 | IT-05 | `domain.inbound.*Test`, use cases (fixed `Clock`), adapter tests | IT inbound tests |
 | BR-OUT-01..09 | IT-06 | `SearchFeePolicyTest`, `DetailsFeePolicyTest`, criteria, formatter parity, adapter tests | IT outbound tests (incl. N-02) |
-| BR-API-01..09 | IT-02..IT-07 | `Rest*ControllerTest`, `RestDomainExceptionHandlerTest`, `RestGlobalExceptionHandlerTest`, `RestErrorContractTest` (moved at IT-07) | IT error-contract tests |
+| BR-API-01..09 | IT-02..IT-07 | `RestInstantPaymentControllerTest`, `RestSuspendedPaymentControllerTest`, `RestInboundPaymentControllerTest`, `RestOutboundPaymentControllerTest`, `RestRecallControllerTest` (each slice loads `RestDomainExceptionHandler` and asserts its 400 bodies; there is no dedicated `RestDomainExceptionHandlerTest`, corrected at Phase 6 R-1), `RestGlobalExceptionHandlerTest`, `RestErrorContractTest` (moved at IT-07) | IT error-contract tests (`PaymentApplicationIntegrationTest`) |
 | BR-ING-01..12 | IT-02..IT-06 | `Kafka*ListenerTest`, `Persist*ServiceTest` | IT Kafka ingestion tests (Awaitility, `...09` ids) |
 | BR-DAT-01..03 | IT-00, IT-07 | — | IT seed assertions |
 
@@ -540,3 +540,14 @@ AC-01..AC-21 of the migration agent and MAC-01..MAC-08 of `ddd-test-coverage.md`
 | 2026-11-12 | IT-07 scope gate Q1–Q7 | Q1 (a) `PaymentControllerWebTest` → `RestErrorContractTest` unchanged; Q2 (a) `PaymentUtilsTest` mapping approved, delete; Q3 (a) bootstrap POM trimmed; Q4 (b) AR-19 skipped; Q5 (a) module AGENTS.md lines 14/15/23/39; Q6 (a) root `../AGENTS.md` stays a logged follow-up; Q7 (a) scope approved, then Phase 5 final verification |
 | 2026-11-12 | IT-07 / Phase 5 exit gate Q1–Q2 | Q1 (a) IT-07 **APPROVED AND COMMIT**; Q2 (b) update the root `../AGENTS.md` statements about this module only, committed separately |
 | 2026-11-12 | Phase 5 exit | IT-07 committed as `8d830d495527272ea4759634b6e56af84b8302dc`; root `../AGENTS.md` JPA-module statements updated (docs commit `docs: update root AGENTS.md for the migrated JPA module`, which also carries this status edit); migration **COMPLETE** |
+
+## 16. Phase 6 Remediation
+
+| ID | Date | Finding | Decision (user, verbatim answer) | Change |
+|---|---|---|---|---|
+| R-1 | 2026-11-12 | S-01: `RestGlobalExceptionHandler` IAE / `InvalidDataAccessApiUsageException` handlers suspected unreachable | (a) KEEP both handlers as a safety net; closed as intentional (accepted exception) | none |
+| R-1 | 2026-11-12 | S-02: `TimestampBound.absent()` used only by tests | (a) KEEP as public shared-kernel API; closed as intentional | none |
+| R-1 | 2026-11-12 | D-01: §8 BR-API row named a non-existent `RestDomainExceptionHandlerTest` | (c) fix | §8 BR-API row now lists the 5 `Rest*ControllerTest` slices that load and assert `RestDomainExceptionHandler`, plus the integration suite |
+| R-1 | 2026-11-12 | D-02: root `../README.md` lines 9 and 129 describe this module pre-migration | (c) fix, JPA module only | "migrated on this branch" notes appended to the JPA row (line 9) and to the JPA smells paragraph (line 129); other modules' text unchanged |
+
+Docs only, no code changed.
