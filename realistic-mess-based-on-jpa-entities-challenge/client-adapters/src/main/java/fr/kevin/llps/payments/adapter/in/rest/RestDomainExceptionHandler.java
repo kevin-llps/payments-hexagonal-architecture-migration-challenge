@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import fr.kevin.llps.payments.domain.instant.InvalidIbanFilterException;
 import fr.kevin.llps.payments.domain.recall.UnknownRecallTypeException;
 import fr.kevin.llps.payments.domain.sharedkernel.InvalidPaymentIdException;
 import fr.kevin.llps.payments.domain.sharedkernel.NegativeSearchLimitException;
@@ -24,6 +25,11 @@ public class RestDomainExceptionHandler {
 
     @ExceptionHandler(InvalidPaymentIdException.class)
     public ResponseEntity<Map<String, Object>> handleInvalidPaymentId(InvalidPaymentIdException exception) {
+        return badRequest(exception.getMessage());
+    }
+
+    @ExceptionHandler(InvalidIbanFilterException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidIbanFilter(InvalidIbanFilterException exception) {
         return badRequest(exception.getMessage());
     }
 

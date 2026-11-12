@@ -1,6 +1,6 @@
 # Hexagonal Migration Plan — realistic-mess-based-on-jpa-entities-challenge
 
-- **Status:** APPROVED (2026-11-12). IT-00..IT-03 `APPROVED`; IT-04 scope awaiting approval.
+- **Status:** APPROVED (2026-11-12). IT-00..IT-04 `APPROVED`; IT-05 scope awaiting approval.
 - **Owner:** `incremental-hexagonal-architecture-migration` (Phase 5 of the orchestrated migration).
 - **Baseline:** commit `142a3a2` on branch `hexagonal-architecture-migration-2`. Baseline `mvn test`: **307 tests, 0 failures** (run 2026-11-12 in a detached worktree of `142a3a2`).
 - **Source of truth** for iteration planning, ArchUnit catalogue, temporary exceptions and validation history.
@@ -315,8 +315,8 @@ Temporary exceptions (none active today):
 | IT-00 | structure | `APPROVED` (after one `CHANGES_REQUESTED`) | 308 = 307 legacy (per-class counts identical to baseline) + 1 ArchUnit, 0 failures | AR-15 GREEN | `mvn -B clean verify`: exit 0, 308 tests, BUILD SUCCESS (reworked layout) | 1st: changes requested; 2nd: approved 2026-11-12 | `71d9d618455c502b0c354c612a431dc783b44528` |
 | IT-01 | Shared Kernel | `APPROVED` | 439 = 307 legacy (unchanged) + 2 new IT characterization (F-01) + 7 ArchUnit + 123 domain, 0 failures | AR-01, AR-01b, AR-03, AR-04 ×2, AR-15, AR-17 GREEN | `mvn -B clean verify`: exit 0, BUILD SUCCESS | approved 2026-11-12 | `c538730d59e7de4393aa27e3cccf65c2678251ae` |
 | IT-02 | Suspended | `APPROVED` (gates 1–3: `CHANGES_REQUESTED`, package layout) | 489 = domain 142 + client-adapters 15 + infrastructure-adapters 15 + bootstrap 317, 0 failures; 21 legacy suspended tests remapped (see log) | 29 ArchUnit tests GREEN; temporary scopes AR-11, AR-18 | `mvn -B clean verify`: exit 0, BUILD SUCCESS (after the 3rd-gate ring change) | 1st, 2nd, 3rd: changes requested; 4th: approved 2026-11-12 | `47ad475d4f4009c100f2eb6d92fa5c5b472693e9` |
-| IT-03 | Recalls | `APPROVED` (1st gate: `CHANGES_REQUESTED`, Record → Persist naming) | 512 = domain 164 + client-adapters 36 + infrastructure-adapters 30 + bootstrap 282, 0 failures; 36 legacy recall tests remapped (see log) | 30 ArchUnit tests GREEN (AR-02 added); temporary scopes AR-11, AR-18 | `mvn -B clean verify`: exit 0, BUILD SUCCESS | approved 2026-11-12 | Suspended rename `98e278ce1d1283c3e5461e08f3cf9444ff298b4b`; Recalls: see §15 |
-| IT-04 | Instant | `NOT_STARTED` | | | | | |
+| IT-03 | Recalls | `APPROVED` (1st gate: `CHANGES_REQUESTED`, Record → Persist naming) | 512 = domain 164 + client-adapters 36 + infrastructure-adapters 30 + bootstrap 282, 0 failures; 36 legacy recall tests remapped (see log) | 30 ArchUnit tests GREEN (AR-02 added); temporary scopes AR-11, AR-18 | `mvn -B clean verify`: exit 0, BUILD SUCCESS | approved 2026-11-12 | Suspended rename `98e278ce1d1283c3e5461e08f3cf9444ff298b4b`; Recalls `020497069285b50cef119ed73a4940a8d631afda` |
+| IT-04 | Instant | `APPROVED` | 536 = domain 185 + client-adapters 63 + infrastructure-adapters 47 + bootstrap 241, 0 failures; 41 legacy instant test executions remapped (see log) | 30 ArchUnit tests GREEN (AR-02 mutation `InstantPayment` → `Recall` RED, reverted); temporary scopes AR-11, AR-18 | `mvn -B clean verify`: exit 0, BUILD SUCCESS | approved 2026-11-12 | see §15 |
 | IT-05 | Inbound | `NOT_STARTED` | | | | | |
 | IT-06 | Outbound | `NOT_STARTED` | | | | | |
 | IT-07 | Final cleanup | `NOT_STARTED` | | | | | |
@@ -342,6 +342,14 @@ Test remapping log (MAC-07):
 | IT-03 | `PaymentRepositoryUnitTest.recallSearch_alwaysUsesHardcodedLimitOf50`, `recallSearch_appliesFilters`, `recallFindById_foundAndMissing`, `should_treat_date_only_recall_bounds_as_start_of_day_and_ignore_unparsable_ones` (6 rows), `should_order_recalls_by_initiated_at_descending`, `should_accept_recall_without_amount_and_currency` | infrastructure-adapters: `JpaRecallRepositoryAdapterTest` (same seeds and expectations; find-by-id split) | plus 1 new upsert test |
 | IT-03 | `PaymentRepositoryUnitTest.should_reject_malformed_original_payment_id_filter_with_invalid_uuid_message` | domain: `RecallSearchCriteriaTest.should_reject_a_malformed_original_payment_id_with_the_uuid_message` | same input `xyz`, same message (approved Q3) |
 | IT-03 | `PaymentApplicationIntegrationTest` | unchanged assertions; injected `RecallListener` replaced by `KafkaRecallListener` | |
+| IT-04 | `PaymentServiceUnitTest`: `instantSearch_invalidDebtorIban_throws`, `instantSearch_invalidCreditorIban_throws`, `should_report_debtor_iban_first_when_both_iban_filters_are_invalid`, `should_not_query_repository_when_creditor_iban_is_invalid`, `should_ignore_blank_iban_filters_and_delegate_to_repository`, `should_accept_iban_filter_containing_spaces_when_length_without_spaces_is_valid`, `instantSearch_validIbans_delegatesToRepository`, `instantGetById_delegatesToRepository` | domain: `InstantPaymentSearchCriteriaTest` (IBAN rows, blank, spaced), `SearchInstantPaymentsServiceTest` (delegation, no load on invalid IBAN), `GetInstantPaymentDetailsServiceTest` (found / missing) | same inputs and messages; ids as UUIDs |
+| IT-04 | `KafkaListenerUnitTest` instant tests (10, incl. 5 + 2 parameterized rows) and the instant topic/group row | client-adapters: `KafkaInstantPaymentListenerTest` (same payloads) | assertions on the persisted command; plus 1 new swallow-on-persist-failure test |
+| IT-04 | `PaymentControllerWebTest.instantSearch_returnsRows`, `instantDetails_foundAndMissing`, `should_return_400_with_exception_message_when_service_rejects_instant_iban` | client-adapters: `RestInstantPaymentControllerTest` | UUID ids; IBAN case via `InvalidIbanFilterException` from the mocked port, same body |
+| IT-04 | `PaymentControllerWebTest.instantSearch_serviceFailure_returns500` and instant rows of the 500 tests | unchanged in bootstrap, mocks swapped to `SearchInstantPayments` / `GetInstantPaymentDetails` | move in IT-07 |
+| IT-04 | `PaymentRepositoryUnitTest`: `instantSearch_appliesAllFilters_andFormatsExecutionDatetime`, `instantSearch_ordersByExecutionDatetimeDescending`, `instantFindById_foundAndMissing`, `should_apply_inclusive_instant_execution_bounds_and_ignore_unparsable_ones` (5 rows), `should_match_instant_iban_filter_case_insensitively_as_contains`, `should_not_strip_inner_spaces_from_instant_iban_filter`, `should_match_end_to_end_id_exactly_and_case_sensitively`, `should_return_no_instant_payment_when_limit_is_zero`, `should_round_amount_to_two_fractional_digits` | infrastructure-adapters: `JpaInstantPaymentRepositoryAdapterTest` (find-by-id split; plus 1 upsert test); `executionDatetime` rendering asserted in `RestInstantPaymentControllerTest` | input change approved at the IT-04 gate: legacy IBAN fragments `de89` / `fr76` / ` 0532013 ` bypassed the service validation and are rejected by the criteria factory; replaced by `de89370400440532013000` / `fr7630006000011234567890189` / ` 370400440532013 ` (same contains / case-insensitive / trim behaviour) |
+| IT-04 | `PaymentRepositoryUnitTest.should_reject_negative_instant_limit_with_illegal_argument_root_cause` | domain: `InstantPaymentSearchCriteriaTest.should_reject_a_negative_limit_with_the_legacy_message`; HTTP 400 in `RestInstantPaymentControllerTest` | approved |
+| IT-04 | `PaymentRepositoryUnitTest.should_reject_instant_payment_without_currency` | stays in bootstrap (entity / schema only) | |
+| IT-04 | `PaymentApplicationIntegrationTest` | unchanged assertions; injected `InstantPaymentListener` replaced by `KafkaInstantPaymentListener` | |
 
 ## 12. Risks and Open Issues
 
@@ -424,6 +432,16 @@ AC-01..AC-21 of the migration agent and MAC-01..MAC-08 of `ddd-test-coverage.md`
 
 | 2026-11-12 | IT-03 (commit 1 isolation) | temporary worktree from `47ad475` + only the Suspended rename files and the IDD/TLD naming notes; `mvn -B clean verify` | exit 0; 489 tests, 0 failures; committed as `98e278c`, tree identical to the verified worktree |
 
+| 2026-11-12 | IT-04 | ArchUnit before migration (no new rule; AR-02 and `DomainLayout` rules apply generically) | GREEN |
+| 2026-11-12 | IT-04 | `mvn -B -pl domain test` with stubs | 185 tests: 21 assertion failures (all new instant tests), 0 errors |
+| 2026-11-12 | IT-04 | `mvn -B -pl domain test` after implementation | 185 tests, 0 failures |
+| 2026-11-12 | IT-04 | `mvn -B test -pl domain,infrastructure-adapters -Dtest='JpaInstant*'` with stubs | 17 tests: 15 assertion failures and 2 errors (`InvalidIbanFilterException` from the remapped short IBAN fragments, see remap log); inputs then adjusted |
+| 2026-11-12 | IT-04 | `mvn -B test -pl domain,infrastructure-adapters` after implementation | 47 tests, 0 failures |
+| 2026-11-12 | IT-04 | `mvn -B test -pl domain,client-adapters -Dtest='*Instant*'` with stubs | 27 tests: 23 assertion failures, 0 errors; 4 passing on the no-op stubs (malformed JSON, missing id, unparsable date, annotation check) |
+| 2026-11-12 | IT-04 | `mvn -B test -pl domain,client-adapters` after implementation | 63 tests, 0 failures |
+| 2026-11-12 | IT-04 | final compilation gate `mvn -B clean verify` (Docker) | exit 0; domain 185, client-adapters 63, infrastructure-adapters 47, bootstrap 241 = 536 tests, 0 failures |
+| 2026-11-12 | IT-04 | AR-02 mutation (`InstantPayment` returning `Recall`) | AR-02 RED (1 of 30); reverted, 30 GREEN |
+
 ### IT-01 findings (confirmed at the IT-01 gate, 2026-11-12: F-01 (a), F-02..F-04 (a))
 
 - **F-01 `MalformedDateException` message.** Legacy `Date.valueOf` throws a `NumberFormatException` *with* a message for a non-numeric field (e.g. `2026-1x-05` gives `Error at index 1 in: "1x"`), which the legacy handler renders as the 400 body instead of `Bad request`. `IsoDateBound` therefore carries that message (null for shape/range errors). `technical-layer-design.md` §7 shows `MalformedDateException` → `{"error":"Bad request"}` only; parity requires the REST handler (IT-05/IT-06) to render `message ?? "Bad request"`.
@@ -459,3 +477,5 @@ AC-01..AC-21 of the migration agent and MAC-01..MAC-08 of `ddd-test-coverage.md`
 | 2026-11-12 | IT-03 gate A | Change requested. User: "replace record by persist in RecordRecall and RecordSuspendedPayment". Applied to Suspended (committed in IT-02, `git mv`) and Recalls; template `Persist<X>` / `Persist<X>Service` / `Persist<X>Command` for IT-04..IT-06 |
 | 2026-11-12 | IT-03 gate Q1 | (a) stricter exact-message assertion approved |
 | 2026-11-12 | IT-03 gate (2nd) Q1–Q3 | (a) port method `persist(...)` kept (template); (b) two commits (Suspended rename, then Recalls); IT-03 **APPROVED** |
+| 2026-11-12 | IT-04 scope gate Q1–Q3 | (a) criteria hold the trimmed upper-cased IBAN fragment, the JPA adapter adds `%…%`; (a) test remaps approved; (a) IT-04 scope approved |
+| 2026-11-12 | IT-04 gate Q1–Q2 | (a) changed IBAN inputs in the two remapped repository tests approved; (a) IT-04 **APPROVED AND COMMIT** |

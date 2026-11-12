@@ -27,7 +27,6 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.transaction.annotation.Transactional;
 
 import fr.kevin.llps.payments.entity.InboundPayment;
-import fr.kevin.llps.payments.entity.InstantPayment;
 import fr.kevin.llps.payments.entity.OutboundPayment;
 
 import jakarta.persistence.EntityManager;
@@ -39,35 +38,9 @@ class KafkaListenerUnitTest {
     private EntityManager em;
 
     @InjectMocks
-    private InstantPaymentListener instantListener;
-    @InjectMocks
     private InboundPaymentListener inboundListener;
     @InjectMocks
     private OutboundPaymentMessageConsumer outboundConsumer;
-
-    @Test
-    void instant_onMessage_persistsRow() {
-        instantListener.onMessage("""
-                {"id":"00000000-0000-0000-0000-000000000901","endToEndId":"E2E-1","uetr":"uetr-1",
-                 "amount":42.00,"currency":"EUR","debtorIban":"DE89","debtorName":"ACME",
-                 "creditorIban":"FR76","creditorName":"Dupont","executionDateTime":"2026-10-17 10:00:00",
-                 "status":"COMPLETED","scheme":"SCT INST"}
-                """);
-
-        InstantPayment payment = captureMerge(InstantPayment.class);
-        assertThat(payment.id).isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000901"));
-        assertThat(payment.endToEndId).isEqualTo("E2E-1");
-        assertThat(payment.amount).isEqualByComparingTo("42.00");
-        assertThat(payment.executionDatetime).isEqualTo(Timestamp.valueOf("2026-10-17 10:00:00"));
-        assertThat(payment.scheme).isEqualTo("SCT INST");
-        assertThat(payment.createdAt).isNotNull();
-    }
-
-    @Test
-    void instant_onMessage_malformedJson_swallowed() {
-        assertThatCode(() -> instantListener.onMessage("not json")).doesNotThrowAnyException();
-        verify(em, never()).merge(org.mockito.ArgumentMatchers.any(InstantPayment.class));
-    }
 
     @Test
     void inbound_onMessage_nullSettlementDate_staysNull() {
@@ -114,7 +87,6 @@ class KafkaListenerUnitTest {
 
     @ParameterizedTest(name = "[{index}] {0} listens to {1} in group {2}")
     @CsvSource({
-            "fr.kevin.llps.payments.kafka.InstantPaymentListener, pay.instant, jpa-instant-group",
             "fr.kevin.llps.payments.kafka.InboundPaymentListener, pay.inbound, jpa-inbound-group",
             "fr.kevin.llps.payments.kafka.OutboundPaymentMessageConsumer, pay.outbound, jpa-outbound-group"
     })
@@ -156,20 +128,6 @@ class KafkaListenerUnitTest {
     // ---------------- characterization: skipped messages (BR-ING-05, BR-ING-11) ----------------
 
     @Test
-    void should_skip_instant_event_without_id() {
-        // GIVEN
-        String payload = """
-                {"endToEndId":"E2E-NOID","amount":1.00,"currency":"EUR"}
-                """;
-
-        // WHEN
-        instantListener.onMessage(payload);
-
-        // THEN
-        verifyNoMoreInteractions(em);
-    }
-
-    @Test
     void should_skip_inbound_event_with_invalid_id() {
         // GIVEN
         String payload = """
@@ -178,21 +136,6 @@ class KafkaListenerUnitTest {
 
         // WHEN
         inboundListener.onMessage(payload);
-
-        // THEN
-        verifyNoMoreInteractions(em);
-    }
-
-    @Test
-    void should_skip_instant_event_with_unparsable_execution_date_time() {
-        // GIVEN
-        String payload = """
-                {"id":"00000000-0000-0000-0000-000000000912","amount":1.00,"currency":"EUR",
-                 "executionDateTime":"yesterday"}
-                """;
-
-        // WHEN
-        instantListener.onMessage(payload);
 
         // THEN
         verifyNoMoreInteractions(em);
@@ -214,30 +157,6 @@ class KafkaListenerUnitTest {
     }
 
     // ---------------- characterization: missing and null fields (BR-ING-07) ----------------
-
-    @Test
-    void should_map_missing_instant_fields_to_empty_strings_and_json_nulls_to_null_literal() {
-        // GIVEN
-        String payload = """
-                {"id":"00000000-0000-0000-0000-000000000916","currency":null,"status":null}
-                """;
-
-        // WHEN
-        instantListener.onMessage(payload);
-
-        // THEN
-        InstantPayment payment = captureMerge(InstantPayment.class);
-        assertThat(payment.currency).isEqualTo("null");
-        assertThat(payment.status).isEqualTo("null");
-        assertThat(payment.endToEndId).isEmpty();
-        assertThat(payment.uetr).isEmpty();
-        assertThat(payment.debtorIban).isEmpty();
-        assertThat(payment.debtorName).isEmpty();
-        assertThat(payment.creditorIban).isEmpty();
-        assertThat(payment.creditorName).isEmpty();
-        assertThat(payment.amount).isEqualByComparingTo(BigDecimal.ZERO);
-        assertThat(payment.executionDatetime).isNull();
-    }
 
     @Test
     void should_map_missing_inbound_fields_to_empty_strings_and_json_nulls_to_null_literal() {
@@ -282,26 +201,6 @@ class KafkaListenerUnitTest {
 
     // ---------------- characterization: timestamp and date parsing (BR-ING-08, BR-ING-09) ----------------
 
-    @ParameterizedTest(name = "[{index}] executionDateTime {0} -> {1}")
-    @CsvSource(value = {
-            "2026-10-17T10:00:00Z, 2026-10-17 10:00:00",
-            "2026-10-17T10:00:00, 2026-10-17 10:00:00",
-            "2026-10-17 10:00:00, 2026-10-17 10:00:00",
-            "2026-10-17, 2026-10-17 00:00:00",
-            "null, NULL"
-    }, nullValues = "NULL")
-    void should_parse_instant_execution_date_time_without_time_zone_conversion(String raw, String expected) {
-        // GIVEN
-        String payload = "{\"id\":\"00000000-0000-0000-0000-000000000921\",\"executionDateTime\":\"" + raw + "\"}";
-
-        // WHEN
-        instantListener.onMessage(payload);
-
-        // THEN
-        InstantPayment payment = captureMerge(InstantPayment.class);
-        assertThat(payment.executionDatetime).isEqualTo(expected == null ? null : Timestamp.valueOf(expected));
-    }
-
     @ParameterizedTest(name = "[{index}] requestedExecutionDate {0} -> {1}")
     @CsvSource(value = {
             "2026-10-18, 2026-10-18",
@@ -338,70 +237,7 @@ class KafkaListenerUnitTest {
         assertThat(payment.settlementDate).isEqualTo(Date.valueOf("2026-10-18"));
     }
 
-    // ---------------- characterization: instant scheme and field naming (BR-ING-10) ----------------
-
-    @ParameterizedTest(name = "[{index}] scheme field {0} -> SCT INST")
-    @ValueSource(strings = {"", "\"scheme\":null,"})
-    void should_default_scheme_to_sct_inst_when_missing_or_null(String schemeField) {
-        // GIVEN
-        String payload = "{" + schemeField + "\"id\":\"00000000-0000-0000-0000-000000000926\"}";
-
-        // WHEN
-        instantListener.onMessage(payload);
-
-        // THEN
-        assertThat(captureMerge(InstantPayment.class).scheme).isEqualTo("SCT INST");
-    }
-
-    @Test
-    void should_keep_scheme_given_by_the_event() {
-        // GIVEN
-        String payload = """
-                {"id":"00000000-0000-0000-0000-000000000927","scheme":"SCT"}
-                """;
-
-        // WHEN
-        instantListener.onMessage(payload);
-
-        // THEN
-        assertThat(captureMerge(InstantPayment.class).scheme).isEqualTo("SCT");
-    }
-
-    @Test
-    void should_ignore_api_style_execution_datetime_field_name_in_events() {
-        // GIVEN
-        String payload = """
-                {"id":"00000000-0000-0000-0000-000000000928","executionDatetime":"2026-10-17 10:00:00"}
-                """;
-
-        // WHEN
-        instantListener.onMessage(payload);
-
-        // THEN
-        assertThat(captureMerge(InstantPayment.class).executionDatetime).isNull();
-    }
-
     // ---------------- characterization: no business validation on ingestion (BR-ING-12, BR-SHR-10, BR-RCL-07) ----------------
-
-    @Test
-    void should_persist_instant_event_with_invalid_iban_and_unknown_status_as_is() {
-        // GIVEN
-        String payload = """
-                {"id":"00000000-0000-0000-0000-000000000929","debtorIban":"X","creditorIban":"Y",
-                 "status":"whatever","currency":"eur","amount":-5.00}
-                """;
-
-        // WHEN
-        instantListener.onMessage(payload);
-
-        // THEN
-        InstantPayment payment = captureMerge(InstantPayment.class);
-        assertThat(payment.debtorIban).isEqualTo("X");
-        assertThat(payment.creditorIban).isEqualTo("Y");
-        assertThat(payment.status).isEqualTo("whatever");
-        assertThat(payment.currency).isEqualTo("eur");
-        assertThat(payment.amount).isEqualByComparingTo("-5.00");
-    }
 
     @Test
     void should_persist_outbound_event_with_unknown_charges_type_as_is() {

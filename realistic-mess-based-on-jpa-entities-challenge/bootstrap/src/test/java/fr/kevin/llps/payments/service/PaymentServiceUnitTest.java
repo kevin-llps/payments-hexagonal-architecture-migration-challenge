@@ -25,71 +25,24 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import fr.kevin.llps.payments.dto.InboundPaymentResponse;
 import fr.kevin.llps.payments.dto.InboundPaymentSearchRequest;
-import fr.kevin.llps.payments.dto.InstantPaymentResponse;
-import fr.kevin.llps.payments.dto.InstantPaymentSearchRequest;
 import fr.kevin.llps.payments.dto.OutboundPaymentResponse;
 import fr.kevin.llps.payments.dto.OutboundPaymentSearchRequest;
 import fr.kevin.llps.payments.entity.OutboundPayment;
 import fr.kevin.llps.payments.repository.InboundPaymentRepository;
-import fr.kevin.llps.payments.repository.InstantPaymentRepository;
 import fr.kevin.llps.payments.repository.OutboundPaymentRepository;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentServiceUnitTest {
 
     @Mock
-    private InstantPaymentRepository instantRepository;
-    @Mock
     private InboundPaymentRepository inboundRepository;
     @Mock
     private OutboundPaymentRepository outboundRepository;
 
     @InjectMocks
-    private InstantPaymentService instantService;
-    @InjectMocks
     private InboundPaymentService inboundService;
     @InjectMocks
     private OutboundPaymentService outboundService;
-
-    // ---------------- instant ----------------
-
-    @Test
-    void instantSearch_validIbans_delegatesToRepository() {
-        InstantPaymentResponse response = new InstantPaymentResponse();
-        response.id = "1";
-        when(instantRepository.search(any())).thenReturn(List.of(response));
-
-        List<InstantPaymentResponse> result = instantService.search(new InstantPaymentSearchRequest());
-
-        assertThat(result).hasSize(1);
-    }
-
-    @Test
-    void instantSearch_invalidDebtorIban_throws() {
-        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
-        request.debtorIban = "DE1";
-
-        assertThatThrownBy(() -> instantService.search(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Invalid debtor IBAN");
-    }
-
-    @Test
-    void instantSearch_invalidCreditorIban_throws() {
-        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
-        request.creditorIban = "X";
-
-        assertThatThrownBy(() -> instantService.search(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Invalid creditor IBAN");
-    }
-
-    @Test
-    void instantGetById_delegatesToRepository() {
-        when(instantRepository.findById("1")).thenReturn(new InstantPaymentResponse());
-        assertThat(instantService.getById("1")).isNotNull();
-        assertThat(instantService.getById("2")).isNull();
-    }
 
     // ---------------- inbound ----------------
 
@@ -153,67 +106,6 @@ class PaymentServiceUnitTest {
         payment.chargesType = chargesType;
         payment.status = "SENT";
         return payment;
-    }
-
-    // ---------------- characterization: Instant IBAN filter validation (BR-INS-01, BR-INS-02, BR-SHR-04) ----------------
-
-    @Test
-    void should_ignore_blank_iban_filters_and_delegate_to_repository() {
-        // GIVEN
-        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
-        request.debtorIban = "   ";
-        request.creditorIban = "";
-        when(instantRepository.search(request)).thenReturn(List.of());
-
-        // WHEN
-        List<InstantPaymentResponse> result = instantService.search(request);
-
-        // THEN
-        assertThat(result).isEmpty();
-        verify(instantRepository).search(request);
-    }
-
-    @Test
-    void should_report_debtor_iban_first_when_both_iban_filters_are_invalid() {
-        // GIVEN
-        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
-        request.debtorIban = "DE1";
-        request.creditorIban = "FR1";
-
-        // WHEN / THEN
-        assertThatThrownBy(() -> instantService.search(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Invalid debtor IBAN");
-        verifyNoInteractions(instantRepository);
-    }
-
-    @Test
-    void should_not_query_repository_when_creditor_iban_is_invalid() {
-        // GIVEN
-        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
-        request.debtorIban = "DE89370400440532013000";
-        request.creditorIban = "FR1";
-
-        // WHEN / THEN
-        assertThatThrownBy(() -> instantService.search(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Invalid creditor IBAN");
-        verifyNoInteractions(instantRepository);
-    }
-
-    @Test
-    void should_accept_iban_filter_containing_spaces_when_length_without_spaces_is_valid() {
-        // GIVEN
-        InstantPaymentSearchRequest request = new InstantPaymentSearchRequest();
-        request.debtorIban = "DE89 3704 0044 0532 0130 00";
-        when(instantRepository.search(request)).thenReturn(List.of());
-
-        // WHEN
-        List<InstantPaymentResponse> result = instantService.search(request);
-
-        // THEN
-        assertThat(result).isEmpty();
-        verify(instantRepository).search(request);
     }
 
     // ---------------- characterization: Outbound search fee policy (BR-OUT-06, BR-OUT-08) ----------------

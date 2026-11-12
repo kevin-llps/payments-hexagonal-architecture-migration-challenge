@@ -30,25 +30,26 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import fr.kevin.llps.payments.adapter.in.rest.instant.RestInstantPaymentController;
 import fr.kevin.llps.payments.adapter.in.rest.recall.RestRecallController;
+import fr.kevin.llps.payments.domain.instant.port.in.GetInstantPaymentDetails;
+import fr.kevin.llps.payments.domain.instant.port.in.SearchInstantPayments;
 import fr.kevin.llps.payments.adapter.in.rest.suspended.RestSuspendedPaymentController;
 import fr.kevin.llps.payments.domain.recall.port.in.GetRecallDetails;
 import fr.kevin.llps.payments.domain.recall.port.in.SearchRecalls;
 import fr.kevin.llps.payments.domain.suspended.port.in.GetSuspendedPaymentDetails;
 import fr.kevin.llps.payments.domain.suspended.port.in.SearchSuspendedPayments;
 import fr.kevin.llps.payments.dto.InboundPaymentResponse;
-import fr.kevin.llps.payments.dto.InstantPaymentResponse;
 import fr.kevin.llps.payments.dto.OutboundPaymentResponse;
 import fr.kevin.llps.payments.entity.OutboundPayment;
 import fr.kevin.llps.payments.service.InboundPaymentService;
-import fr.kevin.llps.payments.service.InstantPaymentService;
 import fr.kevin.llps.payments.service.OutboundPaymentService;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 
 @WebMvcTest(controllers = {
-        InstantPaymentController.class,
+        RestInstantPaymentController.class,
         RestSuspendedPaymentController.class,
         InboundPaymentController.class,
         OutboundPaymentController.class,
@@ -60,7 +61,9 @@ class PaymentControllerWebTest {
     private MockMvc mvc;
 
     @MockitoBean
-    private InstantPaymentService instantService;
+    private SearchInstantPayments searchInstantPayments;
+    @MockitoBean
+    private GetInstantPaymentDetails getInstantPaymentDetails;
     @MockitoBean
     private SearchSuspendedPayments searchSuspendedPayments;
     @MockitoBean
@@ -86,37 +89,12 @@ class PaymentControllerWebTest {
     // ---------------- instant ----------------
 
     @Test
-    void instantSearch_returnsRows() throws Exception {
-        InstantPaymentResponse response = new InstantPaymentResponse();
-        response.id = "1";
-        when(instantService.search(any())).thenReturn(List.of(response));
-
-        mvc.perform(get("/api/v1/instant-payments/search").param("status", "COMPLETED"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value("1"));
-    }
-
-    @Test
     void instantSearch_serviceFailure_returns500() throws Exception {
-        when(instantService.search(any())).thenThrow(new RuntimeException("boom"));
+        when(searchInstantPayments.search(any())).thenThrow(new RuntimeException("boom"));
 
         mvc.perform(get("/api/v1/instant-payments/search"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.error").exists());
-    }
-
-    @Test
-    void instantDetails_foundAndMissing() throws Exception {
-        InstantPaymentResponse response = new InstantPaymentResponse();
-        response.id = "1";
-        when(instantService.getById("1")).thenReturn(response);
-        when(instantService.getById("missing")).thenReturn(null);
-
-        mvc.perform(get("/api/v1/instant-payments/1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value("1"));
-        mvc.perform(get("/api/v1/instant-payments/missing"))
-                .andExpect(status().isNotFound());
     }
 
     // ---------------- inbound ----------------
@@ -209,7 +187,7 @@ class PaymentControllerWebTest {
         mvc.perform(get(path).param("limit", nonIntegerLimit))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.error").value(GenericError));
-        verifyNoInteractions(instantService, searchSuspendedPayments, getSuspendedPaymentDetails, inboundService,
+        verifyNoInteractions(searchInstantPayments, getInstantPaymentDetails, searchSuspendedPayments, getSuspendedPaymentDetails, inboundService,
                 outboundService, searchRecalls, getRecallDetails);
     }
 
@@ -229,19 +207,8 @@ class PaymentControllerWebTest {
         mvc.perform(post(unsupportedMethodPath))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.error").value(GenericError));
-        verifyNoInteractions(instantService, searchSuspendedPayments, getSuspendedPaymentDetails, inboundService,
+        verifyNoInteractions(searchInstantPayments, getInstantPaymentDetails, searchSuspendedPayments, getSuspendedPaymentDetails, inboundService,
                 outboundService, searchRecalls, getRecallDetails);
-    }
-
-    @Test
-    void should_return_400_with_exception_message_when_service_rejects_instant_iban() throws Exception {
-        // GIVEN
-        when(instantService.search(any())).thenThrow(new IllegalArgumentException("Invalid debtor IBAN"));
-
-        // WHEN / THEN
-        mvc.perform(get("/api/v1/instant-payments/search").param("debtorIban", "DE1"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("Invalid debtor IBAN"));
     }
 
     @Test
