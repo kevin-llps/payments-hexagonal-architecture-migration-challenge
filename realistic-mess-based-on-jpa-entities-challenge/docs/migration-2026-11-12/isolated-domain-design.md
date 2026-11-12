@@ -102,16 +102,20 @@ fr.kevin.llps.payments.domain.suspended    (+ LoadSuspendedPayments, SaveSuspend
 fr.kevin.llps.payments.domain.inbound      (+ LoadInboundPayments, SaveInboundPayment)
 fr.kevin.llps.payments.domain.outbound     (+ LoadOutboundPayments, SaveOutboundPayment)
 fr.kevin.llps.payments.domain.recall       (+ LoadRecalls, SaveRecall)
+
+fr.kevin.llps.payments.domain.<ctx>.usecase          use-case services (application layer)
+fr.kevin.llps.payments.domain.<ctx>.usecase.port.in  input ports, queries, commands, views
 ```
 
-The physical split (single module with packages vs Maven `domain` / `application` / adapters / `bootstrap` modules) is decided in Phase 4/5; the rules below hold in either case.
+The physical split was decided in Phase 4/5: the Maven `domain` module holds both the domain-model packages and the use-case packages (`domain.<ctx>.usecase[.port.in]`, Phase 5 IT-00 gate, 2026-11-12). The rules below hold; "domain model" means the `domain` packages excluding `..usecase..`.
 
 | Rule | Statement |
 |---|---|
 | DR-1 | Domain imports only `java.lang`, `java.util`, `java.math`, `java.time`. No `java.sql`, `jakarta.*`, `org.springframework.*`, `org.hibernate.*`, `com.fasterxml.*`, `org.apache.kafka.*`; no annotations. |
-| DR-2 | A context package depends only on itself and `sharedkernel`; no context-to-context import. |
+| DR-2 | A context package (including its `usecase` sub-packages) depends only on itself and `sharedkernel`; no context-to-context import. |
 | DR-3 | `sharedkernel` depends on no other domain package. |
-| DR-4 | The domain never depends on application, adapter or bootstrap code. |
+| DR-4 | The domain never depends on adapter or bootstrap code. |
+| DR-6 | The domain model (`domain.sharedkernel`, `domain.<ctx>`) never depends on the use-case packages `domain.<ctx>.usecase[.port.in]`; use cases may depend on the model and the repository ports of their own context. |
 | DR-5 | No static utility classes; static factory methods on value objects are allowed (`PaymentId.parse`, `SearchLimit.capped`). |
 
 ### 6.2 Cross-cutting modelling choices
@@ -883,6 +887,7 @@ Unresolved:
 | 2026-11-12 | Gate 2 Q4 | Repository port ownership | (a) owned by the domain, in each context's package |
 | 2026-11-12 | Gate 2 Q5 | Legacy IAE / `InvalidDataAccessApiUsageException` handlers | (a) keep unchanged as safety net; `GlobalExceptionHandlerTest` stays green |
 | 2026-11-12 | Gate 2 Q6 | Port design | (a) APPROVED with answers 1-5 applied |
+| 2026-11-12 | Phase 5 IT-00 gate (user-approved change) | Location of input ports and use cases | (b) `fr.kevin.llps.payments.domain.<ctx>.usecase` (services) and `...domain.<ctx>.usecase.port.in` (input ports, queries, commands, views), inside the Maven `domain` module; DR-2 extended, DR-4 reworded, DR-6 added. Port ownership is unchanged (input ports: application layer; repository ports: domain model). |
 
 Change summary:
 

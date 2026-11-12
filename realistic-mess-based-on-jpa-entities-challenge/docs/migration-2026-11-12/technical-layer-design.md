@@ -57,6 +57,7 @@ Dependencies point inward:
 - **Driving adapters** (REST controllers and the REST exception handler; Kafka listeners) call **application input ports** (`Search<X>s`, `Get<X>Details`, `Record<X>`).
 - **Plain-Java use-case services** implement those ports. They orchestrate the **isolated domain**: aggregates, criteria, fee policies, `ageInDaysOn` and the Shared Kernel.
 - The use cases reach persistence through **domain-owned repository ports** (`Load<X>s`, `Save<X>`), which the **JPA persistence adapter** implements.
+- The domain-model packages (`domain.<ctx>`, `domain.sharedkernel`) and the use-case packages (`domain.<ctx>.usecase[.port.in]`) live together in the `domain` Maven module; the REST and Kafka adapters in `client-adapters`; the JPA adapter in `infrastructure-adapters`.
 - **`bootstrap`** is the composition root. It holds the Spring Boot application, bean wiring, `Clock`, `application.yml`, the integration tests and the ArchUnit tests.
 
 ### 3.1 Technical architecture diagram
@@ -68,25 +69,25 @@ flowchart LR
         KFK([Kafka topics pay.instant pay.suspended pay.inbound pay.outbound pay.recall])
         PG[(PostgreSQL payments_jpa)]
     end
-    subgraph RESTM[adapter-rest]
+    subgraph RESTM[client-adapters: REST]
         RC["Rest X Controller x5"]
         RFMT["Outbound details formatter, UTC millis +00:00"]
         RDEH["RestDomainExceptionHandler HIGHEST_PRECEDENCE"]
         GEH["GlobalExceptionHandler legacy unchanged"]
     end
-    subgraph KAFM[adapter-kafka]
+    subgraph KAFM[client-adapters: Kafka]
         KL["Kafka X Listener x5 Transactional onMessage"]
     end
-    subgraph APPM[application]
+    subgraph APPM[domain module: use-case packages domain.ctx.usecase]
         PIN[["Search X s / Get X Details / Record X"]]
         SVC["Use case services x15"]
     end
-    subgraph DOMM[domain]
+    subgraph DOMM[domain module: domain-model packages]
         AGG["Aggregates, criteria, fee policies, ageInDaysOn"]
         SK["Shared Kernel"]
         POUT[["Load X s / Save X"]]
     end
-    subgraph JPAM[adapter-persistence-jpa]
+    subgraph JPAM[infrastructure-adapters]
         JA["Jpa X RepositoryAdapter x5"]
         JM["Jpa X Mapper x5"]
         ENT["JPA entities unchanged"]
@@ -117,77 +118,84 @@ flowchart LR
     APPCLS --> CFG
 ```
 
-## 4. Module and Package Structure (approved: Q1 = a, Q2 = a, Q3 = a)
+## 4. Module and Package Structure (approved: Q1 = a, Q2 = a, Q3 = a; module set revised at the Phase 5 IT-00 gate, see §15)
 
 ### 4.1 Maven modules
 
+> **Revision 2026-11-12 (Phase 5 IT-00 gate, user-approved change).** The six-module layout originally approved (Q1) was replaced by the user with **four modules**: `domain`, `client-adapters`, `infrastructure-adapters`, `bootstrap`, with plain artifactIds (no `jpa-payments-` prefix). The planned `application` module is merged into `domain`; `adapter-rest` and `adapter-kafka` become `client-adapters`; `adapter-persistence-jpa` becomes `infrastructure-adapters`. Java package names are unchanged. Separations that Maven no longer enforces are enforced by ArchUnit (§4.2, §9).
+
 `realistic-mess-based-on-jpa-entities-challenge/pom.xml` becomes a `packaging=pom` parent:
 
-- It keeps `spring-boot-starter-parent` 3.5.7 as its parent.
-- It lists the six child modules.
-- It manages `com.tngtech.archunit:archunit-junit5` in `dependencyManagement`.
+- It keeps `spring-boot-starter-parent` 3.5.7 as its parent and its artifactId `realistic-mess-based-on-jpa-entities-challenge`.
+- It lists the four child modules.
+- It manages the internal artifacts and `com.tngtech.archunit:archunit-junit5` in `dependencyManagement`.
+- Properties: `surefire.failIfNoSpecifiedTests=false` (module-root `-Dtest=` commands keep working) and `spring-boot.run.skip=true` (overridden to `false` in `bootstrap`).
 - The repository root aggregator `pom.xml` is **unchanged** and still lists the module directory.
-- `cd <module> && mvn test` keeps running every test.
-- The local run command becomes something like `mvn -pl bootstrap -am spring-boot:run`. The one-line README and module `AGENTS.md` updates are acceptable in Phase 5 but must be confirmed with the user then.
-- ArtifactIds are prefixed `jpa-payments-` so they stay unique across the repository reactor, whose groupId `fr.kevin.llps.payments` is shared with the other two apps.
+- `cd <module> && mvn test` keeps running every test; `mvn spring-boot:run` from the module directory still starts the app (verified in IT-00, so README / module `AGENTS.md` are unchanged).
+- ArtifactIds are the plain module names. Within the repository reactor they share groupId `fr.kevin.llps.payments` with the other two apps, which currently have different artifactIds (see TL-R8).
 
-| Module dir | artifactId | Compile dependencies | Contents |
-|---|---|---|---|
-| `domain` | `jpa-payments-domain` | none (JDK only) | `fr.kevin.llps.payments.domain.{sharedkernel,instant,suspended,inbound,outbound,recall}`, including the repository ports `Load<X>s` and `Save<X>` |
-| `application` | `jpa-payments-application` | `domain` | `fr.kevin.llps.payments.application.<ctx>` (services); `fr.kevin.llps.payments.application.<ctx>.port.in` (input ports, queries, commands, `InboundPaymentView`, `OutboundPaymentWithFee`) |
-| `adapter-rest` | `jpa-payments-adapter-rest` | `application`, `spring-boot-starter-web` | `fr.kevin.llps.payments.adapter.in.rest` (`RestDomainExceptionHandler`; in the final iteration also `GlobalExceptionHandler`, content unchanged); `fr.kevin.llps.payments.adapter.in.rest.<ctx>` (controllers, response records, response mappers, outbound details formatter) |
-| `adapter-kafka` | `jpa-payments-adapter-kafka` | `application`, `spring-kafka`, `spring-tx` | `fr.kevin.llps.payments.adapter.in.kafka.<ctx>` |
-| `adapter-persistence-jpa` | `jpa-payments-adapter-persistence-jpa` | `domain`, `spring-boot-starter-data-jpa`; `postgresql` runtime | `fr.kevin.llps.payments.adapter.out.persistence.<ctx>` (adapters, mappers); entities **unchanged in package `fr.kevin.llps.payments.entity`**; `src/main/resources/schema.sql` and `data.sql` (**content unchanged**, Q3) |
-| `bootstrap` | `jpa-payments-bootstrap` | all modules above | `fr.kevin.llps.payments.PaymentsApplication`; `fr.kevin.llps.payments.bootstrap.config` (`ClockConfiguration`, one `<X>UseCaseConfiguration` per context); `application.yml`; tests `integration/*` and `architecture/*` (ArchUnit, test scope only) |
+| Module dir = artifactId | Compile dependencies | Contents |
+|---|---|---|
+| `domain` | none (JDK only) | **domain packages** `fr.kevin.llps.payments.domain.{sharedkernel,instant,suspended,inbound,outbound,recall}` (model, shared kernel, repository/output ports `Load<X>s`, `Save<X>`); **use-case packages** `fr.kevin.llps.payments.domain.<ctx>.usecase` (use-case services) and `fr.kevin.llps.payments.domain.<ctx>.usecase.port.in` (input ports, queries, commands, `InboundPaymentView`, `OutboundPaymentWithFee`), confirmed at the Phase 5 IT-00 gate. Plain Java, no annotations; services wired as `@Bean`s in `bootstrap`. |
+| `client-adapters` | `domain`, `spring-boot-starter-web`, `spring-kafka`, `spring-tx` | driving side: `fr.kevin.llps.payments.adapter.in.rest` (`RestDomainExceptionHandler`; in the final iteration also the legacy handler, renamed `RestGlobalExceptionHandler`, body unchanged); `fr.kevin.llps.payments.adapter.in.rest.<ctx>` (controllers, response records, response mappers, outbound details formatter); `fr.kevin.llps.payments.adapter.in.kafka.<ctx>` (listeners) |
+| `infrastructure-adapters` | `domain`, `spring-boot-starter-data-jpa`; `postgresql` runtime | driven side: `fr.kevin.llps.payments.adapter.out.persistence.<ctx>` (adapters, mappers); entities **unchanged in package `fr.kevin.llps.payments.entity`**; `src/main/resources/schema.sql` and `data.sql` (**content unchanged**, Q3) |
+| `bootstrap` | all modules above | `fr.kevin.llps.payments.PaymentsApplication`; `fr.kevin.llps.payments.bootstrap.config` (`ClockConfiguration`, one `<X>UseCaseConfiguration` per context); `application.yml`; tests `integration/*` and `architecture/*` (ArchUnit, test scope only) |
 
 `<ctx>` is one of `instant`, `suspended`, `inbound`, `outbound`, `recall`. `docker-compose.yml` stays at the module root.
 
 Test dependencies are added per module only where needed:
-- `spring-boot-starter-test` everywhere;
-- Testcontainers in `adapter-persistence-jpa` and `bootstrap`;
-- `spring-kafka-test` in `bootstrap` (and in `adapter-kafka` if a slice needs it).
+- `domain`: JUnit 5, AssertJ, Mockito only (no Spring, MAC-08);
+- `spring-boot-starter-test` in `client-adapters`, `infrastructure-adapters`, `bootstrap`;
+- Testcontainers in `infrastructure-adapters` and `bootstrap`;
+- `spring-kafka-test` in `bootstrap` (and in `client-adapters` if a slice needs it).
 
 ### 4.2 Maven-enforced dependency graph
 
 ```mermaid
 flowchart BT
-    APPL[application] --> DOM[domain]
-    REST[adapter-rest] --> APPL
-    KAF[adapter-kafka] --> APPL
-    JPA[adapter-persistence-jpa] --> DOM
-    BOOT[bootstrap] --> REST
-    BOOT --> KAF
-    BOOT --> JPA
-    BOOT --> APPL
+    CLI[client-adapters] --> DOM[domain]
+    INF[infrastructure-adapters] --> DOM
+    BOOT[bootstrap] --> CLI
+    BOOT --> INF
+    BOOT --> DOM
 ```
 
-The following become uncompilable:
-- the domain depending on anything;
-- the application depending on an adapter;
-- an adapter depending on another adapter;
-- an adapter depending on `bootstrap`.
+Maven makes the following uncompilable:
+- the `domain` module (domain-model and use-case packages) depending on any framework or other module;
+- client adapters depending on infrastructure adapters and vice versa;
+- any adapter depending on `bootstrap`.
 
-ArchUnit (§9) covers the package-level rules Maven cannot express.
+With four modules, Maven **no longer** separates the following; ArchUnit enforces them instead (§9):
+
+| Separation | Previously enforced by | Now enforced by |
+|---|---|---|
+| domain-model packages must not depend on use-case packages (`..domain.*.usecase..`) | `domain` / `application` modules | AR-04 |
+| use-case packages framework-free | `application` module POM | `domain` module POM (no dependencies) + AR-01 + AR-05 |
+| REST adapter must not depend on Kafka adapter and vice versa | `adapter-rest` / `adapter-kafka` modules | AR-10 |
+| persistence adapter must not depend on use-case packages | `adapter-persistence-jpa` → `domain` only | AR-09 |
+| driving adapters use the use cases only through `..usecase.port.in..` | (ArchUnit already) | AR-08 |
+
+ArchUnit (§9) also covers the other package-level rules.
 
 ### 4.3 Legacy code during the transition (Q2 = a)
 
 1. **Iteration 0 is a structural move only. No content changes.**
    - All legacy classes move into `bootstrap` with their packages unchanged: `controller` including `GlobalExceptionHandler`, `service`, `repository`, `kafka`, `dto`, `util`.
-   - Entities move to `adapter-persistence-jpa` (package `fr.kevin.llps.payments.entity` unchanged).
-   - `schema.sql` and `data.sql` move to `adapter-persistence-jpa/src/main/resources`.
+   - Entities move to `infrastructure-adapters` (package `fr.kevin.llps.payments.entity` unchanged).
+   - `schema.sql` and `data.sql` move to `infrastructure-adapters/src/main/resources`.
    - `application.yml` moves to `bootstrap/src/main/resources`.
    - Every existing test moves into `bootstrap/src/test/java` with its package unchanged.
    - Exit criterion: the full `mvn test` stays green with the same 307 tests.
-2. **Each context iteration** (Suspended → Recalls → Instant → Inbound → Outbound) adds the context's domain, application and adapter classes, then deletes the context's legacy controller, service, repository, listener and DTOs from `bootstrap`. Tests are remapped per MAC-07.
+2. **Each context iteration** (Suspended → Recalls → Instant → Inbound → Outbound) adds the context's domain and application classes (both in the `domain` module) and adapter classes, then deletes the context's legacy controller, service, repository, listener and DTOs from `bootstrap`. Tests are remapped per MAC-07.
 3. **Final iteration:**
    - delete `PaymentUtils` and its unused-helper tests (D-09);
-   - move `GlobalExceptionHandler` verbatim to `adapter-rest` (`fr.kevin.llps.payments.adapter.in.rest`), together with `GlobalExceptionHandlerTest`;
+   - move `GlobalExceptionHandler` to `client-adapters` (`fr.kevin.llps.payments.adapter.in.rest`), renamed `RestGlobalExceptionHandler` with its body unchanged, together with its test renamed `RestGlobalExceptionHandlerTest` (Phase 5 gate answer);
    - `bootstrap` then contains only the entry point, configuration, resources, integration and ArchUnit tests.
 
 ### 4.4 Spring test slices outside bootstrap
 
-- `@WebMvcTest` in `adapter-rest` needs a test-only `@SpringBootConfiguration` class in its test sources.
-- `@DataJpaTest` in `adapter-persistence-jpa` needs the same. It also needs Testcontainers, `@AutoConfigureTestDatabase(replace = NONE)`, and `schema.sql`/`data.sql` from the module's own resources.
+- `@WebMvcTest` in `client-adapters` needs a test-only `@SpringBootConfiguration` class in its test sources.
+- `@DataJpaTest` in `infrastructure-adapters` needs the same. It also needs Testcontainers, `@AutoConfigureTestDatabase(replace = NONE)`, and `schema.sql`/`data.sql` from the module's own resources.
 - See TL-R4.
 
 ## 5. Layer Responsibility Matrix
@@ -291,7 +299,7 @@ The diagram has 25 port nodes and 15 adapter classes, matching §6.1, §6.2 and 
 
 ### 6.4 Application use-case inventory (15 services)
 
-All services are plain Java `final` classes in `application.<ctx>`. They use constructor injection with `private final` fields, carry no Spring annotations, and are instantiated as `@Bean`s in `bootstrap.config.<X>UseCaseConfiguration`.
+All services are plain Java `final` classes in `domain.<ctx>.usecase` (input ports, queries, commands and views in `domain.<ctx>.usecase.port.in`). They use constructor injection with `private final` fields, carry no Spring annotations, and are instantiated as `@Bean`s in `bootstrap.config.<X>UseCaseConfiguration`.
 
 | Service | Implements | Collaborators | Behaviour |
 |---|---|---|---|
@@ -397,7 +405,7 @@ Entities, `schema.sql`, `data.sql` and `ddl-auto: none` are unchanged. Only `ada
   - The container stays a `HashMap<String,Object>` with exactly the 13 keys `id, instruction_id, amount, currency, debtor_iban, debtor_name, destination_bic, requested_execution_date, charges_type, status, created_at, updated_at, estimatedFee`.
 
 **Pinning tests (Phase 5, written before the switch, MAC-04/MAC-07). Output must stay byte-identical.**
-1. **Characterization parity test** (adapter-rest unit test, parameterized). For a set of `LocalDateTime` values × zones, assert that the formatter output equals the string Spring Boot's auto-configured `ObjectMapper` produces for `java.sql.Timestamp.valueOf(ldt)` under the same default zone.
+1. **Characterization parity test** (`client-adapters` unit test, parameterized). For a set of `LocalDateTime` values × zones, assert that the formatter output equals the string Spring Boot's auto-configured `ObjectMapper` produces for `java.sql.Timestamp.valueOf(ldt)` under the same default zone.
    - Zones: `UTC`, `Europe/Paris` winter and summer, `America/New_York`, `Asia/Kolkata` (fractional offset).
    - Values: zero millis, non-zero millis, sub-millisecond nanos (truncation), and DST gap and overlap instants in `Europe/Paris`.
    - `java.sql` may appear in this test code only.
@@ -414,13 +422,13 @@ DR-1..DR-5 from Phase 3 still hold. In addition:
 
 | ID | Rule |
 |---|---|
-| TL-DR-1 | Driving adapters (`..adapter.in..`) depend on the application only through `..application..port.in..`, never on `*Service` classes. |
-| TL-DR-2 | Driven adapters (`..adapter.out..`) depend only on domain ports and domain types, never on `..application..`. |
-| TL-DR-3 | `..application..` depends only on `..domain..` and the JDK: no Spring, `jakarta.*`, `java.sql`, Jackson, Kafka or Hibernate. |
+| TL-DR-1 | Driving adapters (`..adapter.in..`) depend on the use cases only through `..domain.*.usecase.port.in..`, never on `*Service` classes in `..domain.*.usecase`; they may use domain-model types returned by the ports. |
+| TL-DR-2 | Driven adapters (`..adapter.out..`) depend only on domain-model ports and types, never on `..domain.*.usecase..`. |
+| TL-DR-3 | `..domain.*.usecase..` depends only on domain-model packages and the JDK: no Spring, `jakarta.*`, `java.sql`, Jackson, Kafka or Hibernate. |
 | TL-DR-4 | Adapters never depend on each other (`adapter.in.rest`, `adapter.in.kafka`, `adapter.out.persistence`). |
 | TL-DR-5 | `fr.kevin.llps.payments.entity..` is accessed only by `..adapter.out.persistence..` among production classes. |
 | TL-DR-6 | `EntityManager` / `@PersistenceContext` appear only in `..adapter.out.persistence..`. |
-| TL-DR-7 | `application.<ctx>` depends only on `domain.<ctx>` and `domain.sharedkernel` (extends DR-2). |
+| TL-DR-7 | `domain.<ctx>.usecase[.port.in]` depends only on its own context (`domain.<ctx>`) and `domain.sharedkernel`; the domain model (`domain.<ctx>`, `domain.sharedkernel`) never depends on `..usecase..` (extends DR-2, DR-6). |
 | TL-DR-8 | Only `bootstrap` depends on every module; nothing depends on `bootstrap`. |
 | TL-DR-9 | `java.sql` is used only in `..adapter.out.persistence..` and `..adapter.in.kafka..` (legacy grammars) among new production packages; never in `..adapter.in.rest..` (Q5). |
 | TL-DR-10 | `@Transactional` appears only on Kafka listener methods (no new transaction boundaries). |
@@ -431,20 +439,20 @@ The tests go in `bootstrap/src/test/java/fr/kevin/llps/payments/architecture/`, 
 
 | ID | Rule | Family | Source |
 |---|---|---|---|
-| AR-01 | `..domain..` does not depend on `org.springframework..`, `jakarta..`, `org.hibernate..`, `com.fasterxml..`, `org.apache.kafka..`, `java.sql..` | DomainIsolationTest | DR-1 |
-| AR-02 | `domain.(*)` context slices do not depend on each other (only `sharedkernel` shared) | DomainIsolationTest | DR-2 |
+| AR-01 | `..domain..` (model and use-case packages) does not depend on `org.springframework..`, `jakarta..`, `org.hibernate..`, `com.fasterxml..`, `org.apache.kafka..`, `java.sql..` | DomainIsolationTest | DR-1 |
+| AR-02 | `domain.(*)..` context slices (each including its `usecase` sub-packages) do not depend on each other; only `sharedkernel` is shared | DomainIsolationTest | DR-2 |
 | AR-03 | `domain.sharedkernel` depends on no other domain package | DomainIsolationTest | DR-3 |
-| AR-04 | `..domain..` does not depend on `..application..`, `..adapter..`, `..bootstrap..`, `fr.kevin.llps.payments.entity..` | DomainIsolationTest | DR-4 |
-| AR-05 | `..application..` does not depend on Spring, `jakarta..`, `java.sql..`, Jackson, Kafka, `..adapter..`, `..entity..` | HexagonalArchitectureTest | TL-DR-3 |
-| AR-06 | `onionArchitecture()`: domainModels `..domain..`, applicationServices `..application..`, adapters `rest` / `kafka` / `persistence` | HexagonalArchitectureTest | §3 |
-| AR-07 | `application.(*)` slices do not depend on each other or on other contexts' domain packages | HexagonalArchitectureTest | TL-DR-7 |
-| AR-08 | `..adapter.in..` accesses `..application..` only through `..port.in..` | AdapterDependenciesTest | TL-DR-1 |
-| AR-09 | `..adapter.out..` does not depend on `..application..` | AdapterDependenciesTest | TL-DR-2 |
+| AR-04 | domain-model packages (`..domain..` excluding `..domain.*.usecase..`) do not depend on `..usecase..`; the whole `..domain..` does not depend on `..adapter..`, `..bootstrap..`, `fr.kevin.llps.payments.entity..` | DomainIsolationTest | DR-4, DR-6 |
+| AR-05 | `..domain.*.usecase..` does not depend on Spring, `jakarta..`, `java.sql..`, Jackson, Kafka, `..adapter..`, `..entity..` | HexagonalArchitectureTest | TL-DR-3 |
+| AR-06 | `onionArchitecture()`: domainModels = domain-model packages (`fr.kevin.llps.payments.domain.sharedkernel..` and the five `fr.kevin.llps.payments.domain.<ctx>` packages, without `usecase`), applicationServices `..domain.*.usecase..`, adapters `rest` / `kafka` / `persistence` | HexagonalArchitectureTest | §3 |
+| AR-07 | `domain.<ctx>.usecase..` depends only on `domain.<ctx>` (own model and ports), its own `usecase` packages, `domain.sharedkernel..` and the JDK | HexagonalArchitectureTest | TL-DR-7 |
+| AR-08 | `..adapter.in..` accesses `..domain.*.usecase..` only through `..domain.*.usecase.port.in..` | AdapterDependenciesTest | TL-DR-1 |
+| AR-09 | `..adapter.out..` does not depend on `..domain.*.usecase..` | AdapterDependenciesTest | TL-DR-2 |
 | AR-10 | Adapter packages do not depend on each other | AdapterDependenciesTest | TL-DR-4 |
 | AR-11 | `fr.kevin.llps.payments.entity..` and `jakarta.persistence.EntityManager` only accessed from `..adapter.out.persistence..` | AdapterDependenciesTest | TL-DR-5/6 |
 | AR-12 | `..adapter.in.rest..` does not depend on `java.sql..` | AdapterDependenciesTest | TL-DR-9, Q5 |
 | AR-13 | `Jpa*RepositoryAdapter` classes implement a domain `Load*` and `Save*` interface | AdapterDependenciesTest | §6 |
-| AR-14 | Input ports (`Search*`, `Get*Details`, `Record*` in `..port.in..`) and repository ports (`Load*`, `Save*` in `..domain..`) are interfaces | PortsTest | Phase 3 §11 |
+| AR-14 | Input ports (`Search*`, `Get*Details`, `Record*` in `..domain.*.usecase.port.in..`) and repository ports (`Load*`, `Save*` in the domain-model packages `domain.<ctx>`) are interfaces | PortsTest | Phase 3 §11 |
 | AR-15 | No cycles between `fr.kevin.llps.payments.(*)..` slices | CyclesTest | §4.2 |
 | AR-16 | Classes annotated `@RestController`/`@RestControllerAdvice` in new packages are prefixed `Rest`; classes with `@KafkaListener` methods prefixed `Kafka`; classes in `..adapter.out.persistence..` prefixed `Jpa` | CodingConventionsTest | conventions |
 | AR-17 | No `@Autowired` fields and no `System.out`/`System.err` in new packages; no public non-final fields in `..domain..` | CodingConventionsTest | conventions |
@@ -454,9 +462,11 @@ Rules about the legacy packages (`controller`, `service`, `repository`, `kafka`,
 
 A rule on a package is added in the iteration that creates the package (the skill keeps `failOnEmptyShould`).
 
-Any temporary exception must be narrow and reference its removal iteration. Two are known in advance:
-- AR-16 must exclude the legacy `GlobalExceptionHandler` by name, or be added once it moves.
-- AR-11 temporarily tolerates the legacy `repository`/`kafka`/`controller` packages until they are deleted.
+Since the Phase 5 IT-00 gate, AR-04, AR-05, AR-08, AR-09 and AR-10 also carry the separations that the removed `application`, `adapter-rest` and `adapter-kafka` modules used to enforce at compile time (§4.2).
+
+Any temporary exception must be narrow and reference its removal iteration. Known in advance:
+- AR-11 and AR-18 temporarily tolerate the legacy `controller`/`service`/`repository`/`kafka` packages until they are deleted (IT-06).
+- AR-16 needs no exception: AR-16 targets the adapter packages only, and the legacy handler is renamed `RestGlobalExceptionHandler` when it moves there (IT-07).
 
 ## 10. Feature-Preservation Matrix
 
@@ -478,7 +488,7 @@ Any temporary exception must be narrow and reference its removal iteration. Two 
 | Upsert by payload id (full replace) | `em.merge` | `Jpa<X>RepositoryAdapter.save` | P-<X>-OUT-2 | `em.merge` of a freshly mapped entity |
 | Swallow + WARN on parse/persist error; commit-time violations propagate (BR-ING-06) | listeners | Kafka listeners | P-<X>-IN-3 | `try` covers parse + `record(...)`; `@Transactional` on `onMessage`; no flush anywhere |
 | `createdAt`/`updatedAt` = consumer time | listener (`currentTimeMillis` ×2) | `Record<X>Service` + `Clock` | P-<X>-IN-3 | one clock reading (DR-R9 accepted) |
-| DDL + destructive seed at every startup | `schema.sql`, `data.sql`, `sql.init.mode: always`, `ddl-auto: none` | `adapter-persistence-jpa` resources + bootstrap yml | — | contents unchanged (MAC-06); on bootstrap classpath via the jar |
+| DDL + destructive seed at every startup | `schema.sql`, `data.sql`, `sql.init.mode: always`, `ddl-auto: none` | `infrastructure-adapters` resources + bootstrap yml | — | contents unchanged (MAC-06); on bootstrap classpath via the jar |
 | Response date formats `yyyy-MM-dd'T'HH:mm:ss` / `yyyy-MM-dd` (local zone) | `PaymentUtils.FMT` / `DAY_FMT` | REST response mappers | — | `DateTimeFormatter` from `ApiDateTimeFormat` patterns, JVM default zone |
 | `PaymentUtils` helpers | `util` | deleted in the final iteration | — | D-09 |
 | Logging (`fr.kevin.llps.payments: INFO`, WARN skip messages, ERROR on 500) | yml, listeners, handler | same | — | messages and levels unchanged |
@@ -533,17 +543,17 @@ sequenceDiagram
 | Component | Change | When |
 |---|---|---|
 | Module `pom.xml` | becomes a `packaging=pom` parent with 6 modules and ArchUnit `dependencyManagement` | iteration 0 |
-| 6 child POMs | created | iteration 0 |
+| 4 child POMs (`domain`, `client-adapters`, `infrastructure-adapters`, `bootstrap`) | created | iteration 0 |
 | Root `pom.xml` | unchanged | — |
 | All legacy classes and tests | moved into `bootstrap`, content unchanged | iteration 0 |
-| Entities | moved to `adapter-persistence-jpa`, package and content unchanged | iteration 0 |
-| `schema.sql`, `data.sql` | moved to `adapter-persistence-jpa/src/main/resources`, content unchanged | iteration 0 |
+| Entities | moved to `infrastructure-adapters`, package and content unchanged | iteration 0 |
+| `schema.sql`, `data.sql` | moved to `infrastructure-adapters/src/main/resources`, content unchanged | iteration 0 |
 | `application.yml` | moved to `bootstrap/src/main/resources`, content unchanged | iteration 0 |
 | Legacy controller, service, repository, listener and DTOs per context | replaced by the §6.2 classes, then deleted; tests remapped (MAC-07) | iterations 1–5 (Suspended, Recalls, Instant, Inbound, Outbound) |
 | `OutboundPaymentMessageConsumer` | replaced by `KafkaOutboundPaymentListener` (Q4) | Outbound iteration |
 | `OutboundPaymentController` `EntityManager` usage | removed; the `PaymentControllerWebTest` `EntityManager` mocks become removable (approve then) | Outbound iteration |
 | `PaymentUtils` + unused-helper tests | deleted | final iteration |
-| `GlobalExceptionHandler` + its test | moved to `adapter-rest`, content unchanged | final iteration |
+| `GlobalExceptionHandler` + its test | moved to `client-adapters`, renamed `RestGlobalExceptionHandler` / `RestGlobalExceptionHandlerTest`, body unchanged | final iteration |
 | README / module `AGENTS.md` run command | one-line update (to confirm with the user then) | iteration 0 or final |
 | ArchUnit tests | added rule by rule as packages appear | from iteration 0 |
 
@@ -551,9 +561,9 @@ sequenceDiagram
 
 | ID | Decision | Rationale / trade-off |
 |---|---|---|
-| TD-01 | Maven multi-module inside the module directory (Q1) | compile-time enforcement and fit with the `archunit-test` skill and conventions, at the cost of a large structural iteration 0 (TL-R3) |
+| TD-01 | Maven multi-module inside the module directory (Q1; four modules since the Phase 5 IT-00 gate) | compile-time enforcement and fit with the `archunit-test` skill and conventions, at the cost of a large structural iteration 0 (TL-R3) |
 | TD-02 | Legacy code moves into `bootstrap` unchanged, deleted per context (Q2) | keeps the app runnable and the 307 tests green at every step |
-| TD-03 | `schema.sql`/`data.sql` in `adapter-persistence-jpa` resources (Q3) | DDL is a persistence concern; `@DataJpaTest` in the module can use them |
+| TD-03 | `schema.sql`/`data.sql` in `infrastructure-adapters` resources (Q3) | DDL is a persistence concern; `@DataJpaTest` in the module can use them |
 | TD-04 | `KafkaOutboundPaymentListener` (Q4) | naming convention; the intentional misnaming smell is retired at migration time with user approval |
 | TD-05 | Explicit UTC formatter for outbound details, no `java.sql` in REST (Q5) | REST adapter free of legacy types; byte-identical output enforced by Jackson parity tests (§8.3) |
 | TD-06 | Application services carry no Spring annotations; wired in bootstrap | conventions ("wiring lives in bootstrap"); keeps the application framework-free |
@@ -576,6 +586,7 @@ sequenceDiagram
 | TL-R4 | Spring test slices in non-bootstrap modules need a `@SpringBootConfiguration` | test-only configuration class per module; documented in Phase 5 |
 | TL-R5 | Entity/aggregate simple-name collisions | FQN entity references in mappers/adapters; JPQL entity names unchanged |
 | TL-R6 | `Timestamp` → `LocalDateTime` → `Timestamp` round trip in the mapper for ambiguous local times | stored values are local timestamps; identical through `Timestamp.valueOf`/`toLocalDateTime` except within a DST gap (never in seeds); accepted and covered by repository adapter tests |
+| TL-R8 | Plain artifactIds (`domain`, `bootstrap`, ...) under the groupId `fr.kevin.llps.payments` shared by the three apps in the root reactor: a future multi-module migration of another app with the same module names would clash | today no clash (root `mvn -q validate` exit 0); revisit if another app is split |
 | TL-R7 | Classpath resource lookup of `schema.sql`/`data.sql` from the persistence jar | integration test in bootstrap asserts seeded rows (BR-DAT-*), which fails fast if the scripts are not found |
 
 Carried over unchanged: DR-R1..DR-R11 (Phase 3) and R-01..R-11 (Phase 1). Unresolved and unchanged: OQ-01 (meaning of business codes) and OQ-02 (recall reference validation). The Mermaid diagrams were reviewed manually; no renderer was run.
@@ -597,5 +608,11 @@ Changes after the gate:
 - TL-DR-9 / AR-12 were added (no `java.sql` in the REST adapter).
 - TL-R2 was reworded and TL-R6/TL-R7 added.
 - TD-01..TD-14 now record the answers.
+
+| 2026-11-12 | Phase 5 IT-00 gate: module structure (user-approved change) | Changes requested: "only two adapters modules must exist : client-adapters and infrastructure-adapters. Domain must be named domain only"; clarified "Drop prefixes, keep application"; then corrected: "application must be merged in domain". Result: four modules `domain`, `client-adapters`, `infrastructure-adapters`, `bootstrap`, plain artifactIds, Java packages unchanged. |
+| 2026-11-12 | Phase 5 IT-00 gate: use-case / input-port packages (user-approved change) | (b) `fr.kevin.llps.payments.domain.<ctx>.usecase` for use-case services and `fr.kevin.llps.payments.domain.<ctx>.usecase.port.in` for input ports, queries, commands and views; AR-01..AR-08, DR-2, TL-DR-7 retargeted; the model must not depend on `usecase` packages (ArchUnit). |
+| 2026-11-12 | Phase 5 plan gate: `GlobalExceptionHandler` naming (AR-16) | (a) rename to `RestGlobalExceptionHandler` (and its test) when it moves in the final iteration, body unchanged; no ArchUnit exception. |
+
+Changes after the Phase 5 IT-00 gate: use-case packages moved from `application.<ctx>[.port.in]` to `domain.<ctx>.usecase[.port.in]` (§3, §4.1, §4.2, §6.4, TL-DR-1/2/3/7, AR-01..AR-09, AR-14); §3 diagram labels, §4.1 (four modules), §4.2 (graph and ArchUnit takeover table), §4.3, §4.4, §8.3, §9.2 exceptions, §10, §12, TD-01, TD-03, TL-R8.
 
 **Status: APPROVED.** This document is the Phase 4 deliverable and an input to Phase 5.
