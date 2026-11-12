@@ -29,11 +29,9 @@ import fr.kevin.llps.payments.dto.InboundPaymentSearchRequest;
 import fr.kevin.llps.payments.dto.InstantPaymentResponse;
 import fr.kevin.llps.payments.dto.InstantPaymentSearchRequest;
 import fr.kevin.llps.payments.dto.OutboundPaymentSearchRequest;
-import fr.kevin.llps.payments.dto.RecallSearchRequest;
 import fr.kevin.llps.payments.entity.InboundPayment;
 import fr.kevin.llps.payments.entity.InstantPayment;
 import fr.kevin.llps.payments.entity.OutboundPayment;
-import fr.kevin.llps.payments.entity.Recall;
 import fr.kevin.llps.payments.entity.SuspendedPayment;
 
 import jakarta.persistence.PersistenceException;
@@ -41,7 +39,7 @@ import jakarta.persistence.PersistenceException;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({InstantPaymentRepository.class, InboundPaymentRepository.class,
-        OutboundPaymentRepository.class, RecallRepository.class})
+        OutboundPaymentRepository.class})
 @Testcontainers
 class PaymentRepositoryUnitTest {
 
@@ -61,8 +59,6 @@ class PaymentRepositoryUnitTest {
     private InboundPaymentRepository inboundRepository;
     @Autowired
     private OutboundPaymentRepository outboundRepository;
-    @Autowired
-    private RecallRepository recallRepository;
     @Autowired
     private TestEntityManager em;
 
@@ -210,55 +206,6 @@ class PaymentRepositoryUnitTest {
         OutboundPayment found = outboundRepository.findById("00000000-0000-0000-0000-000000000634");
         assertThat(found.instructionId).isEqualTo("OUT-4");
         assertThat(outboundRepository.findById("11111111-1111-1111-1111-111111111111")).isNull();
-    }
-
-    // ---------------- recalls ----------------
-
-    @Test
-    void recallSearch_alwaysUsesHardcodedLimitOf50() {
-        for (int i = 0; i < 51; i++) {
-            persist(recall(String.format("00000000-0000-0000-0000-00000000%04d", 700 + i),
-                    "R-COR", Timestamp.valueOf("2026-10-16 12:00:00"), Date.valueOf("2026-10-18")));
-        }
-
-        RecallSearchRequest request = new RecallSearchRequest();
-        request.limit = 5;
-
-        assertThat(recallRepository.search(request)).hasSize(50);
-    }
-
-    @Test
-    void recallSearch_appliesFilters() {
-        persist(
-                recall("00000000-0000-0000-0000-000000000751", "R-COR", Timestamp.valueOf("2026-10-16 12:00:00"),
-                        Date.valueOf("2026-10-18")),
-                recall("00000000-0000-0000-0000-000000000752", "R-REJ", Timestamp.valueOf("2026-10-14 19:00:00"),
-                        Date.valueOf("2026-10-16")));
-
-        RecallSearchRequest request = new RecallSearchRequest();
-        request.recallType = "r-cor";
-        request.originalPaymentId = "00000000-0000-0000-0000-000000000401";
-        request.originalPaymentType = "outbound";
-        request.reasonCode = "ac04";
-        request.status = "initiated";
-        request.initiatedFrom = "2026-10-01T00:00:00";
-        request.initiatedTo = "2026-10-31T00:00:00";
-
-        List<Recall> results = recallRepository.search(request);
-
-        assertThat(results).hasSize(1);
-        assertThat(results.get(0).recallReference).isEqualTo("RCL-T1");
-    }
-
-    @Test
-    void recallFindById_foundAndMissing() {
-        persist(recall("00000000-0000-0000-0000-000000000753", "R-COR", Timestamp.valueOf("2026-10-16 12:00:00"),
-                Date.valueOf("2026-10-18")));
-
-        Recall found = recallRepository.findById("00000000-0000-0000-0000-000000000753");
-        assertThat(found.recallType).isEqualTo("R-COR");
-        assertThat(found.deadline).isEqualTo(Date.valueOf("2026-10-18"));
-        assertThat(recallRepository.findById("11111111-1111-1111-1111-111111111111")).isNull();
     }
 
     // ---------------- characterization: Instant date bounds (BR-INS-06, BR-INS-07, C-04) ----------------
@@ -513,66 +460,6 @@ class PaymentRepositoryUnitTest {
         assertThat(results).extracting(p -> p.instructionId).containsExactly("OUT-EQ");
     }
 
-    // ---------------- characterization: Recalls (BR-RCL-03, BR-RCL-04, BR-RCL-06) ----------------
-
-    @Test
-    void should_reject_malformed_original_payment_id_filter_with_invalid_uuid_message() {
-        // GIVEN
-        RecallSearchRequest request = new RecallSearchRequest();
-        request.originalPaymentId = "xyz";
-
-        // WHEN / THEN
-        assertThatThrownBy(() -> recallRepository.search(request))
-                .satisfies(e -> assertThat(rootCauseOf(e)).isInstanceOf(IllegalArgumentException.class)
-                        .hasMessage("Invalid UUID string: xyz"));
-    }
-
-    @ParameterizedTest(name = "[{index}] initiatedFrom={0} initiatedTo={1} -> {2} rows")
-    @CsvSource(value = {
-            "NULL, 2026-10-16, 1",
-            "NULL, 2026-10-17, 2",
-            "2026-10-16, NULL, 1",
-            "garbage, NULL, 2",
-            "NULL, garbage, 2",
-            "2026-10-16T12:00:00, 2026-10-16T12:00:00, 1"
-    }, nullValues = "NULL")
-    void should_treat_date_only_recall_bounds_as_start_of_day_and_ignore_unparsable_ones(String from, String to,
-            int expectedCount) {
-        // GIVEN
-        persist(
-                recall("00000000-0000-0000-0000-000000000761", "R-COR", Timestamp.valueOf("2026-10-16 12:00:00"),
-                        Date.valueOf("2026-10-18")),
-                recall("00000000-0000-0000-0000-000000000762", "R-REJ", Timestamp.valueOf("2026-10-14 19:00:00"),
-                        Date.valueOf("2026-10-16")));
-        RecallSearchRequest request = new RecallSearchRequest();
-        request.initiatedFrom = from;
-        request.initiatedTo = to;
-
-        // WHEN
-        List<Recall> results = recallRepository.search(request);
-
-        // THEN
-        assertThat(results).hasSize(expectedCount);
-    }
-
-    @Test
-    void should_order_recalls_by_initiated_at_descending() {
-        // GIVEN
-        persist(
-                recall("00000000-0000-0000-0000-000000000763", "R-REJ", Timestamp.valueOf("2026-10-14 19:00:00"),
-                        Date.valueOf("2026-10-16")),
-                recall("00000000-0000-0000-0000-000000000764", "R-UPD", Timestamp.valueOf("2026-10-16 20:00:00"),
-                        Date.valueOf("2026-10-19")),
-                recall("00000000-0000-0000-0000-000000000765", "R-COR", Timestamp.valueOf("2026-10-16 12:00:00"),
-                        Date.valueOf("2026-10-18")));
-
-        // WHEN
-        List<Recall> results = recallRepository.search(new RecallSearchRequest());
-
-        // THEN
-        assertThat(results).extracting(r -> r.recallType).containsExactly("R-UPD", "R-COR", "R-REJ");
-    }
-
     // ---------------- characterization: schema constraints (BR-SHR-09, BR-DAT-01) ----------------
 
     @Test
@@ -626,23 +513,6 @@ class PaymentRepositoryUnitTest {
         assertThatThrownBy(() -> persist(payment))
                 .isInstanceOf(PersistenceException.class)
                 .rootCause().hasMessageContaining("value too long");
-    }
-
-    @Test
-    void should_accept_recall_without_amount_and_currency() {
-        // GIVEN
-        Recall recall = recall("00000000-0000-0000-0000-000000000685", "R-COR", Timestamp.valueOf("2026-10-16 12:00:00"),
-                Date.valueOf("2026-10-18"));
-        recall.amount = null;
-        recall.currency = null;
-        persist(recall);
-
-        // WHEN
-        Recall found = recallRepository.findById("00000000-0000-0000-0000-000000000685");
-
-        // THEN
-        assertThat(found.amount).isNull();
-        assertThat(found.currency).isNull();
     }
 
     @Test
@@ -752,21 +622,4 @@ class PaymentRepositoryUnitTest {
         return payment;
     }
 
-    private Recall recall(String id, String recallType, Timestamp initiatedAt, Date deadline) {
-        Recall recall = new Recall();
-        recall.id = UUID.fromString(id);
-        recall.recallReference = "RCL-T1";
-        recall.recallType = recallType;
-        recall.originalPaymentId = UUID.fromString("00000000-0000-0000-0000-000000000401");
-        recall.originalPaymentType = "OUTBOUND";
-        recall.reasonCode = "AC04";
-        recall.amount = new BigDecimal("300.00");
-        recall.currency = "EUR";
-        recall.initiatedAt = initiatedAt;
-        recall.deadline = deadline;
-        recall.status = "INITIATED";
-        recall.createdAt = initiatedAt;
-        recall.updatedAt = initiatedAt;
-        return recall;
-    }
 }

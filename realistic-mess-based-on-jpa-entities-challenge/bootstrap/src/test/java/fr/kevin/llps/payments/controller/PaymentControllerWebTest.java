@@ -30,18 +30,19 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import fr.kevin.llps.payments.adapter.in.rest.recall.RestRecallController;
 import fr.kevin.llps.payments.adapter.in.rest.suspended.RestSuspendedPaymentController;
+import fr.kevin.llps.payments.domain.recall.port.in.GetRecallDetails;
+import fr.kevin.llps.payments.domain.recall.port.in.SearchRecalls;
 import fr.kevin.llps.payments.domain.suspended.port.in.GetSuspendedPaymentDetails;
 import fr.kevin.llps.payments.domain.suspended.port.in.SearchSuspendedPayments;
 import fr.kevin.llps.payments.dto.InboundPaymentResponse;
 import fr.kevin.llps.payments.dto.InstantPaymentResponse;
 import fr.kevin.llps.payments.dto.OutboundPaymentResponse;
-import fr.kevin.llps.payments.dto.RecallResponse;
 import fr.kevin.llps.payments.entity.OutboundPayment;
 import fr.kevin.llps.payments.service.InboundPaymentService;
 import fr.kevin.llps.payments.service.InstantPaymentService;
 import fr.kevin.llps.payments.service.OutboundPaymentService;
-import fr.kevin.llps.payments.service.RecallService;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
@@ -51,7 +52,7 @@ import jakarta.persistence.EntityManagerFactory;
         RestSuspendedPaymentController.class,
         InboundPaymentController.class,
         OutboundPaymentController.class,
-        RecallController.class
+        RestRecallController.class
 })
 class PaymentControllerWebTest {
 
@@ -69,7 +70,9 @@ class PaymentControllerWebTest {
     @MockitoBean
     private OutboundPaymentService outboundService;
     @MockitoBean
-    private RecallService recallService;
+    private SearchRecalls searchRecalls;
+    @MockitoBean
+    private GetRecallDetails getRecallDetails;
     @MockitoBean
     private EntityManagerFactory entityManagerFactory;
     @MockitoBean
@@ -186,39 +189,6 @@ class PaymentControllerWebTest {
         mvc.perform(get("/api/v1/outbound-payments/" + id)).andExpect(status().isInternalServerError());
     }
 
-    // ---------------- recalls ----------------
-
-    @Test
-    void recallsSearch_returnsRows() throws Exception {
-        RecallResponse response = new RecallResponse();
-        response.id = "r1";
-        when(recallService.search(any())).thenReturn(List.of(response));
-
-        mvc.perform(get("/api/v1/recalls/search").param("recallType", "R-COR"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value("r1"));
-    }
-
-    @Test
-    void recallsSearch_invalidType_returns400() throws Exception {
-        when(recallService.search(any())).thenThrow(new IllegalArgumentException("Unknown recall type: NOPE"));
-
-        mvc.perform(get("/api/v1/recalls/search").param("recallType", "NOPE"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("Unknown recall type: NOPE"));
-    }
-
-    @Test
-    void recallsDetails_foundAndMissing() throws Exception {
-        RecallResponse response = new RecallResponse();
-        response.id = "r1";
-        when(recallService.getById("r1")).thenReturn(response);
-        when(recallService.getById("missing")).thenReturn(null);
-
-        mvc.perform(get("/api/v1/recalls/r1")).andExpect(status().isOk());
-        mvc.perform(get("/api/v1/recalls/missing")).andExpect(status().isNotFound());
-    }
-
     // ---------------- characterization: REST error contract (BR-API-01, BR-API-03, BR-API-08) ----------------
 
     private static final String GenericError = "Something went wrong, contact support with the trace id";
@@ -240,7 +210,7 @@ class PaymentControllerWebTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.error").value(GenericError));
         verifyNoInteractions(instantService, searchSuspendedPayments, getSuspendedPaymentDetails, inboundService,
-                outboundService, recallService);
+                outboundService, searchRecalls, getRecallDetails);
     }
 
     @ParameterizedTest(name = "[{index}] POST {0} -> 500")
@@ -260,7 +230,7 @@ class PaymentControllerWebTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.error").value(GenericError));
         verifyNoInteractions(instantService, searchSuspendedPayments, getSuspendedPaymentDetails, inboundService,
-                outboundService, recallService);
+                outboundService, searchRecalls, getRecallDetails);
     }
 
     @Test

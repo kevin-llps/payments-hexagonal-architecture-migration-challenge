@@ -5,10 +5,12 @@ import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
 
+import static com.tngtech.archunit.base.DescribedPredicate.alwaysTrue;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideOutsideOfPackage;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
+import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
 @AnalyzeClasses(packages = "fr.kevin.llps.payments", importOptions = ImportOption.DoNotIncludeTests.class)
 class DomainIsolationTest {
@@ -29,6 +31,14 @@ class DomainIsolationTest {
                     .should().onlyDependOnClassesThat().resideInAnyPackage(
                             "java.lang..", "java.util..", "java.math..", "java.time..", "fr.kevin.llps.payments.domain..")
                     .because("isolated-domain-design.md DR-1: the domain imports only java.lang, java.util, java.math and java.time");
+
+    // AR-02 (the shared kernel is shared by definition, DR-2; AR-03 keeps it independent of the contexts)
+    @ArchTest
+    static final ArchRule contextsShouldNotDependOnEachOther =
+            slices().matching("fr.kevin.llps.payments.domain.(*)..")
+                    .should().notDependOnEachOther()
+                    .ignoreDependency(alwaysTrue(), resideInAPackage("fr.kevin.llps.payments.domain.sharedkernel.."))
+                    .because("isolated-domain-design.md DR-2 / technical-layer-design.md AR-02 and AR-07: bounded contexts only share the shared kernel");
 
     // AR-03
     @ArchTest

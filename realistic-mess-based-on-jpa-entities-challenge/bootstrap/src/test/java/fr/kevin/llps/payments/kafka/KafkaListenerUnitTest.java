@@ -29,7 +29,6 @@ import org.springframework.transaction.annotation.Transactional;
 import fr.kevin.llps.payments.entity.InboundPayment;
 import fr.kevin.llps.payments.entity.InstantPayment;
 import fr.kevin.llps.payments.entity.OutboundPayment;
-import fr.kevin.llps.payments.entity.Recall;
 
 import jakarta.persistence.EntityManager;
 
@@ -45,8 +44,6 @@ class KafkaListenerUnitTest {
     private InboundPaymentListener inboundListener;
     @InjectMocks
     private OutboundPaymentMessageConsumer outboundConsumer;
-    @InjectMocks
-    private RecallListener recallListener;
 
     @Test
     void instant_onMessage_persistsRow() {
@@ -113,37 +110,13 @@ class KafkaListenerUnitTest {
         verify(em, never()).merge(org.mockito.ArgumentMatchers.any(OutboundPayment.class));
     }
 
-    @Test
-    void recall_onMessage_persistsRow() {
-        recallListener.onMessage("""
-                {"id":"00000000-0000-0000-0000-000000000905","recallReference":"RCL-1","recallType":"R-COR",
-                 "originalPaymentId":"00000000-0000-0000-0000-000000000904","originalPaymentType":"OUTBOUND",
-                 "reasonCode":"AC04","amount":300.00,"currency":"EUR","initiatedAt":"2026-10-17 12:00:00",
-                 "deadline":"2026-10-19","status":"INITIATED"}
-                """);
-
-        Recall recall = captureMerge(Recall.class);
-        assertThat(recall.recallReference).isEqualTo("RCL-1");
-        assertThat(recall.originalPaymentId).isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000904"));
-        assertThat(recall.initiatedAt).isEqualTo(Timestamp.valueOf("2026-10-17 12:00:00"));
-        assertThat(recall.deadline).isEqualTo(Date.valueOf("2026-10-19"));
-        assertThat(recall.reasonCode).isEqualTo("AC04");
-    }
-
-    @Test
-    void recall_onMessage_malformedJson_swallowed() {
-        assertThatCode(() -> recallListener.onMessage("<>")).doesNotThrowAnyException();
-        verify(em, never()).merge(org.mockito.ArgumentMatchers.any(Recall.class));
-    }
-
     // ---------------- characterization: topics and consumer groups (BR-ING-01, BR-ING-02, BR-ING-06) ----------------
 
     @ParameterizedTest(name = "[{index}] {0} listens to {1} in group {2}")
     @CsvSource({
             "fr.kevin.llps.payments.kafka.InstantPaymentListener, pay.instant, jpa-instant-group",
             "fr.kevin.llps.payments.kafka.InboundPaymentListener, pay.inbound, jpa-inbound-group",
-            "fr.kevin.llps.payments.kafka.OutboundPaymentMessageConsumer, pay.outbound, jpa-outbound-group",
-            "fr.kevin.llps.payments.kafka.RecallListener, pay.recall, jpa-recall-group"
+            "fr.kevin.llps.payments.kafka.OutboundPaymentMessageConsumer, pay.outbound, jpa-outbound-group"
     })
     void should_listen_to_its_own_topic_with_its_own_transactional_consumer_group(String listenerClass, String topic,
             String groupId) throws Exception {
@@ -240,24 +213,6 @@ class KafkaListenerUnitTest {
         verifyNoMoreInteractions(em);
     }
 
-    @ParameterizedTest(name = "[{index}] originalPaymentId {0} -> recall dropped")
-    @ValueSource(strings = {
-            "\"originalPaymentId\":\"not-a-uuid\",",
-            "\"originalPaymentId\":null,",
-            ""
-    })
-    void should_drop_recall_event_when_original_payment_id_is_not_a_uuid(String originalPaymentIdField) {
-        // GIVEN
-        String payload = "{\"id\":\"00000000-0000-0000-0000-000000000915\"," + originalPaymentIdField
-                + "\"recallType\":\"R-COR\",\"amount\":1.00,\"currency\":\"EUR\"}";
-
-        // WHEN
-        recallListener.onMessage(payload);
-
-        // THEN
-        verifyNoMoreInteractions(em);
-    }
-
     // ---------------- characterization: missing and null fields (BR-ING-07) ----------------
 
     @Test
@@ -325,29 +280,6 @@ class KafkaListenerUnitTest {
         assertThat(payment.requestedExecutionDate).isNull();
     }
 
-    @Test
-    void should_map_missing_recall_fields_to_empty_strings_and_json_nulls_to_null_literal() {
-        // GIVEN
-        String payload = """
-                {"id":"00000000-0000-0000-0000-000000000920",
-                 "originalPaymentId":"00000000-0000-0000-0000-000000000401","reasonCode":null}
-                """;
-
-        // WHEN
-        recallListener.onMessage(payload);
-
-        // THEN
-        Recall recall = captureMerge(Recall.class);
-        assertThat(recall.reasonCode).isEqualTo("null");
-        assertThat(recall.recallReference).isEmpty();
-        assertThat(recall.recallType).isEmpty();
-        assertThat(recall.originalPaymentType).isEmpty();
-        assertThat(recall.currency).isEmpty();
-        assertThat(recall.amount).isEqualByComparingTo(BigDecimal.ZERO);
-        assertThat(recall.initiatedAt).isNull();
-        assertThat(recall.deadline).isNull();
-    }
-
     // ---------------- characterization: timestamp and date parsing (BR-ING-08, BR-ING-09) ----------------
 
     @ParameterizedTest(name = "[{index}] executionDateTime {0} -> {1}")
@@ -368,24 +300,6 @@ class KafkaListenerUnitTest {
         // THEN
         InstantPayment payment = captureMerge(InstantPayment.class);
         assertThat(payment.executionDatetime).isEqualTo(expected == null ? null : Timestamp.valueOf(expected));
-    }
-
-    @ParameterizedTest(name = "[{index}] initiatedAt {0} -> {1}")
-    @CsvSource({
-            "2026-10-17T12:00:00Z, 2026-10-17 12:00:00",
-            "2026-10-17, 2026-10-17 00:00:00"
-    })
-    void should_parse_recall_initiated_at_with_same_timestamp_rules(String raw, String expected) {
-        // GIVEN
-        String payload = "{\"id\":\"00000000-0000-0000-0000-000000000922\","
-                + "\"originalPaymentId\":\"00000000-0000-0000-0000-000000000401\",\"initiatedAt\":\"" + raw + "\"}";
-
-        // WHEN
-        recallListener.onMessage(payload);
-
-        // THEN
-        Recall recall = captureMerge(Recall.class);
-        assertThat(recall.initiatedAt).isEqualTo(Timestamp.valueOf(expected));
     }
 
     @ParameterizedTest(name = "[{index}] requestedExecutionDate {0} -> {1}")
@@ -487,27 +401,6 @@ class KafkaListenerUnitTest {
         assertThat(payment.status).isEqualTo("whatever");
         assertThat(payment.currency).isEqualTo("eur");
         assertThat(payment.amount).isEqualByComparingTo("-5.00");
-    }
-
-    @Test
-    void should_persist_recall_with_unknown_type_without_checking_original_payment() {
-        // GIVEN
-        String payload = """
-                {"id":"00000000-0000-0000-0000-000000000930","recallType":"R-XXX",
-                 "originalPaymentId":"99999999-9999-9999-9999-999999999999","originalPaymentType":"CHEQUE",
-                 "status":"unknown"}
-                """;
-
-        // WHEN
-        recallListener.onMessage(payload);
-
-        // THEN
-        Recall recall = captureMerge(Recall.class);
-        assertThat(recall.recallType).isEqualTo("R-XXX");
-        assertThat(recall.originalPaymentId).isEqualTo(UUID.fromString("99999999-9999-9999-9999-999999999999"));
-        assertThat(recall.originalPaymentType).isEqualTo("CHEQUE");
-        assertThat(recall.status).isEqualTo("unknown");
-        verifyNoMoreInteractions(em);
     }
 
     @Test

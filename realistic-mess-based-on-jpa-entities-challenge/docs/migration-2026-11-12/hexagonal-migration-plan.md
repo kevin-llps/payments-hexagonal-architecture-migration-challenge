@@ -1,6 +1,6 @@
 # Hexagonal Migration Plan — realistic-mess-based-on-jpa-entities-challenge
 
-- **Status:** APPROVED (2026-11-12). IT-00 `APPROVED`; IT-01 `APPROVED`; IT-02 `APPROVED`; IT-03 scope awaiting approval.
+- **Status:** APPROVED (2026-11-12). IT-00..IT-03 `APPROVED`; IT-04 scope awaiting approval.
 - **Owner:** `incremental-hexagonal-architecture-migration` (Phase 5 of the orchestrated migration).
 - **Baseline:** commit `142a3a2` on branch `hexagonal-architecture-migration-2`. Baseline `mvn test`: **307 tests, 0 failures** (run 2026-11-12 in a detached worktree of `142a3a2`).
 - **Source of truth** for iteration planning, ArchUnit catalogue, temporary exceptions and validation history.
@@ -169,10 +169,10 @@ Common definition of done for every iteration: TDD (RED → GREEN → refactor);
 |---|---|
 | Bounded Context | Suspended Payments |
 | Business rules | BR-SUS-01..06; suspended slice of BR-API-01..09 and BR-ING-01..09/12 |
-| Target classes / ports | `domain.suspended`: `SuspendedPayment`, `SearchSuspendedPaymentsService`, `GetSuspendedPaymentDetailsService`, `RecordSuspendedPaymentService`; `.command`: `RecordSuspendedPaymentCommand`; `.query`: `SuspendedPaymentSearchCriteria`, `SuspendedPaymentSearchQuery`; `.port.in`: `SearchSuspendedPayments`, `GetSuspendedPaymentDetails`, `RecordSuspendedPayment`; `.port.out`: `LoadSuspendedPayments`, `SaveSuspendedPayment` (template for IT-03..IT-06) |
+| Target classes / ports | `domain.suspended`: `SuspendedPayment`, `SearchSuspendedPaymentsService`, `GetSuspendedPaymentDetailsService`, `PersistSuspendedPaymentService`; `.command`: `PersistSuspendedPaymentCommand`; `.query`: `SuspendedPaymentSearchCriteria`, `SuspendedPaymentSearchQuery`; `.port.in`: `SearchSuspendedPayments`, `GetSuspendedPaymentDetails`, `PersistSuspendedPayment`; `.port.out`: `LoadSuspendedPayments`, `SaveSuspendedPayment` (template for IT-03..IT-06) |
 | Adapters | `RestSuspendedPaymentController` (+ response record, mapper), `RestDomainExceptionHandler` (`@Order(HIGHEST_PRECEDENCE)`, handlers for SK exceptions), `KafkaSuspendedPaymentListener`, `JpaSuspendedPaymentRepositoryAdapter` + `JpaSuspendedPaymentMapper`; `bootstrap.config.ClockConfiguration`, `SuspendedUseCaseConfiguration`; test-only `@SpringBootConfiguration` in `client-adapters` and `infrastructure-adapters` |
 | Legacy deleted | `SuspendedPaymentController`, `SuspendedPaymentService`, `SuspendedPaymentRepository`, `SuspendedPaymentListener`, `SuspendedPayment{SearchRequest,Response}` |
-| Tests | domain unit tests; use-case tests with fixed `Clock`; `@WebMvcTest` with `@MockitoBean` input ports; Kafka listener unit tests mocking `RecordSuspendedPayment`; `@DataJpaTest` + Testcontainers adapter tests; suspended methods of the 4 legacy test classes remapped (MAC-07); IT unchanged |
+| Tests | domain unit tests; use-case tests with fixed `Clock`; `@WebMvcTest` with `@MockitoBean` input ports; Kafka listener unit tests mocking `PersistSuspendedPayment`; `@DataJpaTest` + Testcontainers adapter tests; suspended methods of the 4 legacy test classes remapped (MAC-07); IT unchanged |
 | ArchUnit (test-first) | AR-05, AR-06, AR-08, AR-09, AR-10, AR-11 (+ temporary exception), AR-12, AR-13, AR-14, AR-16, AR-17 (rest), AR-18 (+ temporary exception) |
 | Risks | TL-R1 advice order; TL-R4 slices outside bootstrap; DR-R8 `matchesNothing`; BR-ING-06 commit-time propagation (DR-R3) |
 | Completion | all suspended tests green in their new modules; no suspended legacy class left |
@@ -260,7 +260,7 @@ Order rationale: structure first; Shared Kernel before any context (every contex
 | BR-INB-01..08 | IT-05 | `domain.inbound.*Test`, use cases (fixed `Clock`), adapter tests | IT inbound tests |
 | BR-OUT-01..09 | IT-06 | `SearchFeePolicyTest`, `DetailsFeePolicyTest`, criteria, formatter parity, adapter tests | IT outbound tests (incl. N-02) |
 | BR-API-01..09 | IT-02..IT-07 | `Rest*ControllerTest`, `RestDomainExceptionHandlerTest`, `GlobalExceptionHandlerTest` (→ `RestGlobalExceptionHandlerTest` in IT-07) | IT error-contract tests |
-| BR-ING-01..12 | IT-02..IT-06 | `Kafka*ListenerTest`, `Record*ServiceTest` | IT Kafka ingestion tests (Awaitility, `...09` ids) |
+| BR-ING-01..12 | IT-02..IT-06 | `Kafka*ListenerTest`, `Persist*ServiceTest` | IT Kafka ingestion tests (Awaitility, `...09` ids) |
 | BR-DAT-01..03 | IT-00, IT-07 | — | IT seed assertions |
 
 The per-test mapping is maintained in §11 as tests are moved.
@@ -290,7 +290,8 @@ Location: `bootstrap/src/test/java/fr/kevin/llps/payments/architecture/`. Comman
 | AR-16 ×3 | `@RestController`/`@RestControllerAdvice` in `..adapter..` prefixed `Rest`; top-level classes in `..adapter.in.kafka..` prefixed `Kafka`, in `..adapter.out.persistence..` prefixed `Jpa` | `CodingConventionsTest` | conventions | IT-02 | RED (empty) → GREEN |
 | AR-17 ×2 | no `@Autowired` fields and no standard streams in `domain..`, `adapter..`, `bootstrap..` | `CodingConventionsTest` | conventions | IT-02 | GREEN before and after (guard) |
 | AR-18 ×2 | `@Transactional` methods only in `..adapter.in.kafka..` (temporary legacy scope); no class-level `@Transactional` | `CodingConventionsTest` | TL-DR-10 | IT-02 | GREEN before and after (guard) |
-| AR-02, AR-07 | context slices independent | `DomainIsolationTest`, `HexagonalArchitectureTest` | DR-2, TL-DR-7 | IT-03 (planned) | — |
+| AR-02 | `domain.(*)..` context slices do not depend on each other; dependencies on `domain.sharedkernel..` ignored by definition (DR-2) | `DomainIsolationTest` | DR-2 | IT-03 | GREEN before migration (guard; one context only); after: GREEN, mutation `Recall` → `SuspendedPayment` RED, reverted |
+| AR-07 | a context's use cases only use their own context and the shared kernel | covered by AR-02 | TL-DR-7 | IT-03 | covered |
 
 Temporary exceptions (none active today):
 
@@ -301,7 +302,7 @@ Temporary exceptions (none active today):
 
 ## 10. Test Strategy
 
-- **Tiers:** domain and application tests are plain JUnit 5 + AssertJ (+ Mockito) with no Spring, Docker or Kafka (MAC-08); REST adapter `@WebMvcTest` slices with `@MockitoBean` input ports; Kafka adapter plain unit tests mocking `Record<X>`; persistence adapter `@DataJpaTest` + Testcontainers (Docker); `bootstrap` keeps `PaymentApplicationIntegrationTest` unchanged and the ArchUnit tests.
+- **Tiers:** domain and application tests are plain JUnit 5 + AssertJ (+ Mockito) with no Spring, Docker or Kafka (MAC-08); REST adapter `@WebMvcTest` slices with `@MockitoBean` input ports; Kafka adapter plain unit tests mocking `Persist<X>`; persistence adapter `@DataJpaTest` + Testcontainers (Docker); `bootstrap` keeps `PaymentApplicationIntegrationTest` unchanged and the ArchUnit tests.
 - **TDD:** each public method is driven test-first (`tdd`, `unit-test`, `parameterized-unit-test`, `api-rest-test` skills); ArchUnit rules first.
 - **Remapping (MAC-07):** a legacy test is deleted only when its equivalent with the same inputs and expected values exists in the new location; each remap is listed in §11. Retirements beyond those already approved need user approval.
 - **Counts (MAC-01/02):** baseline 307; after each iteration the count must be ≥ 307 minus approved retirements, excluding new ArchUnit tests from the comparison.
@@ -313,8 +314,8 @@ Temporary exceptions (none active today):
 |---|---|---|---|---|---|---|---|
 | IT-00 | structure | `APPROVED` (after one `CHANGES_REQUESTED`) | 308 = 307 legacy (per-class counts identical to baseline) + 1 ArchUnit, 0 failures | AR-15 GREEN | `mvn -B clean verify`: exit 0, 308 tests, BUILD SUCCESS (reworked layout) | 1st: changes requested; 2nd: approved 2026-11-12 | `71d9d618455c502b0c354c612a431dc783b44528` |
 | IT-01 | Shared Kernel | `APPROVED` | 439 = 307 legacy (unchanged) + 2 new IT characterization (F-01) + 7 ArchUnit + 123 domain, 0 failures | AR-01, AR-01b, AR-03, AR-04 ×2, AR-15, AR-17 GREEN | `mvn -B clean verify`: exit 0, BUILD SUCCESS | approved 2026-11-12 | `c538730d59e7de4393aa27e3cccf65c2678251ae` |
-| IT-02 | Suspended | `APPROVED` (gates 1–3: `CHANGES_REQUESTED`, package layout) | 489 = domain 142 + client-adapters 15 + infrastructure-adapters 15 + bootstrap 317, 0 failures; 21 legacy suspended tests remapped (see log) | 29 ArchUnit tests GREEN; temporary scopes AR-11, AR-18 | `mvn -B clean verify`: exit 0, BUILD SUCCESS (after the 3rd-gate ring change) | 1st, 2nd, 3rd: changes requested; 4th: approved 2026-11-12 | see §15 |
-| IT-03 | Recalls | `NOT_STARTED` | | | | | |
+| IT-02 | Suspended | `APPROVED` (gates 1–3: `CHANGES_REQUESTED`, package layout) | 489 = domain 142 + client-adapters 15 + infrastructure-adapters 15 + bootstrap 317, 0 failures; 21 legacy suspended tests remapped (see log) | 29 ArchUnit tests GREEN; temporary scopes AR-11, AR-18 | `mvn -B clean verify`: exit 0, BUILD SUCCESS (after the 3rd-gate ring change) | 1st, 2nd, 3rd: changes requested; 4th: approved 2026-11-12 | `47ad475d4f4009c100f2eb6d92fa5c5b472693e9` |
+| IT-03 | Recalls | `APPROVED` (1st gate: `CHANGES_REQUESTED`, Record → Persist naming) | 512 = domain 164 + client-adapters 36 + infrastructure-adapters 30 + bootstrap 282, 0 failures; 36 legacy recall tests remapped (see log) | 30 ArchUnit tests GREEN (AR-02 added); temporary scopes AR-11, AR-18 | `mvn -B clean verify`: exit 0, BUILD SUCCESS | approved 2026-11-12 | Suspended rename `98e278ce1d1283c3e5461e08f3cf9444ff298b4b`; Recalls: see §15 |
 | IT-04 | Instant | `NOT_STARTED` | | | | | |
 | IT-05 | Inbound | `NOT_STARTED` | | | | | |
 | IT-06 | Outbound | `NOT_STARTED` | | | | | |
@@ -332,6 +333,15 @@ Test remapping log (MAC-07):
 | IT-02 | suspended rows of `PaymentControllerWebTest` error-contract tests and `should_return_generic_error_body_when_service_fails` | unchanged in bootstrap `PaymentControllerWebTest`, mocks swapped to `SearchSuspendedPayments` / `GetSuspendedPaymentDetails` (approved Q1) | move with the legacy handler in IT-07 |
 | IT-02 | `PaymentRepositoryUnitTest.suspendedSearch_appliesParameterizedFilters`, `suspendedFindById_foundAndMissing`, `should_return_no_suspended_payment_when_a_held_bound_is_not_in_iso_date_time_format` (5 rows), `should_apply_inclusive_held_bounds`, `should_order_suspended_payments_by_held_at_descending_and_apply_limit`, `should_match_suspended_debtor_iban_exactly_and_case_sensitively` | infrastructure-adapters: `JpaSuspendedPaymentRepositoryAdapterTest` (11 tests, same seeds, filters and expected ids) | find-by-id split into found / missing; plus 1 new upsert test |
 | IT-02 | `PaymentApplicationIntegrationTest` | unchanged assertions; injected `SuspendedPaymentListener` replaced by `KafkaSuspendedPaymentListener` | approved Q2 |
+| IT-03 | `PaymentServiceUnitTest.should_accept_allowed_recall_types_trimmed_and_case_insensitive` (6 rows), `should_reject_unknown_recall_type_with_raw_input_in_message`, `recallSearch_invalidType_throws`, `should_ignore_blank_recall_type_filter` | domain: `RecallSearchCriteriaTest` (same inputs; exception `UnknownRecallTypeException`, same messages); interaction part in `SearchRecallsServiceTest.should_not_load_anything_when_the_recall_type_is_unknown` | `recallSearch_invalidType_throws` now asserts the full message `Unknown recall type: NOPE` |
+| IT-03 | `PaymentServiceUnitTest.recallSearch_mapsFieldsAndFormatsDates` | domain: `SearchRecallsServiceTest.should_return_the_loaded_recalls_unchanged`; client-adapters: `RestRecallControllerTest.should_render_every_field_with_the_api_formats` | same values (`2026-10-16T12:00:00`, `2026-10-18`, `AC04`, original id) |
+| IT-03 | `PaymentServiceUnitTest.recallGetById_foundAndMissing` | domain: `GetRecallDetailsServiceTest` (2 tests) | missing id is an unknown UUID |
+| IT-03 | `KafkaListenerUnitTest` recall tests (6, of which 2 parameterized: 3 + 2 rows) and the recall topic/group row | client-adapters: `KafkaRecallListenerTest` (same payloads) | assertions on the recorded command; plus 1 new swallow-on-record-failure test |
+| IT-03 | `PaymentControllerWebTest.recallsSearch_returnsRows`, `recallsSearch_invalidType_returns400`, `recallsDetails_foundAndMissing` | client-adapters: `RestRecallControllerTest` | UUID ids; invalid type via `UnknownRecallTypeException` from the mocked port |
+| IT-03 | recall rows of `PaymentControllerWebTest` error-contract tests | unchanged in bootstrap, mocks swapped to `SearchRecalls` / `GetRecallDetails` | move in IT-07 |
+| IT-03 | `PaymentRepositoryUnitTest.recallSearch_alwaysUsesHardcodedLimitOf50`, `recallSearch_appliesFilters`, `recallFindById_foundAndMissing`, `should_treat_date_only_recall_bounds_as_start_of_day_and_ignore_unparsable_ones` (6 rows), `should_order_recalls_by_initiated_at_descending`, `should_accept_recall_without_amount_and_currency` | infrastructure-adapters: `JpaRecallRepositoryAdapterTest` (same seeds and expectations; find-by-id split) | plus 1 new upsert test |
+| IT-03 | `PaymentRepositoryUnitTest.should_reject_malformed_original_payment_id_filter_with_invalid_uuid_message` | domain: `RecallSearchCriteriaTest.should_reject_a_malformed_original_payment_id_with_the_uuid_message` | same input `xyz`, same message (approved Q3) |
+| IT-03 | `PaymentApplicationIntegrationTest` | unchanged assertions; injected `RecallListener` replaced by `KafkaRecallListener` | |
 
 ## 12. Risks and Open Issues
 
@@ -400,6 +410,20 @@ AC-01..AC-21 of the migration agent and MAC-01..MAC-08 of `ddd-test-coverage.md`
 
 | 2026-11-12 | IT-02 (3rd gate rework) | final compilation gate `mvn -B clean verify` (Docker) | exit 0; domain 142, client-adapters 15, infrastructure-adapters 15, bootstrap 317 = 489 tests, 0 failures; per-class counts identical to the previous run |
 
+| 2026-11-12 | IT-03 | `mvn -B test -Dtest='DomainIsolationTest'` with AR-02 before migration | 6 tests GREEN (AR-02 guard: only `sharedkernel` and `suspended` slices) |
+| 2026-11-12 | IT-03 | `mvn -B -pl domain test` with stubs | 164 tests: 22 assertion failures (all new recall tests), 0 errors |
+| 2026-11-12 | IT-03 | `mvn -B -pl domain test` after implementation | 164 tests, 0 failures |
+| 2026-11-12 | IT-03 | `mvn -B test -pl domain,infrastructure-adapters -Dtest='JpaRecall*'` with stubs | 15 tests: 15 assertion failures, 0 errors |
+| 2026-11-12 | IT-03 | `mvn -B test -pl domain,infrastructure-adapters` after implementation | 30 tests, 0 failures |
+| 2026-11-12 | IT-03 | `mvn -B test -pl domain,client-adapters -Dtest='*Recall*'` with stubs | 21 tests: 16 assertion failures, 0 errors; 5 passing on the no-op stubs (malformed JSON swallowed, annotation check, 3 dropped-event rows) |
+| 2026-11-12 | IT-03 | `mvn -B test -pl domain,client-adapters` after implementation | 36 tests, 0 failures |
+| 2026-11-12 | IT-03 | final compilation gate `mvn -B clean verify` (Docker) | exit 0; domain 164, client-adapters 36, infrastructure-adapters 30, bootstrap 282 = 512 tests, 0 failures |
+| 2026-11-12 | IT-03 | AR-02 mutation (`Recall` returning `SuspendedPayment`) | AR-02 RED; reverted |
+
+| 2026-11-12 | IT-03 (gate rework) | `Record<X>` → `Persist<X>` rename in Suspended (`git mv`) and Recalls; `mvn -B clean verify` (Docker) | exit 0; 512 tests, 0 failures; per-class counts identical apart from the renamed test classes |
+
+| 2026-11-12 | IT-03 (commit 1 isolation) | temporary worktree from `47ad475` + only the Suspended rename files and the IDD/TLD naming notes; `mvn -B clean verify` | exit 0; 489 tests, 0 failures; committed as `98e278c`, tree identical to the verified worktree |
+
 ### IT-01 findings (confirmed at the IT-01 gate, 2026-11-12: F-01 (a), F-02..F-04 (a))
 
 - **F-01 `MalformedDateException` message.** Legacy `Date.valueOf` throws a `NumberFormatException` *with* a message for a non-numeric field (e.g. `2026-1x-05` gives `Error at index 1 in: "1x"`), which the legacy handler renders as the 400 body instead of `Bad request`. `IsoDateBound` therefore carries that message (null for shape/range errors). `technical-layer-design.md` §7 shows `MalformedDateException` → `{"error":"Bad request"}` only; parity requires the REST handler (IT-05/IT-06) to render `message ?? "Bad request"`.
@@ -431,3 +455,7 @@ AC-01..AC-21 of the migration agent and MAC-01..MAC-08 of `ddd-test-coverage.md`
 | 2026-11-12 | IT-02 gate (2nd) Q1–Q4 | (a) model/use-case split by `*Service` naming, input-port implementations must be `*Service`; (a) intra-context package cycle accepted as inherent, `CyclesTest` stays at top-level packages; AR-06 approved (port.out as domain-service ring, no optional layers, composition-root ring); commit not yet |
 | 2026-11-12 | IT-02 gate (3rd) Q1–Q3 | (b) `command` and `query` entirely in the domain-model ring (package-based); user: "adapters can use queries and commands" (AR-08/AR-09 keep forbidding `*Service` and the opposite port package); commit not yet |
 | 2026-11-12 | IT-02 gate (4th) | (a) relaxed protections accepted; IT-02 **APPROVED AND COMMIT** |
+| 2026-11-12 | IT-03 scope gate Q1–Q4 | (a) recall VOs and exception in `domain/recall/`; (a) AR-02 with the shared kernel ignored by definition; (a) test remaps approved; (a) IT-03 scope approved |
+| 2026-11-12 | IT-03 gate A | Change requested. User: "replace record by persist in RecordRecall and RecordSuspendedPayment". Applied to Suspended (committed in IT-02, `git mv`) and Recalls; template `Persist<X>` / `Persist<X>Service` / `Persist<X>Command` for IT-04..IT-06 |
+| 2026-11-12 | IT-03 gate Q1 | (a) stricter exact-message assertion approved |
+| 2026-11-12 | IT-03 gate (2nd) Q1–Q3 | (a) port method `persist(...)` kept (template); (b) two commits (Suspended rename, then Recalls); IT-03 **APPROVED** |

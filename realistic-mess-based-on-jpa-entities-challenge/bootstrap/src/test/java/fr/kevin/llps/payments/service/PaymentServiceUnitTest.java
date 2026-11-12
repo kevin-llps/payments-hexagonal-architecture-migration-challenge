@@ -29,14 +29,10 @@ import fr.kevin.llps.payments.dto.InstantPaymentResponse;
 import fr.kevin.llps.payments.dto.InstantPaymentSearchRequest;
 import fr.kevin.llps.payments.dto.OutboundPaymentResponse;
 import fr.kevin.llps.payments.dto.OutboundPaymentSearchRequest;
-import fr.kevin.llps.payments.dto.RecallResponse;
-import fr.kevin.llps.payments.dto.RecallSearchRequest;
 import fr.kevin.llps.payments.entity.OutboundPayment;
-import fr.kevin.llps.payments.entity.Recall;
 import fr.kevin.llps.payments.repository.InboundPaymentRepository;
 import fr.kevin.llps.payments.repository.InstantPaymentRepository;
 import fr.kevin.llps.payments.repository.OutboundPaymentRepository;
-import fr.kevin.llps.payments.repository.RecallRepository;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentServiceUnitTest {
@@ -47,8 +43,6 @@ class PaymentServiceUnitTest {
     private InboundPaymentRepository inboundRepository;
     @Mock
     private OutboundPaymentRepository outboundRepository;
-    @Mock
-    private RecallRepository recallRepository;
 
     @InjectMocks
     private InstantPaymentService instantService;
@@ -56,8 +50,6 @@ class PaymentServiceUnitTest {
     private InboundPaymentService inboundService;
     @InjectMocks
     private OutboundPaymentService outboundService;
-    @InjectMocks
-    private RecallService recallService;
 
     // ---------------- instant ----------------
 
@@ -163,55 +155,6 @@ class PaymentServiceUnitTest {
         return payment;
     }
 
-    // ---------------- recalls ----------------
-
-    @Test
-    void recallSearch_invalidType_throws() {
-        RecallSearchRequest request = new RecallSearchRequest();
-        request.recallType = "NOPE";
-
-        assertThatThrownBy(() -> recallService.search(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Unknown recall type");
-    }
-
-    @Test
-    void recallSearch_mapsFieldsAndFormatsDates() {
-        Recall recall = new Recall();
-        recall.id = UUID.fromString("00000000-0000-0000-0000-000000000501");
-        recall.recallReference = "RCL-1";
-        recall.recallType = "R-COR";
-        recall.originalPaymentId = UUID.fromString("00000000-0000-0000-0000-000000000401");
-        recall.originalPaymentType = "OUTBOUND";
-        recall.reasonCode = "AC04";
-        recall.amount = new BigDecimal("300.00");
-        recall.currency = "EUR";
-        recall.initiatedAt = Timestamp.valueOf("2026-10-16 12:00:00");
-        recall.deadline = Date.valueOf("2026-10-18");
-        recall.status = "INITIATED";
-        when(recallRepository.search(any())).thenReturn(List.of(recall));
-
-        RecallSearchRequest request = new RecallSearchRequest();
-        request.recallType = "r-cor";
-        RecallResponse response = recallService.search(request).get(0);
-
-        assertThat(response.initiatedAt).isEqualTo("2026-10-16T12:00:00");
-        assertThat(response.deadline).isEqualTo("2026-10-18");
-        assertThat(response.reasonCode).isEqualTo("AC04");
-        assertThat(response.originalPaymentId).isEqualTo("00000000-0000-0000-0000-000000000401");
-    }
-
-    @Test
-    void recallGetById_foundAndMissing() {
-        Recall recall = new Recall();
-        recall.id = UUID.fromString("00000000-0000-0000-0000-000000000501");
-        when(recallRepository.findById("00000000-0000-0000-0000-000000000501")).thenReturn(recall);
-        when(recallRepository.findById("nope")).thenReturn(null);
-
-        assertThat(recallService.getById("00000000-0000-0000-0000-000000000501")).isNotNull();
-        assertThat(recallService.getById("nope")).isNull();
-    }
-
     // ---------------- characterization: Instant IBAN filter validation (BR-INS-01, BR-INS-02, BR-SHR-04) ----------------
 
     @Test
@@ -271,52 +214,6 @@ class PaymentServiceUnitTest {
         // THEN
         assertThat(result).isEmpty();
         verify(instantRepository).search(request);
-    }
-
-    // ---------------- characterization: Recall type filter validation (BR-RCL-01) ----------------
-
-    @ParameterizedTest(name = "[{index}] recallType \"{0}\" accepted")
-    @ValueSource(strings = {"R-REJ", "R-COR", "R-UPD", " r-rej ", "r-cor", "R-upd"})
-    void should_accept_allowed_recall_types_trimmed_and_case_insensitive(String recallType) {
-        // GIVEN
-        RecallSearchRequest request = new RecallSearchRequest();
-        request.recallType = recallType;
-        when(recallRepository.search(request)).thenReturn(List.of());
-
-        // WHEN
-        List<RecallResponse> result = recallService.search(request);
-
-        // THEN
-        assertThat(result).isEmpty();
-        verify(recallRepository).search(request);
-    }
-
-    @Test
-    void should_reject_unknown_recall_type_with_raw_input_in_message() {
-        // GIVEN
-        RecallSearchRequest request = new RecallSearchRequest();
-        request.recallType = " nope ";
-
-        // WHEN / THEN
-        assertThatThrownBy(() -> recallService.search(request))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("Unknown recall type:  nope ");
-        verifyNoInteractions(recallRepository);
-    }
-
-    @Test
-    void should_ignore_blank_recall_type_filter() {
-        // GIVEN
-        RecallSearchRequest request = new RecallSearchRequest();
-        request.recallType = "  ";
-        when(recallRepository.search(request)).thenReturn(List.of());
-
-        // WHEN
-        List<RecallResponse> result = recallService.search(request);
-
-        // THEN
-        assertThat(result).isEmpty();
-        verify(recallRepository).search(request);
     }
 
     // ---------------- characterization: Outbound search fee policy (BR-OUT-06, BR-OUT-08) ----------------

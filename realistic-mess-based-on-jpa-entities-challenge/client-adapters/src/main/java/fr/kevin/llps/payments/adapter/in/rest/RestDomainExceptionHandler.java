@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import fr.kevin.llps.payments.domain.recall.UnknownRecallTypeException;
 import fr.kevin.llps.payments.domain.sharedkernel.InvalidPaymentIdException;
 import fr.kevin.llps.payments.domain.sharedkernel.NegativeSearchLimitException;
 
@@ -23,6 +24,11 @@ public class RestDomainExceptionHandler {
 
     @ExceptionHandler(InvalidPaymentIdException.class)
     public ResponseEntity<Map<String, Object>> handleInvalidPaymentId(InvalidPaymentIdException exception) {
+        return badRequest(exception.getMessage());
+    }
+
+    @ExceptionHandler(UnknownRecallTypeException.class)
+    public ResponseEntity<Map<String, Object>> handleUnknownRecallType(UnknownRecallTypeException exception) {
         return badRequest(exception.getMessage());
     }
 
