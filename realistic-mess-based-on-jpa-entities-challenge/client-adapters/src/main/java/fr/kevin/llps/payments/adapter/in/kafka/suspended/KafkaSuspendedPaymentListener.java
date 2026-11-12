@@ -14,12 +14,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import fr.kevin.llps.payments.domain.sharedkernel.PaymentId;
-import fr.kevin.llps.payments.domain.suspended.command.RecordSuspendedPaymentCommand;
-import fr.kevin.llps.payments.domain.suspended.port.in.RecordSuspendedPayment;
+import fr.kevin.llps.payments.domain.suspended.command.PersistSuspendedPaymentCommand;
+import fr.kevin.llps.payments.domain.suspended.port.in.PersistSuspendedPayment;
 
 /**
  * Consumes {@code pay.suspended} with the legacy parsing grammar (BR-ING-01..09, BR-ING-12). Any parsing or
- * recording failure is logged and the event skipped (BR-ING-05); the transaction commits after the {@code try}, so
+ * persisting failure is logged and the event skipped (BR-ING-05); the transaction commits after the {@code try}, so
  * commit-time violations still propagate (BR-ING-06).
  */
 @Component
@@ -31,10 +31,10 @@ public class KafkaSuspendedPaymentListener {
 
     // A private mapper, not Spring's, so that number parsing cannot drift from the legacy listener (TD-11).
     private final ObjectMapper mapper = new ObjectMapper();
-    private final RecordSuspendedPayment recordSuspendedPayment;
+    private final PersistSuspendedPayment persistSuspendedPayment;
 
-    public KafkaSuspendedPaymentListener(RecordSuspendedPayment recordSuspendedPayment) {
-        this.recordSuspendedPayment = recordSuspendedPayment;
+    public KafkaSuspendedPaymentListener(PersistSuspendedPayment persistSuspendedPayment) {
+        this.persistSuspendedPayment = persistSuspendedPayment;
     }
 
     @KafkaListener(topics = "pay.suspended", groupId = "jpa-suspended-group")
@@ -42,7 +42,7 @@ public class KafkaSuspendedPaymentListener {
     public void onMessage(String raw) {
         try {
             JsonNode node = mapper.readTree(raw);
-            recordSuspendedPayment.record(new RecordSuspendedPaymentCommand(
+            persistSuspendedPayment.persist(new PersistSuspendedPaymentCommand(
                     PaymentId.of(UUID.fromString(node.path("id").asText())),
                     node.path("amount").decimalValue(),
                     node.path("currency").asText(),

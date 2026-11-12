@@ -15,7 +15,7 @@ The module is a read-only payment back-office: five record types are upserted fr
 This design defines, for each of the five unchanged Bounded Contexts plus the Shared Kernel:
 
 - an **isolated, framework-free domain** (immutable final classes with `Optional` accessors, `java.time`, open-string codes) that owns search-criteria semantics, limit policy, date grammars, IBAN-length and recall-type validation, the two outbound fee policies and the inbound age computation;
-- **25 ports**: per context 3 application-owned input ports (`Search<X>s`, `Get<X>Details`, `Record<X>`) and 2 domain-owned repository ports (`Load<X>s`, `Save<X>`); time comes from an injected JDK `java.time.Clock` (no custom port);
+- **25 ports**: per context 3 application-owned input ports (`Search<X>s`, `Get<X>Details`, `Persist<X>`) and 2 domain-owned repository ports (`Load<X>s`, `Save<X>`); time comes from an injected JDK `java.time.Clock` (no custom port);
 - a **mapping boundary** `Domain aggregate <-> Jpa<X>Mapper <-> existing JPA entity`; entities, `schema.sql` and `data.sql` stay unchanged;
 - an **error contract** preserved bit-for-bit through independent domain exceptions (`RuntimeException`) with one explicit REST handler each, plus the unchanged legacy handlers as a safety net;
 - an **incremental extraction strategy** (one context per iteration, lowest risk first) with design risks DR-R1..DR-R11.
@@ -104,7 +104,7 @@ fr.kevin.llps.payments.domain.<ctx>.port.in    input-port interfaces only
 fr.kevin.llps.payments.domain.<ctx>.port.out   output (repository) port interfaces only: Load<X>s, Save<X>
 ```
 
-<ctx> is one of instant, suspended, inbound, outbound, recall. Example (suspended, template for every context): `domain.suspended` holds `SuspendedPayment`, `SearchSuspendedPaymentsService`, `GetSuspendedPaymentDetailsService`, `RecordSuspendedPaymentService`; `domain.suspended.command` holds `RecordSuspendedPaymentCommand`; `domain.suspended.query` holds `SuspendedPaymentSearchCriteria` and `SuspendedPaymentSearchQuery`; `domain.suspended.port.in` holds `SearchSuspendedPayments`, `GetSuspendedPaymentDetails`, `RecordSuspendedPayment`; `domain.suspended.port.out` holds `LoadSuspendedPayments`, `SaveSuspendedPayment`. Views such as `InboundPaymentView` / `OutboundPaymentWithFee` are use-case outputs and will be placed when their contexts migrate.
+<ctx> is one of instant, suspended, inbound, outbound, recall. Example (suspended, template for every context): `domain.suspended` holds `SuspendedPayment`, `SearchSuspendedPaymentsService`, `GetSuspendedPaymentDetailsService`, `PersistSuspendedPaymentService`; `domain.suspended.command` holds `PersistSuspendedPaymentCommand`; `domain.suspended.query` holds `SuspendedPaymentSearchCriteria` and `SuspendedPaymentSearchQuery`; `domain.suspended.port.in` holds `SearchSuspendedPayments`, `GetSuspendedPaymentDetails`, `PersistSuspendedPayment`; `domain.suspended.port.out` holds `LoadSuspendedPayments`, `SaveSuspendedPayment`. Views such as `InboundPaymentView` / `OutboundPaymentWithFee` are use-case outputs and will be placed when their contexts migrate.
 
 The physical split was decided in Phase 4/5: the Maven `domain` module holds the model, the use-case services and both port packages (layout revised at the Phase 5 IT-02 gate, 2026-11-12: no `usecase` package). The rules below hold; "domain model" means every domain class outside the `port` packages that is not a use-case service (`*Service`): aggregates, the `command` and `query` packages and the shared kernel (IT-02 gate, 3rd presentation).
 
@@ -586,7 +586,7 @@ classDiagram
 | BR-RCL-01, BR-RCL-03 | `RecallSearchCriteria.from` (+ `PaymentId.parse`) | service + repository |
 | BR-RCL-07 | `OriginalPaymentReference` (no check) | entity, listener |
 | BR-API-01..09 | REST adapters + exception handlers (§11.3) | controllers, `GlobalExceptionHandler` |
-| BR-ING-01..12 | Kafka adapters (+ `Record<X>` use cases for BR-ING-03/04) | listeners |
+| BR-ING-01..12 | Kafka adapters (+ `Persist<X>` use cases for BR-ING-03/04) | listeners |
 | BR-DAT-01..03 | Persistence adapter / test infrastructure, unchanged | `schema.sql`, `data.sql`, IT |
 
 Invariants: aggregates carry no cross-field invariant today; the only domain-enforced constraints are the search-input rules above. Persistence constraints (lengths, NOT NULL, scale 2) are deliberately **not** enforced in the domain (G-05, DR-R7).
@@ -629,27 +629,27 @@ Ports per context `<X>` ∈ {Instant (INS), Suspended (SUS), Inbound (INB), Outb
 |---|---|---|---|---|---|
 | P-INS-IN-1 | `SearchInstantPayments` | Input | Application | `search(InstantPaymentSearchQuery)` | raw filter strings + `Integer limit` → `List<InstantPayment>` |
 | P-INS-IN-2 | `GetInstantPaymentDetails` | Input | Application | `getDetails(PaymentId)` | → `Optional<InstantPayment>` |
-| P-INS-IN-3 | `RecordInstantPayment` | Input | Application | `record(RecordInstantPaymentCommand)` | parsed `java.time`/`UUID`/`BigDecimal` values → `void` |
+| P-INS-IN-3 | `PersistInstantPayment` | Input | Application | `persist(PersistInstantPaymentCommand)` | parsed `java.time`/`UUID`/`BigDecimal` values → `void` |
 | P-INS-OUT-1 | `LoadInstantPayments` | Repository | Domain | `search(InstantPaymentSearchCriteria)`, `findById(PaymentId)` | → `List<InstantPayment>`, `Optional<InstantPayment>` |
 | P-INS-OUT-2 | `SaveInstantPayment` | Repository | Domain | `save(InstantPayment)` | full-replace upsert |
 | P-SUS-IN-1 | `SearchSuspendedPayments` | Input | Application | `search(SuspendedPaymentSearchQuery)` | → `List<SuspendedPayment>` |
 | P-SUS-IN-2 | `GetSuspendedPaymentDetails` | Input | Application | `getDetails(PaymentId)` | → `Optional<SuspendedPayment>` |
-| P-SUS-IN-3 | `RecordSuspendedPayment` | Input | Application | `record(RecordSuspendedPaymentCommand)` | → `void` |
+| P-SUS-IN-3 | `PersistSuspendedPayment` | Input | Application | `persist(PersistSuspendedPaymentCommand)` | → `void` |
 | P-SUS-OUT-1 | `LoadSuspendedPayments` | Repository | Domain | `search(SuspendedPaymentSearchCriteria)`, `findById(PaymentId)` | |
 | P-SUS-OUT-2 | `SaveSuspendedPayment` | Repository | Domain | `save(SuspendedPayment)` | |
 | P-INB-IN-1 | `SearchInboundPayments` | Input | Application | `search(InboundPaymentSearchQuery)` | → `List<InboundPaymentView>` |
 | P-INB-IN-2 | `GetInboundPaymentDetails` | Input | Application | `getDetails(PaymentId)` | → `Optional<InboundPaymentView>` |
-| P-INB-IN-3 | `RecordInboundPayment` | Input | Application | `record(RecordInboundPaymentCommand)` | → `void` |
+| P-INB-IN-3 | `PersistInboundPayment` | Input | Application | `persist(PersistInboundPaymentCommand)` | → `void` |
 | P-INB-OUT-1 | `LoadInboundPayments` | Repository | Domain | `search(InboundPaymentSearchCriteria)`, `findById(PaymentId)` | |
 | P-INB-OUT-2 | `SaveInboundPayment` | Repository | Domain | `save(InboundPayment)` | |
 | P-OUT-IN-1 | `SearchOutboundPayments` | Input | Application | `search(OutboundPaymentSearchQuery)` | → `List<OutboundPaymentWithFee>` (search fee) |
 | P-OUT-IN-2 | `GetOutboundPaymentDetails` | Input | Application | `getDetails(PaymentId)` | → `Optional<OutboundPaymentWithFee>` (details fee) |
-| P-OUT-IN-3 | `RecordOutboundPayment` | Input | Application | `record(RecordOutboundPaymentCommand)` | → `void` |
+| P-OUT-IN-3 | `PersistOutboundPayment` | Input | Application | `persist(PersistOutboundPaymentCommand)` | → `void` |
 | P-OUT-OUT-1 | `LoadOutboundPayments` | Repository | Domain | `search(OutboundPaymentSearchCriteria)`, `findById(PaymentId)` | |
 | P-OUT-OUT-2 | `SaveOutboundPayment` | Repository | Domain | `save(OutboundPayment)` | |
 | P-RCL-IN-1 | `SearchRecalls` | Input | Application | `search(RecallSearchQuery)` | → `List<Recall>` (query limit ignored) |
 | P-RCL-IN-2 | `GetRecallDetails` | Input | Application | `getDetails(PaymentId)` | → `Optional<Recall>` |
-| P-RCL-IN-3 | `RecordRecall` | Input | Application | `record(RecordRecallCommand)` | → `void` |
+| P-RCL-IN-3 | `PersistRecall` | Input | Application | `persist(PersistRecallCommand)` | → `void` |
 | P-RCL-OUT-1 | `LoadRecalls` | Repository | Domain | `search(RecallSearchCriteria)`, `findById(PaymentId)` | |
 | P-RCL-OUT-2 | `SaveRecall` | Repository | Domain | `save(Recall)` | |
 
@@ -666,7 +666,7 @@ Not a port: **time**. Use cases receive the JDK `java.time.Clock` by constructor
 |---|---|
 | `Search<X>s` | 1. `<X>SearchCriteria.from(raw query)` (domain validation, legacy error order, limit last). 2. `Load<X>s.search(criteria)`. 3. Inbound: add `ageInDaysOn(today)`; Outbound: add `SearchFeePolicy.estimate`. |
 | `Get<X>Details` | 1. `Load<X>s.findById(id)`. 2. Inbound: add `ageInDaysOn(today)`; Outbound: add `DetailsFeePolicy.estimate`. |
-| `Record<X>` | 1. `now = LocalDateTime.now(clock)` (one reading for `createdAt` and `updatedAt`, BR-ING-04). 2. Build the aggregate from the command. 3. `Save<X>.save(aggregate)`. |
+| `Persist<X>` | 1. `now = LocalDateTime.now(clock)` (one reading for `createdAt` and `updatedAt`, BR-ING-04). 2. Build the aggregate from the command. 3. `Save<X>.save(aggregate)`. |
 
 ### 11.3 REST error mapping (Gate 2 Q3: independent exceptions, one explicit handler each)
 
@@ -686,7 +686,7 @@ Kept unchanged (Gate 2 Q5): `GlobalExceptionHandler` handlers for `IllegalArgume
 | Port group | Justification | Ownership rationale |
 |---|---|---|
 | `Search<X>s`, `Get<X>Details` | Two REST endpoints per type with different results (outbound fee policies, C-01); keeps business validation inside the hexagon (criteria built from the raw query in the use case, so error order is centrally controlled). | Application: they expose use cases. |
-| `Record<X>` | Kafka is the only write path; separates JSON parsing (adapter) from aggregate construction and audit timestamps (application). | Application. |
+| `Persist<X>` | Kafka is the only write path; separates JSON parsing (adapter) from aggregate construction and audit timestamps (application). | Application. |
 | `Load<X>s` | Read side for search and details; ISP split from save because the read use cases never write. | Domain, per context package (Gate 2 Q4): collection-like abstraction of the aggregate in domain types. |
 | `Save<X>` | Write side for ingestion only. | Domain (Gate 2 Q4). |
 | (no clock port) | JDK `Clock` suffices (Gate 2 Q1). | — |
@@ -700,7 +700,7 @@ Alternatives considered and rejected are listed in §20.
 |---|---|---|---|---|---|---|
 | `Search<X>s` | `<X>Controller.search` calls the port instead of `<X>Service`; maps results to the existing `*Response` DTOs (formats per BR-SHR-05) | — | new `Search<X>sService` replaces `<X>Service.search` | — | — | new handlers §11.3 |
 | `Get<X>Details` | `<X>Controller.get`: trims id (4 types) or not (outbound), `PaymentId.parse`, 404 when empty; outbound builds the snake_case map (BR-OUT-09) and stops injecting `EntityManager` | — | new `Get<X>DetailsService` | — | — | idem |
-| `Record<X>` | — | listener keeps JSON parsing, defaults, group id, `@Transactional`, swallow; calls the port instead of `em.merge` | new `Record<X>Service` | — | — | — |
+| `Persist<X>` | — | listener keeps JSON parsing, defaults, group id, `@Transactional`, swallow; calls the port instead of `em.merge` | new `Persist<X>Service` | — | — | — |
 | `Load<X>s` | — | — | used by search/details services | `<X>Repository` becomes `Jpa<X>RepositoryAdapter` (criteria in, aggregates out) | read via `Jpa<X>Mapper` | — |
 | `Save<X>` | — | — | used by record service | same adapter, `em.merge` | written via `Jpa<X>Mapper` | — |
 
@@ -743,11 +743,11 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant K as Kafka listener (Transactional)
-    participant R as RecordInboundPayment service
+    participant R as PersistInboundPayment service
     participant S as SaveInboundPayment
     participant J as JpaInboundPaymentRepositoryAdapter
     K->>K: parse JSON, BR-ING-07 and 09
-    K->>R: record(command)
+    K->>R: persist(command)
     R->>R: now from Clock, build aggregate
     R->>S: save(aggregate)
     S->>J: implemented by, em.merge
@@ -766,7 +766,7 @@ flowchart LR
     subgraph APP[Application layer]
         IN1[[Search X s]]
         IN2[[Get X Details]]
-        IN3[[Record X]]
+        IN3[[Persist X]]
         UC[Use case services]
     end
     subgraph DOM[Domain]
@@ -893,6 +893,7 @@ Unresolved:
 | 2026-11-12 | Gate 2 Q5 | Legacy IAE / `InvalidDataAccessApiUsageException` handlers | (a) keep unchanged as safety net; `GlobalExceptionHandlerTest` stays green |
 | 2026-11-12 | Gate 2 Q6 | Port design | (a) APPROVED with answers 1-5 applied |
 | 2026-11-12 | Phase 5 IT-01 gate (user-approved) | Shared Kernel implementation notes | F-01..F-04 recorded in §6.3 |
+| 2026-11-12 | Phase 5 IT-03 gate (user-approved change) | Naming of the write input port | User: "replace record by persist in RecordRecall and RecordSuspendedPayment". `Record<X>` → `Persist<X>`, `Record<X>Service` → `Persist<X>Service`, `Record<X>Command` → `Persist<X>Command`, port method `record(...)` → `persist(...)`; template for every context; output ports `Save<X>` unchanged. |
 | 2026-11-12 | Phase 5 IT-02 gate, 3rd presentation (user-approved) | Ring of `command` / `query` | (b) `command` and `query` belong entirely to the domain model; user: "adapters can use queries and commands". DR-6 reworded. |
 | 2026-11-12 | Phase 5 IT-02 gate, 2nd presentation (user-approved change) | `command` and `query` packages | User: "can you move commands classes in command package and do the same for criteria", then "replace package criteria package by query". Per context: `command` (`*Command`) and `query` (`*Query`, `*Criteria`); `port.in` / `port.out` hold interfaces only; template for every context. |
 | 2026-11-12 | Phase 5 IT-02 gate (user-approved change) | Package layout per context | User: "do not use usecase package. port.out package is missing". Use-case services move to the context package `domain.<ctx>` (`*Service`), input ports to `domain.<ctx>.port.in`, output ports to `domain.<ctx>.port.out`; supersedes the IT-00 `usecase` layout; DR-2 and DR-6 reworded. |
@@ -921,7 +922,7 @@ Change summary:
 2. One context per iteration, lowest risk first: **Suspended → Recalls → Instant → Inbound → Outbound**. Per iteration:
    1. domain classes (TDD, pure unit tests);
    2. `Jpa<X>RepositoryAdapter` + `Jpa<X>Mapper` behind `Load<X>s` / `Save<X>`;
-   3. use cases (`Search`, `Get`, `Record`) with a fixed `Clock`;
+   3. use cases (`Search`, `Get`, `Persist`) with a fixed `Clock`;
    4. REST adapter switch + explicit exception handlers for the context's exceptions;
    5. Kafka adapter switch (keep `@Transactional` on the listener);
    6. delete the legacy classes of that context, remap their tests (assertions unchanged, MAC-07);
@@ -931,7 +932,7 @@ Change summary:
 ### 22.3 Test remapping
 
 - `PaymentServiceUnitTest` → domain and use-case tests.
-- `KafkaListenerUnitTest` → Kafka adapter tests mocking `Record<X>`.
+- `KafkaListenerUnitTest` → Kafka adapter tests mocking `Persist<X>`.
 - `PaymentControllerWebTest` → `@MockitoBean` on input ports; the `EntityManager` mocks become removable only once outbound details no longer injects `EntityManager` (approval needed then).
 - `PaymentRepositoryUnitTest` → JPA adapter tests (Docker).
 - Approved retirements: `outboundGetById_foundAndMissing`; the two BR-INB-08 structural tests (remapped to use-case tests); `PaymentUtilsTest` unused-helper tests at the end.

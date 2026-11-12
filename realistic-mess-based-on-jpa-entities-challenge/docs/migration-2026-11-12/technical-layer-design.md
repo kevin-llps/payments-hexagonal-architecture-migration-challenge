@@ -54,7 +54,7 @@ None of the following exist today: scheduled jobs, external API clients, securit
 
 Dependencies point inward:
 
-- **Driving adapters** (REST controllers and the REST exception handler; Kafka listeners) call **application input ports** (`Search<X>s`, `Get<X>Details`, `Record<X>`).
+- **Driving adapters** (REST controllers and the REST exception handler; Kafka listeners) call **application input ports** (`Search<X>s`, `Get<X>Details`, `Persist<X>`).
 - **Plain-Java use-case services** implement those ports. They orchestrate the **isolated domain**: aggregates, criteria, fee policies, `ageInDaysOn` and the Shared Kernel.
 - The use cases reach persistence through **domain-owned repository ports** (`Load<X>s`, `Save<X>`), which the **JPA persistence adapter** implements.
 - Per context, the `domain` Maven module holds the aggregate and the use-case services (`*Service`) in `domain.<ctx>`, commands in `domain.<ctx>.command`, search queries and criteria in `domain.<ctx>.query`, input-port interfaces in `domain.<ctx>.port.in` and output-port interfaces in `domain.<ctx>.port.out`, next to `domain.sharedkernel`; the REST and Kafka adapters in `client-adapters`; the JPA adapter in `infrastructure-adapters`.
@@ -79,7 +79,7 @@ flowchart LR
         KL["Kafka X Listener x5 Transactional onMessage"]
     end
     subgraph APPM[domain module: use-case services and port.in]
-        PIN[["Search X s / Get X Details / Record X"]]
+        PIN[["Search X s / Get X Details / Persist X"]]
         SVC["Use case services x15"]
     end
     subgraph DOMM[domain module: domain-model packages]
@@ -229,7 +229,7 @@ ArchUnit (§9) also covers the other package-level rules.
 |---|---|---|---|---|---|---|---|---|
 | P-<X>-IN-1 | `Search<X>s` | inbound | application | `Rest<X>Controller.search` (REST, driving) calls it; `Search<X>sService` implements it | `<X>Controller.search` + `<X>Service.search` (+ `<X>Repository.search` parsing) | request params → `<X>SearchQuery` record (raw `String`s + `Integer limit`); domain results → `<X>Response` record (same JSON field names, null values serialized) | domain exceptions → `RestDomainExceptionHandler` (§7) | URL, params, error order, limits, ordering, formats |
 | P-<X>-IN-2 | `Get<X>Details` | inbound | application | `Rest<X>Controller.get`; `Get<X>DetailsService` | `<X>Controller.get` + `<X>Service.getById` (outbound: controller + `EntityManager.find`) | path id → trim (not outbound) → `PaymentId.parse`; `Optional` empty → 404 empty body | `InvalidPaymentIdException` → 400 (4 contexts) / caught → 404 (outbound, C-02) | details payloads, 404 contract |
-| P-<X>-IN-3 | `Record<X>` | inbound | application | `Kafka<X>Listener.onMessage` (Kafka, driving); `Record<X>Service` | legacy listener body up to `em.merge` | raw JSON → `Record<X>Command` record (`UUID`, `java.time`, `BigDecimal`, raw `String`s incl. `""`/`"null"` per BR-ING-07) | all exceptions inside the `try` swallowed + WARN; commit-time failures propagate | topic, `groupId`, BR-ING-01..12 |
+| P-<X>-IN-3 | `Persist<X>` | inbound | application | `Kafka<X>Listener.onMessage` (Kafka, driving); `Persist<X>Service` | legacy listener body up to `em.merge` | raw JSON → `Persist<X>Command` record (`UUID`, `java.time`, `BigDecimal`, raw `String`s incl. `""`/`"null"` per BR-ING-07) | all exceptions inside the `try` swallowed + WARN; commit-time failures propagate | topic, `groupId`, BR-ING-01..12 |
 | P-<X>-OUT-1 | `Load<X>s` | outbound | domain | `Jpa<X>RepositoryAdapter` (persistence, driven) | `<X>Repository.search`/`findById` | criteria → JPQL clauses + named params (`Timestamp`/`Date` built here) → `setMaxResults(criteria limit)` → entities → `Jpa<X>Mapper.toDomain`; `findById` → `em.find` → `Optional` | `@Repository` exception translation kept (A-T3) | operators, inclusive bounds, ordering, unescaped LIKE (DR-R10) |
 | P-<X>-OUT-2 | `Save<X>` | outbound | domain | same `Jpa<X>RepositoryAdapter` | listener `em.merge` | aggregate → `Jpa<X>Mapper.toEntity` → `em.merge` | none in the adapter; no flush, so violations surface at commit (BR-ING-06) | full-replace upsert keyed by payload id |
 
@@ -256,35 +256,35 @@ flowchart LR
     subgraph SUS[Suspended]
         S1[RestSuspendedPaymentController] --> S2[[SearchSuspendedPayments]]
         S1 --> S3[[GetSuspendedPaymentDetails]]
-        S4[KafkaSuspendedPaymentListener] --> S5[[RecordSuspendedPayment]]
+        S4[KafkaSuspendedPaymentListener] --> S5[[PersistSuspendedPayment]]
         S6[JpaSuspendedPaymentRepositoryAdapter] -. implements .-> S7[[LoadSuspendedPayments]]
         S6 -. implements .-> S8[[SaveSuspendedPayment]]
     end
     subgraph RCL[Recalls]
         R1[RestRecallController] --> R2[[SearchRecalls]]
         R1 --> R3[[GetRecallDetails]]
-        R4[KafkaRecallListener] --> R5[[RecordRecall]]
+        R4[KafkaRecallListener] --> R5[[PersistRecall]]
         R6[JpaRecallRepositoryAdapter] -. implements .-> R7[[LoadRecalls]]
         R6 -. implements .-> R8[[SaveRecall]]
     end
     subgraph INS[Instant]
         I1[RestInstantPaymentController] --> I2[[SearchInstantPayments]]
         I1 --> I3[[GetInstantPaymentDetails]]
-        I4[KafkaInstantPaymentListener] --> I5[[RecordInstantPayment]]
+        I4[KafkaInstantPaymentListener] --> I5[[PersistInstantPayment]]
         I6[JpaInstantPaymentRepositoryAdapter] -. implements .-> I7[[LoadInstantPayments]]
         I6 -. implements .-> I8[[SaveInstantPayment]]
     end
     subgraph INB[Inbound]
         B1[RestInboundPaymentController] --> B2[[SearchInboundPayments]]
         B1 --> B3[[GetInboundPaymentDetails]]
-        B4[KafkaInboundPaymentListener] --> B5[[RecordInboundPayment]]
+        B4[KafkaInboundPaymentListener] --> B5[[PersistInboundPayment]]
         B6[JpaInboundPaymentRepositoryAdapter] -. implements .-> B7[[LoadInboundPayments]]
         B6 -. implements .-> B8[[SaveInboundPayment]]
     end
     subgraph OUT[Outbound]
         O1[RestOutboundPaymentController] --> O2[[SearchOutboundPayments]]
         O1 --> O3[[GetOutboundPaymentDetails]]
-        O4[KafkaOutboundPaymentListener] --> O5[[RecordOutboundPayment]]
+        O4[KafkaOutboundPaymentListener] --> O5[[PersistOutboundPayment]]
         O6[JpaOutboundPaymentRepositoryAdapter] -. implements .-> O7[[LoadOutboundPayments]]
         O6 -. implements .-> O8[[SaveOutboundPayment]]
     end
@@ -305,19 +305,19 @@ All services are plain Java `final` classes named `*Service` in the context pack
 |---|---|---|---|
 | `SearchSuspendedPaymentsService` | `SearchSuspendedPayments` | `LoadSuspendedPayments` | `SuspendedPaymentSearchCriteria.from(...)` → `load.search` |
 | `GetSuspendedPaymentDetailsService` | `GetSuspendedPaymentDetails` | `LoadSuspendedPayments` | `load.findById` |
-| `RecordSuspendedPaymentService` | `RecordSuspendedPayment` | `SaveSuspendedPayment`, `Clock` | `now(clock)` once → aggregate → `save` |
+| `PersistSuspendedPaymentService` | `PersistSuspendedPayment` | `SaveSuspendedPayment`, `Clock` | `now(clock)` once → aggregate → `save` |
 | `SearchRecallsService` | `SearchRecalls` | `LoadRecalls` | `RecallSearchCriteria.from(...)` (query `limit` ignored, `fixedDefault`) → `load.search` |
 | `GetRecallDetailsService` | `GetRecallDetails` | `LoadRecalls` | `load.findById` |
-| `RecordRecallService` | `RecordRecall` | `SaveRecall`, `Clock` | as above |
+| `PersistRecallService` | `PersistRecall` | `SaveRecall`, `Clock` | as above |
 | `SearchInstantPaymentsService` | `SearchInstantPayments` | `LoadInstantPayments` | `InstantPaymentSearchCriteria.from(...)` → `load.search` |
 | `GetInstantPaymentDetailsService` | `GetInstantPaymentDetails` | `LoadInstantPayments` | `load.findById` |
-| `RecordInstantPaymentService` | `RecordInstantPayment` | `SaveInstantPayment`, `Clock` | as above |
+| `PersistInstantPaymentService` | `PersistInstantPayment` | `SaveInstantPayment`, `Clock` | as above |
 | `SearchInboundPaymentsService` | `SearchInboundPayments` | `LoadInboundPayments`, `Clock` | criteria → `load.search` → `InboundPaymentView(p, p.ageInDaysOn(LocalDate.now(clock)))` |
 | `GetInboundPaymentDetailsService` | `GetInboundPaymentDetails` | `LoadInboundPayments`, `Clock` | `load.findById` → same `InboundPaymentView` (single computation, D-07) |
-| `RecordInboundPaymentService` | `RecordInboundPayment` | `SaveInboundPayment`, `Clock` | as above |
+| `PersistInboundPaymentService` | `PersistInboundPayment` | `SaveInboundPayment`, `Clock` | as above |
 | `SearchOutboundPaymentsService` | `SearchOutboundPayments` | `LoadOutboundPayments`, `SearchFeePolicy` | criteria → `load.search` → `OutboundPaymentWithFee(p, searchFeePolicy.estimate(p))` |
 | `GetOutboundPaymentDetailsService` | `GetOutboundPaymentDetails` | `LoadOutboundPayments`, `DetailsFeePolicy` | `load.findById` → `OutboundPaymentWithFee(p, detailsFeePolicy.estimate(p))` |
-| `RecordOutboundPaymentService` | `RecordOutboundPayment` | `SaveOutboundPayment`, `Clock` | as above |
+| `PersistOutboundPaymentService` | `PersistOutboundPayment` | `SaveOutboundPayment`, `Clock` | as above |
 
 `SearchFeePolicy` and `DetailsFeePolicy` are concrete, stateless domain classes injected without an interface (DIP R17, LSP, D-16).
 
@@ -486,8 +486,8 @@ Any temporary exception must be narrow and reference its removal iteration. Know
 | Consumer config (String deserializers, auto-commit, `earliest`, `bootstrap-servers`) | `application.yml` | `bootstrap/src/main/resources/application.yml` | — | file moved, content unchanged |
 | Payload parsing: `asText()`, `""`/`"null"` → null for dates, `Timestamp.valueOf`/`Date.valueOf` grammars, `Z` stripping, 10-char date padding, scheme default `SCT INST`, recall dropped on bad `originalPaymentId` | listeners | Kafka listeners | P-<X>-IN-3 | parsing code kept identical in the adapter, including a private `new ObjectMapper()` per listener (not Spring's, so `decimalValue()` behaviour cannot drift); conversion to `java.time` after legacy parsing |
 | Upsert by payload id (full replace) | `em.merge` | `Jpa<X>RepositoryAdapter.save` | P-<X>-OUT-2 | `em.merge` of a freshly mapped entity |
-| Swallow + WARN on parse/persist error; commit-time violations propagate (BR-ING-06) | listeners | Kafka listeners | P-<X>-IN-3 | `try` covers parse + `record(...)`; `@Transactional` on `onMessage`; no flush anywhere |
-| `createdAt`/`updatedAt` = consumer time | listener (`currentTimeMillis` ×2) | `Record<X>Service` + `Clock` | P-<X>-IN-3 | one clock reading (DR-R9 accepted) |
+| Swallow + WARN on parse/persist error; commit-time violations propagate (BR-ING-06) | listeners | Kafka listeners | P-<X>-IN-3 | `try` covers parse + `persist(...)`; `@Transactional` on `onMessage`; no flush anywhere |
+| `createdAt`/`updatedAt` = consumer time | listener (`currentTimeMillis` ×2) | `Persist<X>Service` + `Clock` | P-<X>-IN-3 | one clock reading (DR-R9 accepted) |
 | DDL + destructive seed at every startup | `schema.sql`, `data.sql`, `sql.init.mode: always`, `ddl-auto: none` | `infrastructure-adapters` resources + bootstrap yml | — | contents unchanged (MAC-06); on bootstrap classpath via the jar |
 | Response date formats `yyyy-MM-dd'T'HH:mm:ss` / `yyyy-MM-dd` (local zone) | `PaymentUtils.FMT` / `DAY_FMT` | REST response mappers | — | `DateTimeFormatter` from `ApiDateTimeFormat` patterns, JVM default zone |
 | `PaymentUtils` helpers | `util` | deleted in the final iteration | — | D-09 |
@@ -527,10 +527,10 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant K as KafkaSuspendedPaymentListener (Transactional)
-    participant R as RecordSuspendedPaymentService
+    participant R as PersistSuspendedPaymentService
     participant J as JpaSuspendedPaymentRepositoryAdapter
     K->>K: parse JSON with legacy grammars into command
-    K->>R: record(command)
+    K->>R: persist(command)
     R->>R: now from Clock, build aggregate
     R->>J: save(aggregate) via SaveSuspendedPayment
     J->>J: map to entity, em.merge, no flush
@@ -610,6 +610,7 @@ Changes after the gate:
 - TD-01..TD-14 now record the answers.
 
 | 2026-11-12 | Phase 5 IT-00 gate: module structure (user-approved change) | Changes requested: "only two adapters modules must exist : client-adapters and infrastructure-adapters. Domain must be named domain only"; clarified "Drop prefixes, keep application"; then corrected: "application must be merged in domain". Result: four modules `domain`, `client-adapters`, `infrastructure-adapters`, `bootstrap`, plain artifactIds, Java packages unchanged. |
+| 2026-11-12 | Phase 5 IT-03 gate (user-approved change) | User: "replace record by persist in RecordRecall and RecordSuspendedPayment". Input port `Record<X>` renamed `Persist<X>` (service `Persist<X>Service`, command `Persist<X>Command`, method `persist(...)`) in the port inventory, flows and matrices; template for IT-04..IT-06; `Save<X>` unchanged. |
 | 2026-11-12 | Phase 5 IT-02 gate, 3rd presentation (user-approved) | (b) `command` and `query` belong entirely to the domain-model ring (package-based); user: "adapters can use queries and commands". AR-08 keeps forbidding `*Service` and `port.out` to driving adapters, AR-09 keeps forbidding `*Service` and `port.in` to driven adapters; the `*Query` / `*Criteria` restrictions are removed. AR-14 package-content rules kept. |
 | 2026-11-12 | Phase 5 IT-02 gate, 2nd presentation: `command` / `query` packages (user-approved change) | User: "can you move commands classes in command package and do the same for criteria", then "replace package criteria package by query". Commands in `domain.<ctx>.command`, `*Query` and `*Criteria` in `domain.<ctx>.query`; port packages hold interfaces only; template for IT-03..IT-06. Ring assignment (AR-06) proposed then: `command` and `*Query` in the application ring, `*Criteria` in the domain-model ring (superseded at the 3rd presentation). Also answered: model/use-case split by `*Service` naming (a); intra-context package cycle accepted, `CyclesTest` stays at top-level packages (a); AR-06 approved. |
 | 2026-11-12 | Phase 5 IT-02 gate: package layout (user-approved change) | User: "do not use usecase package. port.out package is missing". Per context: model and `*Service` use-case services in `domain.<ctx>`, input ports in `domain.<ctx>.port.in`, output ports in `domain.<ctx>.port.out`; no `usecase` package. Supersedes the IT-00 `usecase` layout. TL-DR-1/2/3/7 and AR-01..AR-09, AR-13, AR-14 retargeted; AR-06 uses class predicates (output ports as the domain-service ring), so `withOptionalLayers` is no longer needed; the composition-root ring stays. |
